@@ -94,7 +94,8 @@ sudo apt install -y \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
   redis-tools aria2 btop miller \
   inotify-tools expect asciinema at \
-  lnav imagemagick maim xdotool
+  lnav imagemagick maim xdotool \
+  universal-ctags chafa
 
 sudo apt autoremove -y
 
@@ -258,7 +259,7 @@ fi
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
-BUN_TOOLS=("trash-cli" "tldr" "prettier")
+BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix")
 for tool in "${BUN_TOOLS[@]}"; do
   if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
     ok "$tool (exists)"
@@ -308,7 +309,7 @@ CARGO_CRATES=(
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
   bandwhich websocat bore-cli procs bottom hyperfine
   pueue watchexec-cli just starship atuin navi choose
-  xh mdbook tokei jnv ouch
+  xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
 )
 
 CARGO_FAIL=0
@@ -393,6 +394,15 @@ declare -A GO_MAP=(
   ["gum"]="github.com/charmbracelet/gum@latest"
   ["act"]="github.com/nektos/act@latest"
   ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
+  ["gron"]="github.com/tomnomnom/gron@latest"
+  ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+  ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
+  ["cosign"]="github.com/sigstore/cosign/v2/cmd/cosign@latest"
+  ["crane"]="github.com/google/go-containerregistry/cmd/crane@latest"
+  ["scc"]="github.com/boyter/scc/v3@latest"
+  ["dasel"]="github.com/tomwright/dasel/v2/cmd/dasel@latest"
 )
 
 for name in "${!GO_MAP[@]}"; do
@@ -622,6 +632,24 @@ if ! command -v step &>/dev/null; then
     && ok "step-cli ${STEP_VERSION}" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
+# comby — structural code search/replace that understands syntax
+if ! command -v comby &>/dev/null; then
+  sudo apt install -y libpcre3-dev 2>/dev/null
+  bash <(curl -sL get.comby.dev) << 'COMBY_EOF'
+y
+COMBY_EOF
+  command -v comby &>/dev/null && ok "comby" || warn "comby install failed"
+else ok "comby (exists)"; fi
+
+# runme — execute code blocks from Markdown runbooks
+if ! command -v runme &>/dev/null; then
+  RUNME_VERSION=$(curl -s https://api.github.com/repos/stateful/runme/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+  curl -sL -o "$WORKDIR/runme.tar.gz" "https://dl.runme.dev/runme/v${RUNME_VERSION}/runme_linux_${ARCH_AMD}.tar.gz" \
+    && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" \
+    && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
+    && ok "runme ${RUNME_VERSION}" || warn "runme install failed"
+else ok "runme (exists)"; fi
+
 
 section "Phase 4/6 — Claude Code CLI"
 
@@ -718,6 +746,14 @@ NEVER guess flags. Discover tools on demand:
 | Compress/extract | `ouch` | tar/unzip/7z |
 | Format shell | `shfmt` | manual |
 | Format web files | `prettier` | manual |
+| Structural replace | `comby` | regex sed |
+| Greppable JSON | `gron` | manual jq |
+| Code stats | `scc` | tokei/cloc |
+| Multi-format query | `dasel` | format-specific |
+| API test chains | `hurl` | curl scripts |
+| JWT inspect | `jwt` | python/openssl |
+| HTTP load test | `oha` | ab/wrk |
+| Repo → AI context | `repomix` | manual |
 
 ## CLI Tools That Replace MCPs — use these instead
 | Domain | CLI tool | Replaces MCP |
@@ -737,8 +773,11 @@ NEVER guess flags. Discover tools on demand:
 | Secrets scan | `gitleaks`, `trufflehog` | — |
 | Vuln scan | `trivy`, `nuclei`, `grype` | — |
 | SBOM | `syft` | — |
-| Static analysis | `semgrep` | — |
+| Static analysis | `semgrep`, `comby` | — |
 | Certificates | `step`, `mkcert` | — |
+| Recon | `subfinder`, `httpx`, `dnsx`, `katana` | — |
+| Container registry | `crane`, `cosign` | — |
+| Code indexing | `ctags`, `tree-sitter` | — |
 
 ## Workflow Rules — IMPORTANT
 1. **Branch first**: Never commit directly to `main`.
@@ -886,6 +925,8 @@ Never guess flags — always check help first.
 - `fd` — find files by name/pattern. Use over `find` always.
 - `fzf` — pipe anything into it for fuzzy selection.
 - `ast-grep` — search code by AST structure, not text patterns.
+- `comby` — structural search/replace that understands code syntax (strings, comments, blocks).
+- `ctags` — generate symbol index. Run `ctags -R .` then query tags file for fast navigation.
 
 **File Viewing & Management:**
 - `bat` — view files with syntax highlighting. Use over `cat` for code.
@@ -906,6 +947,8 @@ Never guess flags — always check help first.
 - `csvkit` — CSV processing suite (csvlook, csvstat, csvsql).
 - `choose` — select columns from output. Use over `cut`.
 - `jnv` — interactive JSON viewer with jq filtering.
+- `gron` — flatten JSON to greppable lines. `gron --ungron` reverses. Use to explore large API responses.
+- `dasel` — unified query/modify for JSON, YAML, TOML, XML, CSV, HCL. One syntax for all formats.
 - `vd` (visidata) — TUI spreadsheet for CSV, JSON, SQLite, Parquet.
 - `nu` (nushell) — structured data shell, everything is a table.
 
@@ -923,7 +966,8 @@ Never guess flags — always check help first.
 - `semgrep` — run static analysis. Use for security and correctness patterns.
 - `shellcheck` — always lint shell scripts before execution.
 - `ruff` — Python linter and formatter. Use over flake8/black.
-- `tokei` — quick codebase stats (languages, lines, complexity).
+- `scc` — codebase stats with complexity scoring and COCOMO estimates. Use over tokei.
+- `tree-sitter` — parse code into ASTs. Build repo maps for context-efficient navigation.
 - `typos` — spell check source code and docs.
 - `codespell` — fix common misspellings.
 - `hadolint` — lint Dockerfiles.
@@ -939,6 +983,8 @@ Never guess flags — always check help first.
 - `k9s` — Kubernetes terminal UI.
 - `helm` — Kubernetes package management.
 - `stern` — tail logs from multiple pods simultaneously.
+- `crane` — inspect/copy/mutate container images without Docker daemon.
+- `cosign` — sign and verify container images (Sigstore supply chain security).
 
 **Infrastructure:**
 - `terraform` — infrastructure provisioning.
@@ -958,6 +1004,8 @@ Never guess flags — always check help first.
 - `bandwhich` — see bandwidth usage by process.
 - `websocat` — WebSocket client.
 - `grpcurl` — interact with gRPC services.
+- `oha` — HTTP load testing with real-time TUI. Use for API performance testing.
+- `hurl` — declarative HTTP test chains with assertions. Use for API integration testing.
 - `aria2c` — accelerated downloads.
 - `bore` — expose local ports publicly (tunneling).
 - `mitmproxy` — intercept/inspect/modify HTTP/HTTPS traffic.
@@ -978,6 +1026,11 @@ Never guess flags — always check help first.
 - `syft` — generate SBOMs for containers and filesystems.
 - `grype` — vulnerability scanner (pairs with syft for full supply chain coverage).
 - `step` — inspect/generate certificates, debug TLS issues.
+- `jwt` — decode, encode, and validate JWTs from terminal.
+- `httpx` — mass HTTP probing for live service discovery. Pairs with subfinder.
+- `subfinder` — passive subdomain enumeration from 50+ sources.
+- `dnsx` — bulk DNS resolution and wildcard detection.
+- `katana` — web crawler with JS rendering. Finds endpoints ffuf misses.
 
 **Databases:**
 - `duckdb` — run SQL on local files (CSV, Parquet, JSON). Extremely powerful.
@@ -1013,6 +1066,9 @@ Never guess flags — always check help first.
 - `xdotool` — automate X11 window/keyboard/mouse actions.
 - `lnav` — structured log viewer with filtering and highlighting.
 - `convert` (imagemagick) — resize, annotate, convert images.
+- `chafa` — render images (PNG, JPG, GIF) in terminal.
+- `repomix` — pack entire repo into AI-optimized single file with token counts.
+- `runme` — execute code blocks directly from Markdown files.
 
 **Cloud CLIs:**
 - `aws` — AWS operations.
@@ -1074,8 +1130,10 @@ Before any push to remote, run this sequence:
 1. `trivy image <image>` — scan container image
 2. `syft <image>` — generate SBOM (Software Bill of Materials)
 3. `grype <image>` — scan SBOM/image for known vulnerabilities
-4. `dive <image>` — check image layer efficiency
-5. `hadolint Dockerfile` — lint Dockerfile for best practices
+4. `crane manifest <image>` — inspect remote image without pulling
+5. `cosign verify <image>` — verify image signature
+6. `dive <image>` — check image layer efficiency
+7. `hadolint Dockerfile` — lint Dockerfile for best practices
 
 ## Infrastructure Security
 1. `trivy config .` — scan Terraform/CloudFormation for misconfigs
@@ -1083,10 +1141,14 @@ Before any push to remote, run this sequence:
 3. `semgrep --config auto .` — static analysis
 
 ## Network Reconnaissance
-1. `nmap -sV -sC <target>` — service version detection
-2. `nuclei -u <target>` — template-based vuln scanning
-3. `nikto -h <target>` — web server scanning
-4. `ffuf -u <url>/FUZZ -w <wordlist>` — directory fuzzing
+1. `subfinder -d <domain>` — passive subdomain enumeration
+2. `dnsx -l subdomains.txt -resp` — bulk DNS resolution
+3. `httpx -l hosts.txt -sc -title -tech-detect` — probe for live HTTP services
+4. `katana -u <url>` — crawl with JS rendering for hidden endpoints
+5. `nmap -sV -sC <target>` — service version detection
+6. `nuclei -u <target>` — template-based vuln scanning
+7. `nikto -h <target>` — web server scanning
+8. `ffuf -u <url>/FUZZ -w <wordlist>` — directory fuzzing
 
 ## Supply Chain Security
 1. `syft dir:.` — generate SBOM for project directory
@@ -2077,7 +2139,7 @@ tools:
   - Bash
 ---
 You are a read-only research agent. Explore the codebase and report findings.
-NEVER modify files. You CAN run: `rg`, `fd`, `bat`, `tokei`, `git log`, `git diff`, `cat`, `head`, `tail`, `wc`, any `--help`.
+NEVER modify files. You CAN run: `rg`, `fd`, `bat`, `scc`, `git log`, `git diff`, `cat`, `head`, `tail`, `wc`, any `--help`.
 Report: what you searched, what you found (paths + lines), patterns observed, recommendations.
 AGENT
 ok "agent: researcher"
