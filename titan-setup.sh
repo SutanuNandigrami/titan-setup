@@ -293,15 +293,7 @@ command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install s
 # claude-agent-sdk is a library (not a CLI tool) — install to user site-packages (uv pip --system blocked on Ubuntu 24.04 externally-managed Python)
 python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { pip3 install --user --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: pip3 install --user claude-agent-sdk)"; }
 
-# sqlite-vec for local vector store (used by codebase indexing)
-if [[ ! -d "$HOME/.local/share/titan/vectordb" ]]; then
-  mkdir -p "$HOME/.local/share/titan/vectordb"
-  uv pip install --system sqlite-vec 2>/dev/null \
-    || uv pip install sqlite-vec --target "$HOME/.local/lib/python-libs" 2>/dev/null \
-    && ok "sqlite-vec" || warn "sqlite-vec (install manually: uv pip install sqlite-vec)"
-else
-  ok "sqlite-vec dir (exists)"
-fi
+# sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
 
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
@@ -415,7 +407,7 @@ fi
 
 ok "Cargo tools installed/updated"
 
-# recall — Claude/Codex conversation search (NOT the crates.io 'recall')
+# recall — spaced repetition flashcard CLI (zippoxer/recall)
 if ! command -v recall &>/dev/null; then
   cargo install --git https://github.com/zippoxer/recall 2>/dev/null && ok "recall" || warn "recall"
 else ok "recall (exists)"; fi
@@ -578,6 +570,11 @@ if ! command -v claude-squad &>/dev/null; then
     && rm -f /tmp/cs.tar.gz \
     && ok "claude-squad" || warn "claude-squad"
 else ok "claude-squad (exists)"; fi
+# episodic-memory — semantic search over past Claude Code sessions (obra/episodic-memory)
+# Installs CLI only; plugin integration requires two interactive commands inside Claude Code (see post-install note)
+if ! command -v episodic-memory &>/dev/null; then
+  bun install -g episodic-memory 2>/dev/null && ok "episodic-memory" || warn "episodic-memory"
+else ok "episodic-memory (exists)"; fi
 
 
 # ─── Binary installs (no package manager available) ───
@@ -1086,7 +1083,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     ],
     "SessionStart": [
       {
-        "matcher": "",
+        "matcher": "startup|compact",
         "hooks": [
           {
             "type": "command",
@@ -1140,8 +1137,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Success' || true",
-            "timeout": 3
+            "command": "bash ~/.claude/hooks/prompt-memory-inject.sh",
+            "timeout": 5
           }
         ]
       }
@@ -2492,6 +2489,44 @@ HOOK
 chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
 ok "hook: session-start.sh"
 
+# UserPromptSubmit: inject memory only when recall-intent keywords detected (zero tokens otherwise)
+cat > "$CLAUDE_DIR/hooks/prompt-memory-inject.sh" << 'HOOK'
+#!/usr/bin/env bash
+# Keyword-triggered memory injection — stdout injected as context ONLY on keyword match
+# Zero token cost on every non-matching prompt
+set -euo pipefail
+
+PROMPT=$(jq -r '.prompt // empty' 2>/dev/null || echo "")
+
+# Exit with no stdout if no recall-intent keywords — nothing injected into context
+if ! echo "$PROMPT" | grep -qiE 'recall|remember|last session|previously|we decided|what did we|what was|history|forget|memory'; then
+  exit 0
+fi
+
+# Find the active project memory directory
+MEMDIR="$HOME/.claude/projects"
+MAINMEM=$(find "$MEMDIR" -path "*/memory/MEMORY.md" 2>/dev/null | sort | tail -1)
+
+if [[ -f "$MAINMEM" ]]; then
+  TOPICDIR=$(dirname "$MAINMEM")
+  printf '=== Project Memory ===\n'
+  cat "$MAINMEM"
+  for f in "$TOPICDIR"/*.md; do
+    [[ "$f" == "$MAINMEM" ]] && continue
+    [[ -f "$f" ]] && printf '\n=== %s ===\n' "$(basename "$f")" && cat "$f"
+  done
+fi
+
+# Also inject last session handoff
+HANDOFF="$HOME/.claude/memory/handoff.md"
+if [[ -f "$HANDOFF" ]]; then
+  printf '\n=== Last Session Handoff ===\n'
+  head -60 "$HANDOFF"
+fi
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
+ok "hook: prompt-memory-inject.sh"
+
 # ─── Status Line Script ───
 cat > "$CLAUDE_DIR/statusline-command.sh" << 'STATUSLINE'
 #!/usr/bin/env bash
@@ -2668,6 +2703,19 @@ paths: ["**/*"]
 - Check existing memory before writing — update, don't duplicate
 RULE
 ok "rule: memory.md"
+
+# ─── /recall command ───
+cat > "$CLAUDE_DIR/commands/recall.md" << 'CMD'
+Surface past session context on demand. Zero startup cost — only loaded when you run this.
+
+1. Read the auto memory directory shown in your system prompt (MEMORY.md + all topic files alongside it)
+2. Read ~/.claude/memory/handoff.md (auto-generated session-end state)
+3. Read _handoff.md in the current workspace if it exists
+4. Summarize in ≤15 lines: current project, branch, key architectural decisions, recent work completed, next steps, and any blockers
+
+Do NOT read every file in the project — only the memory and handoff files listed above.
+CMD
+ok "command: /recall"
 
 # ─── /remember command ───
 cat > "$CLAUDE_DIR/commands/remember.md" << 'CMD'
@@ -2984,6 +3032,12 @@ else
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
   # skill-creator removed — adds 6+ skills to context, only needed when authoring skills
   # Install on-demand if needed: claude plugin install skill-creator
+
+  # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
+  # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
+  claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \
+    && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
+  claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 fi
 
 

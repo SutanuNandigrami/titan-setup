@@ -420,7 +420,17 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.7.1 (current) — Fix install breakages after claude update
+### v3.8 (current) — Smart memory: on-demand retrieval, zero startup cost
+
+- **Fixed:** `SessionStart` hook `matcher: ""` fired on every startup AND every resume — changed to `matcher: "startup|compact"` (skips redundant resume firing, always fires post-compaction for amnesia prevention)
+- **Fixed:** `UserPromptSubmit` hook `echo 'Success'` was injecting the word "Success" as context into every single prompt — replaced with keyword-triggered memory injection (`prompt-memory-inject.sh`)
+- **Added:** `~/.claude/hooks/prompt-memory-inject.sh` — fires on EVERY prompt but injects memory content ONLY when recall-intent keywords detected (`recall`, `remember`, `last session`, `previously`, `we decided`, `history`, `memory`). Zero tokens on all other prompts.
+- **Added:** `/recall` slash command — on-demand surface of MEMORY.md + topic files + handoff. No startup cost.
+- **Removed:** Dead sqlite-vec / vectordb infrastructure — was installed but never connected to anything; vectordb dir was empty
+- **Fixed:** Misleading `recall` cargo binary comment — it's a flashcard CLI (zippoxer/recall), not conversation search
+- **Token cost:** Current session startup = 0 tokens from memory system. `/recall` = ~300 tokens only when invoked.
+
+### v3.7.1 — Fix install breakages after claude update
 
 - **Fixed:** `claude-agent-sdk` install — `uv pip install --system` blocked on Ubuntu 24.04 externally-managed Python; switched to `pip3 install --user`
 - **Fixed:** `claude-squad` install — `go install github.com/smtg-ai/claude-squad@latest` fails due to go.mod module path mismatch (`claude-squad` ≠ `github.com/smtg-ai/claude-squad`); switched to binary download from GitHub releases
