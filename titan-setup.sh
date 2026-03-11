@@ -290,8 +290,8 @@ done
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
-# claude-agent-sdk is a library (not a CLI tool) — install as a uv-managed package
-python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { uv pip install --system claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install claude-agent-sdk)"; }
+# claude-agent-sdk is a library (not a CLI tool) — install to user site-packages (uv pip --system blocked on Ubuntu 24.04 externally-managed Python)
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { pip3 install --user --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: pip3 install --user claude-agent-sdk)"; }
 
 # sqlite-vec for local vector store (used by codebase indexing)
 if [[ ! -d "$HOME/.local/share/titan/vectordb" ]]; then
@@ -568,8 +568,15 @@ if ! command -v ccstatusline &>/dev/null; then
   bun install -g ccstatusline 2>/dev/null && ok "ccstatusline" || warn "ccstatusline"
 else ok "ccstatusline (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
+# Note: go install fails due to go.mod module path mismatch — use binary release instead
 if ! command -v claude-squad &>/dev/null; then
-  go install github.com/smtg-ai/claude-squad@latest 2>/dev/null && ok "claude-squad" || warn "claude-squad"
+  CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name')
+  mkdir -p "$HOME/.local/bin"
+  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz \
+    && tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad \
+    && chmod +x "$HOME/.local/bin/claude-squad" \
+    && rm -f /tmp/cs.tar.gz \
+    && ok "claude-squad" || warn "claude-squad"
 else ok "claude-squad (exists)"; fi
 
 
