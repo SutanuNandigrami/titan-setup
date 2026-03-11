@@ -94,7 +94,8 @@ sudo apt install -y \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
   redis-tools aria2 btop miller \
   inotify-tools expect asciinema at \
-  lnav imagemagick maim xdotool
+  lnav imagemagick maim xdotool \
+  universal-ctags chafa
 
 sudo apt autoremove -y
 
@@ -258,7 +259,7 @@ fi
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
-BUN_TOOLS=("trash-cli" "tldr")
+BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix")
 for tool in "${BUN_TOOLS[@]}"; do
   if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
     ok "$tool (exists)"
@@ -308,7 +309,7 @@ CARGO_CRATES=(
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
   bandwhich websocat bore-cli procs bottom hyperfine
   pueue watchexec-cli just starship atuin navi choose
-  xh mdbook tokei jnv
+  xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
 )
 
 CARGO_FAIL=0
@@ -392,6 +393,16 @@ declare -A GO_MAP=(
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
   ["gum"]="github.com/charmbracelet/gum@latest"
   ["act"]="github.com/nektos/act@latest"
+  ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
+  ["gron"]="github.com/tomnomnom/gron@latest"
+  ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+  ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
+  ["cosign"]="github.com/sigstore/cosign/v2/cmd/cosign@latest"
+  ["crane"]="github.com/google/go-containerregistry/cmd/crane@latest"
+  ["scc"]="github.com/boyter/scc/v3@latest"
+  ["dasel"]="github.com/tomwright/dasel/v2/cmd/dasel@latest"
 )
 
 for name in "${!GO_MAP[@]}"; do
@@ -601,6 +612,42 @@ if ! command -v cloudflared &>/dev/null; then
     && ok "cloudflared" || warn "cloudflared install failed"
 else ok "cloudflared (exists)"; fi
 
+# syft — SBOM generation for containers and filesystems
+if ! command -v syft &>/dev/null; then
+  curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin \
+    && ok "syft" || warn "syft install failed"
+else ok "syft (exists)"; fi
+
+# grype — vulnerability scanner for containers and filesystems (pairs with syft)
+if ! command -v grype &>/dev/null; then
+  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin \
+    && ok "grype" || warn "grype install failed"
+else ok "grype (exists)"; fi
+
+# step-cli — certificate inspection, generation, and TLS debugging
+if ! command -v step &>/dev/null; then
+  STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+  curl -sL -o "$WORKDIR/step-cli.deb" "https://dl.smallstep.com/gh-release/cli/gh-release-header/v${STEP_VERSION}/step-cli_${STEP_VERSION}_${ARCH_AMD}.deb" \
+    && sudo dpkg -i "$WORKDIR/step-cli.deb" &>/dev/null \
+    && ok "step-cli ${STEP_VERSION}" || warn "step-cli install failed"
+else ok "step-cli (exists)"; fi
+
+# comby — structural code search/replace that understands syntax
+if ! command -v comby &>/dev/null; then
+  sudo apt install -y libpcre3-dev 2>/dev/null
+  echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
+    && ok "comby" || warn "comby install failed"
+else ok "comby (exists)"; fi
+
+# runme — execute code blocks from Markdown runbooks
+if ! command -v runme &>/dev/null; then
+  RUNME_VERSION=$(curl -s https://api.github.com/repos/stateful/runme/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+  curl -sL -o "$WORKDIR/runme.tar.gz" "https://dl.runme.dev/runme/v${RUNME_VERSION}/runme_linux_${ARCH_AMD}.tar.gz" \
+    && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" \
+    && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
+    && ok "runme ${RUNME_VERSION}" || warn "runme install failed"
+else ok "runme (exists)"; fi
+
 
 section "Phase 4/6 — Claude Code CLI"
 
@@ -656,7 +703,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   warn "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules}
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -694,6 +741,17 @@ NEVER guess flags. Discover tools on demand:
 | CSV | `xsv` or `miller` | awk |
 | SQL on files | `duckdb` | sqlite3 |
 | HTML extraction | `htmlq` | regex |
+| Compress/extract | `ouch` | tar/unzip/7z |
+| Format shell | `shfmt` | manual |
+| Format web files | `prettier` | manual |
+| Structural replace | `comby` | regex sed |
+| Greppable JSON | `gron` | manual jq |
+| Code stats | `scc` | tokei/cloc |
+| Multi-format query | `dasel` | format-specific |
+| API test chains | `hurl` | curl scripts |
+| JWT inspect | `jwt` | python/openssl |
+| HTTP load test | `oha` | ab/wrk |
+| Repo → AI context | `repomix` | manual |
 
 ## CLI Tools That Replace MCPs — use these instead
 | Domain | CLI tool | Replaces MCP |
@@ -711,8 +769,13 @@ NEVER guess flags. Discover tools on demand:
 | SQL on files | `duckdb` | — |
 | HTTP/APIs | `xh` | Fetch MCP |
 | Secrets scan | `gitleaks`, `trufflehog` | — |
-| Vuln scan | `trivy`, `nuclei` | — |
-| Static analysis | `semgrep` | — |
+| Vuln scan | `trivy`, `nuclei`, `grype` | — |
+| SBOM | `syft` | — |
+| Static analysis | `semgrep`, `comby` | — |
+| Certificates | `step`, `mkcert` | — |
+| Recon | `subfinder`, `httpx`, `dnsx`, `katana` | — |
+| Container registry | `crane`, `cosign` | — |
+| Code indexing | `ctags`, `tree-sitter` | — |
 
 ## Workflow Rules — IMPORTANT
 1. **Branch first**: Never commit directly to `main`.
@@ -730,7 +793,17 @@ NEVER guess flags. Discover tools on demand:
 ## Context Hygiene
 - Use subagents for research to keep main context clean.
 - Write plans to `_scratchpad.md`, not just chat.
-- When compacting, always preserve: current branch, modified files, test status, blockers.
+- At session start, check `~/.claude/memory/handoff.md` — it contains auto-saved state from the previous session.
+
+## Compaction Protocol
+When context is being compacted, ALWAYS preserve in the summary:
+1. **Current task** — what you are working on and why
+2. **Branch name** — the active git branch
+3. **Modified files** — all files changed in this session
+4. **Test status** — last test commands and pass/fail results
+5. **Blockers** — any unresolved errors or open questions
+6. **Key decisions** — architectural or design choices made
+7. **Next steps** — what needs to happen next
 CLAUDEMD
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/CLAUDE.md"
 ok "CLAUDE.md"
@@ -828,6 +901,42 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-compact.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-end.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
@@ -860,6 +969,8 @@ Never guess flags — always check help first.
 - `fd` — find files by name/pattern. Use over `find` always.
 - `fzf` — pipe anything into it for fuzzy selection.
 - `ast-grep` — search code by AST structure, not text patterns.
+- `comby` — structural search/replace that understands code syntax (strings, comments, blocks).
+- `ctags` — generate symbol index. Run `ctags -R .` then query tags file for fast navigation.
 
 **File Viewing & Management:**
 - `bat` — view files with syntax highlighting. Use over `cat` for code.
@@ -868,6 +979,7 @@ Never guess flags — always check help first.
 - `broot` — interactive directory navigation.
 - `yazi` — full terminal file manager when needed.
 - `zoxide` — smart directory jumping.
+- `ouch` — universal compress/decompress (tar, zip, 7z, zstd, gz, xz, bz2).
 
 **Text & Data Wrangling:**
 - `jq` — JSON processing. Always use for JSON manipulation.
@@ -879,6 +991,8 @@ Never guess flags — always check help first.
 - `csvkit` — CSV processing suite (csvlook, csvstat, csvsql).
 - `choose` — select columns from output. Use over `cut`.
 - `jnv` — interactive JSON viewer with jq filtering.
+- `gron` — flatten JSON to greppable lines. `gron --ungron` reverses. Use to explore large API responses.
+- `dasel` — unified query/modify for JSON, YAML, TOML, XML, CSV, HCL. One syntax for all formats.
 - `vd` (visidata) — TUI spreadsheet for CSV, JSON, SQLite, Parquet.
 - `nu` (nushell) — structured data shell, everything is a table.
 
@@ -896,11 +1010,14 @@ Never guess flags — always check help first.
 - `semgrep` — run static analysis. Use for security and correctness patterns.
 - `shellcheck` — always lint shell scripts before execution.
 - `ruff` — Python linter and formatter. Use over flake8/black.
-- `tokei` — quick codebase stats (languages, lines, complexity).
+- `scc` — codebase stats with complexity scoring and COCOMO estimates. Use over tokei.
+- `tree-sitter` — parse code into ASTs. Build repo maps for context-efficient navigation.
 - `typos` — spell check source code and docs.
 - `codespell` — fix common misspellings.
 - `hadolint` — lint Dockerfiles.
 - `actionlint` — lint GitHub Actions workflows.
+- `shfmt` — auto-format shell scripts (pairs with shellcheck).
+- `prettier` — format YAML, JSON, Markdown, HTML, CSS consistently.
 
 **Containers & Kubernetes:**
 - `lazydocker` — Docker management UI.
@@ -910,6 +1027,8 @@ Never guess flags — always check help first.
 - `k9s` — Kubernetes terminal UI.
 - `helm` — Kubernetes package management.
 - `stern` — tail logs from multiple pods simultaneously.
+- `crane` — inspect/copy/mutate container images without Docker daemon.
+- `cosign` — sign and verify container images (Sigstore supply chain security).
 
 **Infrastructure:**
 - `terraform` — infrastructure provisioning.
@@ -929,6 +1048,8 @@ Never guess flags — always check help first.
 - `bandwhich` — see bandwidth usage by process.
 - `websocat` — WebSocket client.
 - `grpcurl` — interact with gRPC services.
+- `oha` — HTTP load testing with real-time TUI. Use for API performance testing.
+- `hurl` — declarative HTTP test chains with assertions. Use for API integration testing.
 - `aria2c` — accelerated downloads.
 - `bore` — expose local ports publicly (tunneling).
 - `mitmproxy` — intercept/inspect/modify HTTP/HTTPS traffic.
@@ -946,6 +1067,14 @@ Never guess flags — always check help first.
 - `sqlmap` — SQL injection testing.
 - `parry` — prompt injection scanner for LLM apps.
 - `sherlock` — username search across social networks.
+- `syft` — generate SBOMs for containers and filesystems.
+- `grype` — vulnerability scanner (pairs with syft for full supply chain coverage).
+- `step` — inspect/generate certificates, debug TLS issues.
+- `jwt` — decode, encode, and validate JWTs from terminal.
+- `httpx` — mass HTTP probing for live service discovery. Pairs with subfinder.
+- `subfinder` — passive subdomain enumeration from 50+ sources.
+- `dnsx` — bulk DNS resolution and wildcard detection.
+- `katana` — web crawler with JS rendering. Finds endpoints ffuf misses.
 
 **Databases:**
 - `duckdb` — run SQL on local files (CSV, Parquet, JSON). Extremely powerful.
@@ -981,6 +1110,9 @@ Never guess flags — always check help first.
 - `xdotool` — automate X11 window/keyboard/mouse actions.
 - `lnav` — structured log viewer with filtering and highlighting.
 - `convert` (imagemagick) — resize, annotate, convert images.
+- `chafa` — render images (PNG, JPG, GIF) in terminal.
+- `repomix` — pack entire repo into AI-optimized single file with token counts.
+- `runme` — execute code blocks directly from Markdown files.
 
 **Cloud CLIs:**
 - `aws` — AWS operations.
@@ -1040,8 +1172,12 @@ Before any push to remote, run this sequence:
 
 ## Container Security
 1. `trivy image <image>` — scan container image
-2. `dive <image>` — check image layer efficiency
-3. `hadolint Dockerfile` — lint Dockerfile for best practices
+2. `syft <image>` — generate SBOM (Software Bill of Materials)
+3. `grype <image>` — scan SBOM/image for known vulnerabilities
+4. `crane manifest <image>` — inspect remote image without pulling
+5. `cosign verify <image>` — verify image signature
+6. `dive <image>` — check image layer efficiency
+7. `hadolint Dockerfile` — lint Dockerfile for best practices
 
 ## Infrastructure Security
 1. `trivy config .` — scan Terraform/CloudFormation for misconfigs
@@ -1049,10 +1185,24 @@ Before any push to remote, run this sequence:
 3. `semgrep --config auto .` — static analysis
 
 ## Network Reconnaissance
-1. `nmap -sV -sC <target>` — service version detection
-2. `nuclei -u <target>` — template-based vuln scanning
-3. `nikto -h <target>` — web server scanning
-4. `ffuf -u <url>/FUZZ -w <wordlist>` — directory fuzzing
+1. `subfinder -d <domain>` — passive subdomain enumeration
+2. `dnsx -l subdomains.txt -resp` — bulk DNS resolution
+3. `httpx -l hosts.txt -sc -title -tech-detect` — probe for live HTTP services
+4. `katana -u <url>` — crawl with JS rendering for hidden endpoints
+5. `nmap -sV -sC <target>` — service version detection
+6. `nuclei -u <target>` — template-based vuln scanning
+7. `nikto -h <target>` — web server scanning
+8. `ffuf -u <url>/FUZZ -w <wordlist>` — directory fuzzing
+
+## Supply Chain Security
+1. `syft dir:.` — generate SBOM for project directory
+2. `grype sbom:./sbom.json` — scan SBOM for known CVEs
+3. `grype dir:.` — scan project directly for vulnerable dependencies
+
+## TLS & Certificate Debugging
+1. `step certificate inspect <cert.pem>` — view certificate details
+2. `step certificate inspect https://<domain>` — inspect remote TLS cert
+3. `step certificate create` — generate self-signed certs for testing
 
 ## System Hardening
 1. `lynis audit system` — full system security audit
@@ -1884,6 +2034,285 @@ systemctl --user daemon-reload
 SKILL
 ok "skill: process-supervisor"
 
+# ─── Hook Scripts (Memory/Context Management) ───
+
+cat > "$CLAUDE_DIR/hooks/pre-compact.sh" << 'HOOK'
+#!/usr/bin/env bash
+# PreCompact hook — auto-save session state before compaction
+set -euo pipefail
+
+MEMORY_DIR="$HOME/.claude/memory"
+HANDOFF="$MEMORY_DIR/handoff.md"
+mkdir -p "$MEMORY_DIR"
+
+# Read input JSON from stdin
+INPUT=$(cat)
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
+
+# Capture git state
+BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
+STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
+DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+
+# Extract last assistant messages from transcript (if available)
+LAST_CONTEXT=""
+if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
+  LAST_CONTEXT=$(tail -100 "$TRANSCRIPT" 2>/dev/null \
+    | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null \
+    | tail -c 3000 || true)
+fi
+
+# Write handoff file
+cat > "$HANDOFF" << EOF
+---
+timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+session_id: ${SESSION_ID}
+branch: ${BRANCH}
+trigger: pre-compact
+---
+
+# Session Handoff
+
+## Branch
+\`${BRANCH}\`
+
+## Modified Files
+\`\`\`
+${MODIFIED:-No modified files}
+\`\`\`
+
+## Git Status
+\`\`\`
+${STATUS:-Clean working tree}
+\`\`\`
+
+## Diff Summary
+\`\`\`
+${DIFF_STAT:-No changes}
+\`\`\`
+
+## Last Context
+${LAST_CONTEXT:-No transcript context available}
+EOF
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/pre-compact.sh"
+ok "hook: pre-compact.sh"
+
+cat > "$CLAUDE_DIR/hooks/session-end.sh" << 'HOOK'
+#!/usr/bin/env bash
+# Stop hook — capture final session state for next session
+set -euo pipefail
+
+MEMORY_DIR="$HOME/.claude/memory"
+HANDOFF="$MEMORY_DIR/handoff.md"
+mkdir -p "$MEMORY_DIR"
+
+# Read input JSON from stdin
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
+LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // empty' 2>/dev/null | head -c 2000)
+
+# Capture git state
+BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
+STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
+DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+
+# Write handoff file
+cat > "$HANDOFF" << EOF
+---
+timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+session_id: ${SESSION_ID}
+branch: ${BRANCH}
+trigger: session-end
+---
+
+# Session Handoff
+
+## Branch
+\`${BRANCH}\`
+
+## Modified Files
+\`\`\`
+${MODIFIED:-No modified files}
+\`\`\`
+
+## Git Status
+\`\`\`
+${STATUS:-Clean working tree}
+\`\`\`
+
+## Diff Summary
+\`\`\`
+${DIFF_STAT:-No changes}
+\`\`\`
+
+## Last Assistant Message
+${LAST_MSG:-No message captured}
+EOF
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/session-end.sh"
+ok "hook: session-end.sh"
+
+cat > "$CLAUDE_DIR/hooks/session-start.sh" << 'HOOK'
+#!/usr/bin/env bash
+# SessionStart hook — notify about previous session state
+set -euo pipefail
+
+HANDOFF="$HOME/.claude/memory/handoff.md"
+
+# Check if handoff exists and is less than 24 hours old
+if [[ -f "$HANDOFF" ]]; then
+  FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0) ))
+  if (( FILE_AGE < 86400 )); then
+    echo "[Memory] Previous session state available at ~/.claude/memory/handoff.md ($(( FILE_AGE / 60 ))m ago)" >&2
+  fi
+fi
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
+ok "hook: session-start.sh"
+
+# ─── .claudeignore Template ───
+
+cat > "$CLAUDE_DIR/claudeignore-template" << 'IGNORE'
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pnp.*
+
+# Build output
+dist/
+build/
+out/
+.next/
+.nuxt/
+target/
+coverage/
+*.egg-info/
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terragrunt-cache/
+
+# Version control internals
+.git/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Large / binary files
+*.wasm
+*.sqlite
+*.db
+*.zip
+*.tar.gz
+*.tgz
+
+# Secrets (defense in depth)
+.env
+.env.*
+*.pem
+*.key
+IGNORE
+ok "template: claudeignore-template"
+
+# ─── Conditional Rules ───
+
+cat > "$CLAUDE_DIR/rules/python.md" << 'RULE'
+---
+paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/requirements*.txt"]
+---
+# Python Rules
+- Use type hints on all function signatures
+- Use `ruff check` and `ruff format` — never `black`, `flake8`, `isort`
+- Use `uv` for package management — never `pip install`
+- Prefer `pathlib.Path` over `os.path`
+- Use `logging` module, never bare `print()` for diagnostics
+- Docstrings on public functions (Google style)
+- Target Python 3.10+ (use `match`, `X | Y` union types)
+RULE
+ok "rule: python.md"
+
+cat > "$CLAUDE_DIR/rules/shell.md" << 'RULE'
+---
+paths: ["**/*.sh", "**/*.bash", "**/justfile"]
+---
+# Shell Rules
+- Start scripts with `set -euo pipefail`
+- Always quote variables: `"$var"` not `$var`
+- Run `shellcheck` before executing any script
+- Use `shfmt` for formatting
+- Prefer `[[` over `[` for conditionals
+- Use `command -v` not `which` for existence checks
+- Arrays: `"${arr[@]}"` with quotes
+RULE
+ok "rule: shell.md"
+
+cat > "$CLAUDE_DIR/rules/terraform.md" << 'RULE'
+---
+paths: ["**/*.tf", "**/*.tfvars", "**/*.hcl", "**/terraform/**"]
+---
+# Terraform Rules
+- Always `terraform fmt` before commit
+- Always `terraform plan` before `terraform apply` — never `-auto-approve` in production
+- Run `tflint` and `trivy config .` before applying
+- Use `infracost` to estimate cost impact
+- One resource per file where practical
+- Use modules for reusable infrastructure
+- Secrets via `sops` or `infisical` — never plaintext in `.tf` files
+- State files (`.tfstate`) must never be committed
+RULE
+ok "rule: terraform.md"
+
+cat > "$CLAUDE_DIR/rules/docker.md" << 'RULE'
+---
+paths: ["**/Dockerfile*", "**/docker-compose*", "**/compose.yaml", "**/compose.yml"]
+---
+# Docker Rules
+- Lint with `hadolint` before building
+- Scan images with `trivy image` before pushing
+- Generate SBOM with `syft` and scan with `grype`
+- Use multi-stage builds to minimize image size
+- Pin base image versions — no `:latest` in production
+- Use `dive` to analyze layer efficiency
+- Run as non-root user
+- Verify signatures with `cosign verify` when pulling third-party images
+RULE
+ok "rule: docker.md"
+
+cat > "$CLAUDE_DIR/rules/security.md" << 'RULE'
+---
+paths: ["**/*"]
+---
+# Security Rules (Always Active)
+- Run `gitleaks detect` before any `git push`
+- Never commit secrets, tokens, API keys, or credentials
+- Never hardcode passwords — use env vars or secret managers (`sops`, `infisical`, `age`)
+- Scan dependencies: `osv-scanner` or `grype dir:.`
+- Review all `curl | bash` commands before execution
+- Check TLS certs with `step certificate inspect` when debugging HTTPS issues
+- Decode JWTs with `jwt decode <token>` — never trust unverified tokens
+RULE
+ok "rule: security.md"
+
 # ─── /remember command ───
 cat > "$CLAUDE_DIR/commands/remember.md" << 'CMD'
 Save a piece of knowledge to persistent memory for use across sessions.
@@ -1953,6 +2382,7 @@ else ok "notebooklm skill (exists)"; fi
 # ─── Commands ───
 cat > "$CLAUDE_DIR/commands/catchup.md" << 'CMD'
 Read git branch, last 10 commits, `git status`, and if they exist: `_scratchpad.md` and `_handoff.md`.
+Also check `~/.claude/memory/handoff.md` — this is auto-generated by session hooks and contains structured state from the last session. Prioritize it if present.
 Summarize: what branch, what's changed, any pending work. Then ask what to work on.
 CMD
 ok "command: /catchup"
@@ -2033,7 +2463,7 @@ tools:
   - Bash
 ---
 You are a read-only research agent. Explore the codebase and report findings.
-NEVER modify files. You CAN run: `rg`, `fd`, `bat`, `tokei`, `git log`, `git diff`, `cat`, `head`, `tail`, `wc`, any `--help`.
+NEVER modify files. You CAN run: `rg`, `fd`, `bat`, `scc`, `git log`, `git diff`, `cat`, `head`, `tail`, `wc`, any `--help`.
 Report: what you searched, what you found (paths + lines), patterns observed, recommendations.
 AGENT
 ok "agent: researcher"

@@ -3,20 +3,25 @@
 **One script. Fresh Ubuntu to fully armed Claude Code workstation.**
 
 ```bash
-chmod +x titan-setup.sh
-./titan-setup.sh              # uses $(whoami) as engineer name
-source ~/.bashrc
-claude    # authenticate
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh)
 ```
+
+That's it. One command. Everything installs automatically.
 
 **Options:**
 ```bash
-./titan-setup.sh --name "Alice"   # set engineer name for Claude config
-./titan-setup.sh --dry-run        # preview without making changes
-./titan-setup.sh --help           # show usage
+# With custom engineer name
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh) --name "Alice"
+
+# Preview without making changes
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh) --dry-run
+
+# Or clone and run locally
+git clone https://github.com/SutanuNandigrami/titan-setup.git && cd titan-setup
+./titan-setup.sh --name "Alice"
 ```
 
-That's it. No other scripts, no tar files, no manual steps.
+After install: `source ~/.bashrc && claude` to authenticate.
 
 ### Prerequisites
 - **OS:** Ubuntu 22.04+ (or Debian-based)
@@ -30,7 +35,7 @@ That's it. No other scripts, no tar files, no manual steps.
 ## What it installs
 
 ### Phase 1 — System Prerequisites
-- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`
+- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`, `universal-ctags`, `chafa`
 - Linux tuning: inotify watchers (524288), file descriptor limits (65535)
 - Git defaults: `main` branch, rebase pull, autocrlf input
 
@@ -50,16 +55,16 @@ That's it. No other scripts, no tar files, no manual steps.
 httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project, mitmproxy, cookiecutter, visidata
 
 **JS (via `bun install -g`):**
-trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc), playwright
+trash-cli, tldr, prettier, repomix, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc), playwright
 
 **Rust (via `cargo install`):**
-ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, tokei, jnv, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git)
+ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, jnv, ouch, hurl, jwt-cli, oha, tree-sitter-cli, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git)
 
 **Go (via `go install`):**
-lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act
+lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act, shfmt, gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel
 
 **Binary downloads:**
-kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared
+kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared, syft, grype, step-cli, comby, runme
 
 **Docker images:**
 n8n (workflow automation server)
@@ -78,6 +83,9 @@ n8n (workflow automation server)
 **settings.json** — Hooks, permissions, tool search optimization:
 - PreToolUse hooks: block `rm -rf`, force push, `pip install`, `npm -g`, commits on main/master
 - PostToolUse hooks: auto-lint on write/edit (shellcheck → .sh, ruff → .py, hadolint → Dockerfile)
+- PreCompact hook: auto-saves session state (branch, files, context) to `~/.claude/memory/handoff.md`
+- Stop hook: captures final state for next session warm-start
+- SessionStart hook: notifies about available previous session state
 - Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
 - Tool search: `auto:5` threshold for MCP lazy loading
 
@@ -93,6 +101,20 @@ n8n (workflow automation server)
 - `diagrams` — Generate architecture/flow/ER/sequence diagrams via mermaid-cli
 - `deploy` — Auto-detect provider (Vercel/Docker/Terraform/K8s/Cloudflare), pre-deploy checks
 - `process-supervisor` — Manage background services with systemd user units
+
+**5 Conditional Rules** (loaded only when matching files are open, 0 tokens otherwise):
+- `rules/python.md` — Type hints, ruff, uv, Python 3.10+ patterns
+- `rules/shell.md` — shellcheck, set -euo pipefail, quoting rules
+- `rules/terraform.md` — Plan before apply, tflint, infracost, state hygiene
+- `rules/docker.md` — hadolint, trivy, syft/grype, multi-stage builds
+- `rules/security.md` — Always active: gitleaks, no secrets, dependency scanning
+
+**Memory/Context Management:**
+- 3 hook scripts (`~/.claude/hooks/`) for automatic session state persistence
+- `~/.claude/memory/handoff.md` — auto-generated cross-session state file
+- `~/.claude/claudeignore-template` — copy to project roots to exclude build artifacts
+- Enhanced `/catchup` command reads handoff.md for warm-start
+- CLAUDE.md compaction protocol preserves 7 critical context fields
 
 **Community Skills** (cloned from GitHub):
 - [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, root cause tracing, defense in depth, brainstorming
@@ -138,18 +160,21 @@ n8n (workflow automation server)
 ## Context Budget
 
 ```
-CLAUDE.md:        ~800 tokens  (loaded every session)
-settings.json:    0 tokens     (parsed by harness)
-11 inline skills: 0 tokens     (loaded on demand by relevance, ~800 lines total)
-community skills: 0 tokens     (loaded on demand)
-9 commands:       0 tokens     (loaded on /command)
-2 agents:         0 tokens     (loaded on spawn)
-CLI --help:       0 tokens     (lazy-loaded at runtime)
+CLAUDE.md:          ~1000 tokens (loaded every session, includes compaction protocol)
+settings.json:      0 tokens    (parsed by harness)
+11 inline skills:   0 tokens    (loaded on demand by relevance, ~800 lines total)
+5 conditional rules: 0 tokens   (loaded only when matching file types are open)
+community skills:   0 tokens    (loaded on demand)
+9 commands:         0 tokens    (loaded on /command)
+3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
+2 agents:           0 tokens    (loaded on spawn)
+CLI --help:         0 tokens    (lazy-loaded at runtime)
+handoff.md:         ~200 tokens (loaded on /catchup or session-start, cross-session state)
 ─────────────────────────────────────
-Total startup:    ~800 tokens of 200,000
+Total startup:      ~1000 tokens of 200,000
 
 vs MCP equivalent: 55,000-134,000 tokens at startup
-Savings:           98.5%+
+Savings:            98.5%+
 ```
 
 ---
@@ -235,7 +260,22 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 ## Changelog
 
-### v3.1 (current)
+### v3.2 (current)
+- Added: Memory/context management system (PreCompact, Stop, SessionStart hooks)
+- Added: Auto-generated `~/.claude/memory/handoff.md` for cross-session state persistence
+- Added: 5 conditional rules files (python, shell, terraform, docker, security)
+- Added: `.claudeignore` template for project context hygiene
+- Added: Enhanced CLAUDE.md compaction protocol (7 preserved fields)
+- Added: 24 new CLI tools (18 + 6 from previous commit), removed tokei (superseded by scc)
+- Added: universal-ctags, chafa (apt), tree-sitter-cli, hurl, jwt-cli, oha (cargo)
+- Added: gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel (go)
+- Added: repomix (bun), comby, runme (binary), syft, grype, step-cli (binary)
+- Added: ouch, shfmt, prettier (previous commit)
+- Updated: `/catchup` command reads handoff.md for warm-start
+- Updated: Security-scan skill with recon pipeline and supply chain sections
+- Total: 150+ CLI tools, 11 skills, 5 rules, 9 commands, 3 hooks, 3 plugins
+
+### v3.1
 - Added: `lnav`, `imagemagick`, `maim`, `xdotool` to system packages
 - Added: `cookiecutter`, `visidata` (uv), `playwright` (bun), `nu`/nushell (cargo), `act` (go), `cloudflared` (binary)
 - Added: 2 new skills — `deploy` (auto-detect provider), `process-supervisor` (systemd user units)
