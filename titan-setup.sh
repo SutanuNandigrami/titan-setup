@@ -457,6 +457,7 @@ declare -A GO_MAP=(
   ["dasel"]="github.com/tomwright/dasel/v2/cmd/dasel@latest"
 )
 
+GO_FAILED=()
 for name in "${!GO_MAP[@]}"; do
   if command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; then
     ok "$name (exists)"
@@ -465,10 +466,22 @@ for name in "${!GO_MAP[@]}"; do
     if go install "${GO_MAP[$name]}" &>/dev/null; then
       echo -e " ${GREEN}✓${NC}"
     else
-      echo -e " ${YELLOW}⚠ failed: go install ${GO_MAP[$name]}${NC}"
+      # Retry once — go proxy connections can be flaky
+      sleep 2
+      if go install "${GO_MAP[$name]}" &>/dev/null; then
+        echo -e " ${GREEN}✓ (retry)${NC}"
+      else
+        GO_FAILED+=("$name")
+        echo -e " ${YELLOW}⚠ failed: go install ${GO_MAP[$name]}${NC}"
+      fi
     fi
   fi
 done
+
+if [ ${#GO_FAILED[@]} -gt 0 ]; then
+  warn "${#GO_FAILED[@]} Go tool(s) failed (likely network): ${GO_FAILED[*]}"
+  echo "    Retry later: for t in ${GO_FAILED[*]}; do go install \${GO_MAP[\$t]}; done"
+fi
 
 # age — special case: go install cmd/... installs 'age' and 'age-keygen'
 if command -v age &>/dev/null || [ -f "$HOME/go/bin/age" ]; then
