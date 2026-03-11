@@ -475,6 +475,10 @@ else ok "claude-esp (exists)"; fi
 if ! command -v ccstatusline &>/dev/null; then
   bun install -g ccstatusline 2>/dev/null && ok "ccstatusline" || warn "ccstatusline"
 else ok "ccstatusline (exists)"; fi
+# claude-squad — manage multiple AI terminal agents in parallel
+if ! command -v claude-squad &>/dev/null; then
+  go install github.com/smtg-ai/claude-squad@latest 2>/dev/null && ok "claude-squad" || warn "claude-squad"
+else ok "claude-squad (exists)"; fi
 
 
 # ─── Binary installs (no package manager available) ───
@@ -708,7 +712,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   warn "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules,logs,templates}
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -820,7 +824,9 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "ENGINEER_NAME": "TITAN_ENGINEER_NAME",
     "DEFAULT_BRANCH": "main",
     "ENABLE_TOOL_SEARCH": "auto:5",
-    "CLAUDE_CODE_STATUSLINE": "ccstatusline"
+    "CLAUDE_CODE_STATUSLINE": "ccstatusline",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "preferences": {
     "thinking": true,
@@ -890,7 +896,19 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
           {
             "type": "command",
             "command": "jq -r '.tool_input.file_path // empty' | { read -r -d '' fp || true; case \"$fp\" in *.sh|*.bash) if command -v shellcheck &>/dev/null; then shellcheck \"$fp\" 2>&1 | head -20 || true; else echo 'warning: shellcheck not found, skipping lint' >&2; fi;; *.py) if command -v ruff &>/dev/null; then ruff check \"$fp\" 2>&1 | head -20 || true; else echo 'warning: ruff not found, skipping lint' >&2; fi;; Dockerfile*) if command -v hadolint &>/dev/null; then hadolint \"$fp\" 2>&1 | head -10 || true; else echo 'warning: hadolint not found, skipping lint' >&2; fi;; esac; }",
-            "timeout": 15
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), tool: .tool_name, input: (.tool_input | tostring | .[0:200])}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -927,6 +945,12 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
             "type": "command",
             "command": "bash ~/.claude/hooks/session-end.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "curl -sf -d \"Claude Code session ended: $(git branch --show-current 2>/dev/null || echo unknown)\" \"${NTFY_URL:-http://localhost:9999/null}\" 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -943,6 +967,19 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "hookify@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "trailofbits": {
+      "source": {
+        "source": "github",
+        "repo": "trailofbits/skills"
+      }
+    }
   }
 }
 SETTINGS
@@ -1133,6 +1170,7 @@ Never guess flags — always check help first.
 - `recall` — search Claude/Codex conversation history.
 - `ccusage` — Claude Code usage stats tracker.
 - `ccstatusline` — Claude Code status line.
+- `claude-squad` — manage multiple AI terminal agents in parallel (tmux-based).
 
 **Documentation:**
 - `pandoc` — convert between document formats.
@@ -2455,6 +2493,49 @@ Initialize workspace for the current project:
 5. Show the user the generated config and ask for adjustments
 CMD
 ok "command: /workspace-init"
+
+# ─── GitHub Actions Template ───
+cat > "$CLAUDE_DIR/templates/claude-code-action.yml" << 'TEMPLATE'
+# Claude Code GitHub Action — auto code review and issue-to-PR
+# Copy to .github/workflows/claude.yml and set ANTHROPIC_API_KEY secret
+name: Claude Code
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude')) ||
+      (github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: "Read,Edit,Bash(ruff*),Bash(pytest*),Bash(shellcheck*),Bash(git diff*),Bash(git log*)"
+TEMPLATE
+ok "template: claude-code-action.yml"
+
+cat > "$CLAUDE_DIR/commands/gh-action.md" << 'CMD'
+Set up Claude Code GitHub Action for the current project:
+1. Copy `~/.claude/templates/claude-code-action.yml` to `.github/workflows/claude.yml`
+2. Tell the user to add `ANTHROPIC_API_KEY` as a GitHub secret: `gh secret set ANTHROPIC_API_KEY`
+3. Explain: `@claude` in PR/issue comments triggers the agent, PRs get auto-reviewed
+CMD
+ok "command: /gh-action"
 
 # ─── Agents ───
 cat > "$CLAUDE_DIR/agents/researcher.md" << 'AGENT'

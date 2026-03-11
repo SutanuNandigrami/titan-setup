@@ -61,7 +61,7 @@ trash-cli, tldr, prettier, repomix, gemini-cli, notebooklm-cli, kilocode, vercel
 ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, jnv, ouch, hurl, jwt-cli, oha, tree-sitter-cli, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git)
 
 **Go (via `go install`):**
-lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act, shfmt, gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel
+lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act, shfmt, gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel, claude-squad
 
 **Binary downloads:**
 kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared, syft, grype, step-cli, comby, runme
@@ -82,12 +82,16 @@ n8n (workflow automation server)
 
 **settings.json** — Hooks, permissions, tool search optimization:
 - PreToolUse hooks: block `rm -rf`, force push, `pip install`, `npm -g`, commits on main/master
-- PostToolUse hooks: auto-lint on write/edit (shellcheck → .sh, ruff → .py, hadolint → Dockerfile)
+- PostToolUse hooks: async auto-lint on write/edit (shellcheck → .sh, ruff → .py, hadolint → Dockerfile)
+- PostToolUse audit hook: async JSONL logging of all tool calls to `~/.claude/logs/audit.jsonl`
 - PreCompact hook: auto-saves session state (branch, files, context) to `~/.claude/memory/handoff.md`
-- Stop hook: captures final state for next session warm-start
+- Stop hook: captures final state + sends ntfy notification (configurable via `NTFY_URL` env var)
 - SessionStart hook: notifies about available previous session state
 - Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
 - Tool search: `auto:5` threshold for MCP lazy loading
+- OpenTelemetry export: `CLAUDE_CODE_ENABLE_TELEMETRY=1`
+- Agent Teams: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` for parallel Claude instances in git worktrees
+- Plugin/marketplace config preserved across re-runs (`enabledPlugins`, `extraKnownMarketplaces`)
 
 **11 Inline Skills** (loaded on demand, 0 startup tokens):
 - `cli-tools` — Full reference for 100+ installed CLI tools by category
@@ -116,6 +120,16 @@ n8n (workflow automation server)
 - Enhanced `/catchup` command reads handoff.md for warm-start
 - CLAUDE.md compaction protocol preserves 7 critical context fields
 
+**GitHub Actions Integration:**
+- `~/.claude/templates/claude-code-action.yml` — ready-to-use CI/CD template
+- `/gh-action` command copies template and guides secret setup
+- Auto code review on PRs, `@claude` mentions trigger agent in issues/comments
+
+**Audit & Observability:**
+- `~/.claude/logs/audit.jsonl` — async JSONL log of every tool call (timestamp, tool, input)
+- ntfy.sh notification on session end (set `NTFY_URL` env var to enable)
+- OpenTelemetry metrics export for usage tracking
+
 **Community Skills** (cloned from GitHub):
 - [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, root cause tracing, defense in depth, brainstorming
 - [VibeSec](https://github.com/BehiSecc/VibeSec-Skill) — Web application security (OWASP Top 10, language-specific patterns)
@@ -123,8 +137,8 @@ n8n (workflow automation server)
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
 - [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
 
-**9 Slash Commands** (loaded only when invoked):
-- `/catchup` — Resume after /clear (reads git state + scratchpad)
+**10 Slash Commands** (loaded only when invoked):
+- `/catchup` — Resume after /clear (reads git state + scratchpad + handoff.md)
 - `/handoff` — Write session state to _handoff.md before ending
 - `/ship` — Full pipeline: lint → test → scan → commit → push → PR
 - `/standup` — Generate standup from git history
@@ -133,6 +147,7 @@ n8n (workflow automation server)
 - `/tools` — List all installed CLI tools by package manager
 - `/workspace-init` — Auto-detect project type, generate `_workspace.json` + `.envrc`
 - `/remember` — Save knowledge to persistent memory across sessions
+- `/gh-action` — Set up Claude Code GitHub Action for CI/CD integration
 
 **2 Subagents:**
 - `researcher` — Read-only codebase explorer
@@ -165,9 +180,11 @@ settings.json:      0 tokens    (parsed by harness)
 11 inline skills:   0 tokens    (loaded on demand by relevance, ~800 lines total)
 5 conditional rules: 0 tokens   (loaded only when matching file types are open)
 community skills:   0 tokens    (loaded on demand)
-9 commands:         0 tokens    (loaded on /command)
+10 commands:        0 tokens    (loaded on /command)
+1 template:         0 tokens    (copied on /gh-action)
 3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
 2 agents:           0 tokens    (loaded on spawn)
+audit log:          0 tokens    (async JSONL, never loaded into context)
 CLI --help:         0 tokens    (lazy-loaded at runtime)
 handoff.md:         ~200 tokens (loaded on /catchup or session-start, cross-session state)
 ─────────────────────────────────────
@@ -275,7 +292,20 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Updated: Security-scan skill with recon pipeline and supply chain sections
 - Total: 150+ CLI tools, 11 skills, 5 rules, 9 commands, 3 hooks, 3 plugins
 
-### v3.1
+### v3.3 (current)
+- Added: `claude-squad` (Go) — multi-agent terminal management with tmux
+- Added: Async PostToolUse audit logging to `~/.claude/logs/audit.jsonl`
+- Added: Async PostToolUse lint hooks (non-blocking file writes)
+- Added: ntfy.sh notification on session stop (`NTFY_URL` env var)
+- Added: OpenTelemetry telemetry export (`CLAUDE_CODE_ENABLE_TELEMETRY=1`)
+- Added: Agent Teams support (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+- Added: GitHub Actions template (`~/.claude/templates/claude-code-action.yml`)
+- Added: `/gh-action` command for CI/CD setup
+- Added: `enabledPlugins` and `extraKnownMarketplaces` in settings.json heredoc (survives re-runs)
+- Added: `logs/` and `templates/` directories in mkdir
+- Total: 155+ CLI tools, 11 skills, 5 rules, 10 commands, 3 hooks, 1 template, 3 plugins
+
+### v3.2
 - Added: `lnav`, `imagemagick`, `maim`, `xdotool` to system packages
 - Added: `cookiecutter`, `visidata` (uv), `playwright` (bun), `nu`/nushell (cargo), `act` (go), `cloudflared` (binary)
 - Added: 2 new skills — `deploy` (auto-detect provider), `process-supervisor` (systemd user units)
