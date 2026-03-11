@@ -32,27 +32,91 @@ After install: `source ~/.bashrc && claude` to authenticate.
 
 ---
 
+## Why Titan
+
+Claude Code is powerful out of the box, but it wastes most of its context window on tool discovery. Every MCP server, every tool schema, every capability description eats tokens before you even ask a question. Titan takes a fundamentally different approach.
+
+### The Problem with MCPs
+
+MCP (Model Context Protocol) servers are the standard way to give Claude Code access to external tools — GitHub, databases, Docker, AWS, etc. Each MCP server injects its tool schemas into the context window at startup:
+
+```
+GitHub MCP:     ~8,000 tokens
+Postgres MCP:   ~4,000 tokens
+Docker MCP:     ~3,500 tokens
+Fetch MCP:      ~2,000 tokens
+...
+A typical setup: 55,000-134,000 tokens before you type anything.
+```
+
+That's 25-67% of a 200K context window gone. You get fewer turns, worse recall, and degraded reasoning — all from tool overhead, not your actual work.
+
+### CLI-over-MCP: The Core Idea
+
+Every MCP server has a CLI equivalent that's already installed on your system or can be. `gh` replaces GitHub MCP. `pgcli` replaces Postgres MCP. `docker` replaces Docker MCP. The difference: CLI tools cost **zero context tokens** because Claude Code already knows how to run shell commands via its built-in Bash tool.
+
+Instead of injecting 8,000 tokens of GitHub MCP schemas, Titan installs `gh` and teaches Claude to run `gh --help` when it needs to discover capabilities. The tool knowledge is lazy-loaded at runtime, not front-loaded at startup.
+
+### What Titan Actually Does
+
+Titan is a single bash script (~2800 lines) that transforms a fresh Ubuntu machine into a fully configured Claude Code workstation in one run:
+
+1. **155+ CLI tools** across 5 package managers (cargo, uv, bun, go, apt) — replacing every common MCP server
+2. **Defense-in-depth safety** — 73 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
+3. **Auto-linting pipeline** — every file write is async-linted (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
+4. **Session persistence** — hooks automatically save/restore session state across conversations via handoff files and persistent memory
+5. **Discovery-based skills** — 11 inline skills and 5 community skill sets loaded on demand, not at startup
+6. **Audit trail** — every tool call logged to JSONL, desktop notifications, optional ntfy.sh alerts
+
+### The Numbers
+
+```
+Titan startup cost:    ~1,700 tokens (CLAUDE.md + memory)
+MCP equivalent:        55,000-134,000 tokens
+Context savings:       98.5%+
+Tools available:       155+ (vs ~20 typical MCP setup)
+Safety rules:          73 deny rules + 17 hook-enforced blocks
+```
+
+You get **more tools with less overhead**, and the safety guardrails that MCPs don't provide.
+
+### Design Principles
+
+| Principle | What it means |
+|-----------|--------------|
+| **CLI over MCP** | Shell commands replace MCP servers — zero token overhead |
+| **Discovery over documentation** | `--help` at runtime beats static docs at startup |
+| **Hooks over instructions** | PreToolUse hooks _enforce_ rules; CLAUDE.md can only _suggest_ them |
+| **Lazy over eager** | Skills, rules, commands load only when triggered |
+| **Idempotent always** | Safe to re-run — every install checks before acting |
+
+---
+
 ## What it installs
 
 ### Phase 1 — System Prerequisites
 - APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`, `universal-ctags`, `chafa`, `libclang-dev`, `cmake`, `libxml2-dev`, `libcurl4-openssl-dev`
+- Build dependencies: `libpulse-dev`, `libasound2-dev`, `libssl-dev`, `libdbus-1-dev`, `pkg-config` (for audio/cargo crates), `libpcre3-dev` (for comby)
 - Linux tuning: inotify watchers (524288), file descriptor limits (65535)
 - Git defaults: `main` branch, rebase pull, autocrlf input
 
 ### Phase 2 — Package Managers
 | Manager | Replaces | Purpose |
 |---------|----------|---------|
-| **Rust/Cargo** | — | Rust CLI tools (rg, fd, bat, eza, etc.) |
+| **Rust/Cargo** | — | Rust CLI tools (rg, fd, bat, eza, etc.) + auto-updates via `rustup update` |
 | **uv** | pip, pipx, pyenv, venv | Python CLI tools in isolated venvs |
 | **bun** | npm, npx | JS CLI tools |
-| **Go** | — | Go CLI tools |
+| **Go** | — | Go CLI tools (auto-upgrades when outdated) |
 | **mise** | asdf, nvm, pyenv | Runtime version management |
 | **Docker** | — | Container runtime (via get.docker.com) |
 
-### Phase 3 — 100+ CLI Tools
+### Phase 3 — 155+ CLI Tools
 
 **Python (via `uv tool install`):**
 httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project, mitmproxy, cookiecutter, visidata
+
+**Python (via `uv pip install`):**
+sqlite-vec (local vector store / codebase indexing)
 
 **JS (via `bun install -g`):**
 trash-cli, tldr, prettier, repomix, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc), playwright
@@ -64,10 +128,13 @@ ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, g
 lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act, shfmt, gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel, claude-squad
 
 **Binary downloads:**
-kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared, syft, grype, step-cli, comby, runme
+kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker, ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared, syft, grype, step-cli, comby, runme
 
 **Docker services (systemd user units):**
 n8n (workflow automation — auto-starts on login, http://localhost:5678)
+
+**Other:**
+CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 
 ### Phase 4 — Claude Code
 - Native binary installer (auto-updates, no Node.js dependency)
@@ -78,23 +145,27 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 
 ### Phase 5 — `~/.claude/` Global Config
 
-**CLAUDE.md** (~800 tokens) — Tool routing tables, workflow rules, MCP replacement map
+**CLAUDE.md** (~1200 tokens) — Tool routing tables, workflow rules, MCP replacement map, auto memory protocol, compaction protocol
 
-**settings.json** — Hooks, permissions, tool search optimization:
-- PreToolUse hooks: block `rm -rf`, force push, `pip install`, `npm -g`, commits on main/master
-- PostToolUse hooks: async auto-lint on write/edit (shellcheck → .sh, ruff → .py, hadolint → Dockerfile)
+**settings.json** — Hooks, permissions, environment, preferences:
+- `PATH` env: all tool directories (`~/.cargo/bin`, `~/go/bin`, `~/.bun/bin`, `~/.local/bin`) injected as absolute paths so tools are discoverable in every Claude Code session
+- PreToolUse hooks: block `rm -rf`, force push, `pip install`, `npm -g`, commits on main/master, `chmod 777`, `kill -9`, unsafe piping, destructive infra/k8s/docker operations
+- PostToolUse hooks: async auto-lint on write/edit (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
 - PostToolUse audit hook: async JSONL logging of all tool calls to `~/.claude/logs/audit.jsonl`
+- Notification hook: desktop notifications via `notify-send`
 - PreCompact hook: auto-saves session state (branch, files, context) to `~/.claude/memory/handoff.md`
 - Stop hook: captures final state + sends ntfy notification (configurable via `NTFY_URL` env var)
 - SessionStart hook: displays handoff content + memory status + audit log rotation
-- Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
-- Tool search: `auto:5` threshold for MCP lazy loading
+- Permissions: 8 wildcard allow rules, 73 deny rules (Bash, Read, Edit, Write — covering destructive commands, sensitive files, credential paths)
+- Preferences: `thinking: true`, `outputStyle: explanatory`, `cleanupPeriodDays: 365`
+- Tool search: `auto:5` threshold for deferred tool loading
 - OpenTelemetry export: `CLAUDE_CODE_ENABLE_TELEMETRY=1`
 - Agent Teams: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` for parallel Claude instances in git worktrees
+- Status line: `CLAUDE_CODE_STATUSLINE=ccstatusline` for terminal status display
 - Plugin/marketplace config preserved across re-runs (`enabledPlugins`, `extraKnownMarketplaces`)
 
 **11 Inline Skills** (loaded on demand, 0 startup tokens):
-- `cli-tools` — Full reference for 100+ installed CLI tools by category
+- `cli-tools` — Full reference for 155+ installed CLI tools by category
 - `security-scan` — Pre-push, container, infra, network scanning workflows
 - `git-workflow` — Branch naming, conventional commits, PR flow
 - `infra-deploy` — Terraform, Ansible, Docker, K8s workflows
@@ -116,7 +187,7 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 
 **Memory/Context Management:**
 - 3 hook scripts (`~/.claude/hooks/`) for automatic session state persistence
-- `~/.claude/memory/handoff.md` — auto-generated cross-session state file (now includes recent commits)
+- `~/.claude/memory/handoff.md` — auto-generated cross-session state file (includes recent commits)
 - `~/.claude/claudeignore-template` — copy to project roots to exclude build artifacts
 - Enhanced `/catchup` command reads handoff.md + auto memory for warm-start
 - CLAUDE.md compaction protocol preserves 7 critical context fields
@@ -132,6 +203,7 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 
 **Audit & Observability:**
 - `~/.claude/logs/audit.jsonl` — async JSONL log of every tool call (timestamp, tool, input)
+- Desktop notifications via `notify-send` on Notification lifecycle events
 - ntfy.sh notification on session end (set `NTFY_URL` env var to enable)
 - OpenTelemetry metrics export for usage tracking
 
@@ -142,10 +214,10 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
 - [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
 
-**12 Slash Commands** (loaded only when invoked):
+**11 Slash Commands** (loaded only when invoked):
 - `/catchup` — Resume after /clear (reads git state + scratchpad + handoff.md)
 - `/handoff` — Write session state to _handoff.md before ending
-- `/ship` — Full pipeline: lint → test → scan → commit → push → PR
+- `/ship` — Full pipeline: lint -> test -> scan -> commit -> push -> PR
 - `/standup` — Generate standup from git history
 - `/scan` — Security scan (secrets, vulns, IaC, containers)
 - `/review` — Code review current branch against main
@@ -167,7 +239,7 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 - Marketplaces: Anthropic official + Trail of Bits
 
 ### Phase 6 — Shell Integration
-- PATH: `~/.local/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/go/bin`
+- PATH: `~/.local/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/go/bin`, `/usr/local/go/bin`
 - Prompts: starship
 - Directory jumping: zoxide
 - Shell history: atuin
@@ -176,6 +248,7 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 - Fuzzy finding: fzf
 - Git diffs: delta (side-by-side, line numbers)
 - Task queue: pueue daemon (auto-started)
+- Pre-exec hooks: bash-preexec (required by atuin)
 
 ---
 
@@ -183,11 +256,11 @@ n8n (workflow automation — auto-starts on login, http://localhost:5678)
 
 ```
 CLAUDE.md:          ~1200 tokens (loaded every session, includes memory protocol + compaction)
-settings.json:      0 tokens    (parsed by harness)
+settings.json:      0 tokens    (parsed by harness, not injected into context)
 11 inline skills:   0 tokens    (loaded on demand by relevance, ~800 lines total)
 6 conditional rules: 0 tokens   (loaded only when matching file types are open)
 community skills:   0 tokens    (loaded on demand)
-12 commands:        0 tokens    (loaded on /command)
+11 commands:        0 tokens    (loaded on /command)
 1 template:         0 tokens    (copied on /gh-action)
 3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
 3 agents:           0 tokens    (loaded on spawn)
@@ -196,7 +269,7 @@ CLI --help:         0 tokens    (lazy-loaded at runtime)
 MEMORY.md:          ~200 tokens (loaded every session, persistent project knowledge)
 handoff.md:         ~300 tokens (shown by session-start hook, cross-session state)
 ─────────────────────────────────────
-Total startup:      ~1700 tokens of 200,000
+Total startup:      ~1,700 tokens of 200,000
 
 vs MCP equivalent: 55,000-134,000 tokens at startup
 Savings:            98.5%+
@@ -207,17 +280,17 @@ Savings:            98.5%+
 ## Package Manager Rules
 
 ```
-Python CLIs → uv tool install <pkg>
-JS CLIs     → bun install -g <pkg>
-Rust CLIs   → cargo install <crate>
-Go CLIs     → go install <path>@latest
-System deps → sudo apt install <pkg>
+Python CLIs -> uv tool install <pkg>
+JS CLIs     -> bun install -g <pkg>
+Rust CLIs   -> cargo install <crate>
+Go CLIs     -> go install <path>@latest
+System deps -> sudo apt install <pkg>
 
-NEVER USE   → pip install, npm install -g, sudo pip
+NEVER USE   -> pip install, npm install -g, sudo pip
 ```
 
 The script blocks `pip install` and `npm install -g` at three levels:
-1. **Permissions deny list** in settings.json
+1. **Permissions deny list** in settings.json (73 deny rules)
 2. **PreToolUse hook** catches and redirects to uv/bun
 3. **Your muscle memory** — this README reminds you
 
@@ -230,6 +303,7 @@ Every section checks before installing:
 - `uv tool list | grep` for Python tools
 - `[ -d <dir> ]` for git-cloned skills
 - Package managers skip already-installed packages
+- Go and Rust toolchains auto-upgrade when outdated
 
 Re-running the script will only install missing components.
 
@@ -250,7 +324,7 @@ claude --version
 claude doctor
 
 # Check key tools
-for cmd in rg fd bat eza jq yq gh docker kubectl terraform claude; do
+for cmd in rg fd bat eza jq yq gh docker kubectl terraform claude gitleaks; do
   printf "%-12s" "$cmd"
   command -v "$cmd" &>/dev/null && echo "✓ $(which $cmd)" || echo "✗ missing"
 done
@@ -285,22 +359,14 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 ## Changelog
 
-### v3.2 (current)
-- Added: Memory/context management system (PreCompact, Stop, SessionStart hooks)
-- Added: Auto-generated `~/.claude/memory/handoff.md` for cross-session state persistence
-- Added: 5 conditional rules files (python, shell, terraform, docker, security)
-- Added: `.claudeignore` template for project context hygiene
-- Added: Enhanced CLAUDE.md compaction protocol (7 preserved fields)
-- Added: 24 new CLI tools (18 + 6 from previous commit), removed tokei (superseded by scc)
-- Added: universal-ctags, chafa (apt), tree-sitter-cli, hurl, jwt-cli, oha (cargo)
-- Added: gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel (go)
-- Added: repomix (bun), comby, runme (binary), syft, grype, step-cli (binary)
-- Added: ouch, shfmt, prettier (previous commit)
-- Updated: `/catchup` command reads handoff.md for warm-start
-- Updated: Security-scan skill with recon pipeline and supply chain sections
-- Total: 150+ CLI tools, 11 skills, 5 rules, 9 commands, 3 hooks, 3 plugins
+### v3.5 (current)
+- Fixed: PATH exports for cargo, uv, bun moved outside install if/else branches — tools were invisible on re-runs when already installed
+- Fixed: Added `PATH` to Claude Code `settings.json` env block with expanded absolute paths — tools like `gitleaks` in `~/go/bin` are now discoverable in every Claude Code session without sourcing `.bashrc`
+- Fixed: README audit — corrected permission counts (8 allow, 73 deny), command count (11 not 12), tool count (155+), CLAUDE.md token estimate (~1200), added missing tools/features
+- Added: "Why Titan" section explaining CLI-over-MCP architecture and design principles
+- Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 3 hooks, 1 template, 3 agents, 3 plugins
 
-### v3.4 (current)
+### v3.4
 - Added: **Auto Memory Protocol** — mandatory rules in CLAUDE.md for when Claude MUST write to persistent memory
 - Added: `rules/memory.md` — always-active conditional rule enforcing memory discipline
 - Added: Session-start hook now displays actual handoff content (not just "file exists") + memory count
@@ -314,9 +380,9 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Fixed: n8n permission error (`~/.n8n` owned by root) — now fixes ownership to uid 1000
 - Changed: n8n runs as systemd user service (auto-starts, survives reboots, http://localhost:5678)
 - Added: `reviewer` agent to script (was live-only, would be lost on re-run)
-- Fixed: Superpowers skills updated to match upstream repo (root-cause-tracing/defense-in-depth → verification-before-completion/writing-plans)
+- Fixed: Superpowers skills updated to match upstream repo (root-cause-tracing/defense-in-depth -> verification-before-completion/writing-plans)
 - Fixed: Live config fully synced with script (CLAUDE.md, cli-tools, security-scan, researcher agent)
-- Total: 155+ CLI tools, 11 skills, 6 rules, 12 commands, 3 hooks, 1 template, 3 agents, 3 plugins
+- Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 3 hooks, 1 template, 3 agents, 3 plugins
 
 ### v3.3
 - Added: `claude-squad` (Go) — multi-agent terminal management with tmux
@@ -332,12 +398,23 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Total: 155+ CLI tools, 11 skills, 5 rules, 10 commands, 3 hooks, 1 template, 3 plugins
 
 ### v3.2
+- Added: Memory/context management system (PreCompact, Stop, SessionStart hooks)
+- Added: Auto-generated `~/.claude/memory/handoff.md` for cross-session state persistence
+- Added: 5 conditional rules files (python, shell, terraform, docker, security)
+- Added: `.claudeignore` template for project context hygiene
+- Added: Enhanced CLAUDE.md compaction protocol (7 preserved fields)
+- Added: 24 new CLI tools (18 + 6 from previous commit), removed tokei (superseded by scc)
 - Added: `lnav`, `imagemagick`, `maim`, `xdotool` to system packages
 - Added: `cookiecutter`, `visidata` (uv), `playwright` (bun), `nu`/nushell (cargo), `act` (go), `cloudflared` (binary)
+- Added: universal-ctags, chafa (apt), tree-sitter-cli, hurl, jwt-cli, oha (cargo)
+- Added: gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel (go)
+- Added: repomix (bun), comby, runme (binary), syft, grype, step-cli (binary)
+- Added: ouch, shfmt, prettier (previous commit)
 - Added: 2 new skills — `deploy` (auto-detect provider), `process-supervisor` (systemd user units)
 - Added: `/remember` command for persistent cross-session memory
-- Added: Tool permissions for all new tools including `systemctl --user` and `journalctl --user`
-- Total: 130+ CLI tools, 11 skills, 9 commands, 3 plugins
+- Updated: `/catchup` command reads handoff.md for warm-start
+- Updated: Security-scan skill with recon pipeline and supply chain sections
+- Total: 150+ CLI tools, 11 skills, 5 rules, 9 commands, 3 hooks, 3 plugins
 
 ### v3.0
 - Added: CLI options `--name`, `--dry-run`, `--help` for public use
@@ -360,21 +437,21 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Removed: All hardcoded personal info (parameterized via `--name`)
 
 ### v2.3
-- Fixed: `lazydocker` go install broken (Docker API conflict) → binary release download
-- Fixed: `mkcert` wrong Go module path (`github.com/FiloSottile/mkcert` → `filippo.io/mkcert`)
-- Fixed: `age` wrong Go module path (`github.com/FiloSottile/age` → `filippo.io/age`)
-- Fixed: `claude-tmux` wrong repo and language (`ngroeneveld` Go → `nielsgroen/claude-tmux` Rust via cargo)
+- Fixed: `lazydocker` go install broken (Docker API conflict) -> binary release download
+- Fixed: `mkcert` wrong Go module path (`github.com/FiloSottile/mkcert` -> `filippo.io/mkcert`)
+- Fixed: `age` wrong Go module path (`github.com/FiloSottile/age` -> `filippo.io/age`)
+- Fixed: `claude-tmux` wrong repo and language (`ngroeneveld` Go -> `nielsgroen/claude-tmux` Rust via cargo)
 - Fixed: Script crash at "Claude Code ecosystem tools:" — double `||` failure + `set -e` killed the process
-- Fixed: `# shellcheck` comment parsed as shellcheck directive → reworded
+- Fixed: `# shellcheck` comment parsed as shellcheck directive -> reworded
 - Security: Added `Write` deny rules for `~/.bashrc`, `~/.profile`, `~/.zshrc`, `~/.ssh/*`, `.env*`
-- Security: Fixed newline bypass in PreToolUse hooks (`read` → `read -r -d ''`)
+- Security: Fixed newline bypass in PreToolUse hooks (`read` -> `read -r -d ''`)
 - Security: Added branch check hook — blocks `git commit` on main/master
 - Fixed: PostToolUse lint hook now triggers on `Edit|MultiEdit` too, not just `Write`
 - Fixed: Notification hook uses direct variable instead of `xargs` (safer with metacharacters)
 - Removed: `debug-protocol` inline skill (replaced by `systematic-debugging` from superpowers)
-- Replaced: `tool-discovery` (39 lines) → `cli-tools` (150 lines, full categorized reference)
-- Replaced: `security-ops` (13 lines) → `security-scan` (39 lines, structured workflows)
-- Replaced: `infra-ops` (14 lines) → `infra-deploy` (45 lines, step-by-step procedures)
+- Replaced: `tool-discovery` (39 lines) -> `cli-tools` (150 lines, full categorized reference)
+- Replaced: `security-ops` (13 lines) -> `security-scan` (39 lines, structured workflows)
+- Replaced: `infra-ops` (14 lines) -> `infra-deploy` (45 lines, step-by-step procedures)
 - Removed: `owasp` skill (536 lines, massive overlap with vibesec)
 - Security: Added `git checkout -- .` and `git checkout .` to deny list
 - Fixed: PostToolUse lint hook now warns when linter binary is missing (was silent)
@@ -382,23 +459,22 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: Project-level `CLAUDE.md` for titan context
 - Security: Added `Bash(rm -r *)`, `Bash(git reset --hard *)`, `Bash(git clean -f*)` to deny list
 - Security: Hook now catches `rm -r -f` and `rm --recursive` variants (not just `rm -rf`)
-- Fixed: `dog` → `doggo` in cli-tools skill (wrong tool name)
+- Fixed: `dog` -> `doggo` in cli-tools skill (wrong tool name)
 - Removed: Auto-generated `ansible` and `docker` junk skills (empty/meaningless content, covered by `infra-deploy` and `cli-tools`)
 - Fixed: `dasel` removed from cli-tools skill (was never installed)
 - Fixed: `gcloud` removed from cli-tools skill (was never installed)
 - Added: `gitleaks` to Go installs (was referenced in CLAUDE.md/skills but never installed)
 - Added: `miller` to apt installs (was referenced in CLAUDE.md/skills but never installed)
 - Added: 15 missing tools to cli-tools skill (parry, sherlock, ruff, infisical, vercel, gemini-cli, claude-tmux, claude-esp, recall, ccusage, ccstatusline, dippy, spotify_player + new AI Tools category)
-- Fixed: Duplicate "Removed: owasp skill" changelog entry
 - Added: `add-cli-tool` inline skill — registers new CLI tools across setup script + live config in one operation
 
 ### v2.2
-- Fixed: `spotify-tui` removed (abandoned, OpenSSL build broken) → replaced with `spotify_player` (actively maintained)
-- Fixed: `ccstatusline` was cargo (wrong) → now `bun install -g` (it's an npm package)
+- Fixed: `spotify-tui` removed (abandoned, OpenSSL build broken) -> replaced with `spotify_player` (actively maintained)
+- Fixed: `ccstatusline` was cargo (wrong) -> now `bun install -g` (it's an npm package)
 - Fixed: `ctop` binary URL pinned to v0.7.7 (archived project, `/latest/` redirect broken)
 - Fixed: `trufflehog` install script now runs with `sudo` (writes to `/usr/local/bin`)
 - Fixed: `claude-tmux` tries `cmd/claude-tmux@latest` path first with fallback
-- Fixed: `n8n` removed from bun (too large, it's a server) → `docker pull n8nio/n8n`
+- Fixed: `n8n` removed from bun (too large, it's a server) -> `docker pull n8nio/n8n`
 - Fixed: `dippy` binary path corrected to `bin/dippy-hook` (not `bin/dippy`)
 - Fixed: `skill-seekers` removed (generates static doc dumps, contradicts lazy-loading)
 - Added: `spotify_player` with audio build dependencies (`libpulse-dev`, etc.)
