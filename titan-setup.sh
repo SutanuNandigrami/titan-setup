@@ -937,9 +937,6 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "ENABLE_TOOL_SEARCH": "auto:5",
     "CLAUDE_CODE_STATUSLINE": "ccstatusline",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
-    "CLAUDE_CODE_EFFORT_LEVEL": "high",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85",
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -956,7 +953,6 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "outputStyle": "explanatory",
     "cleanupPeriodDays": 365
   },
-  "teammateMode": "tmux",
   "showTurnDuration": true,
   "includeCoAuthoredBy": true,
   "respectGitignore": true,
@@ -1199,16 +1195,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
   },
   "enabledPlugins": {
     "hookify@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "skill-creator@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "trailofbits": {
-      "source": {
-        "source": "github",
-        "repo": "trailofbits/skills"
-      }
-    }
+    "code-review@claude-plugins-official": true
   },
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
@@ -2756,23 +2743,29 @@ if [ ! -d ~/.claude/skills/vibesec ]; then
   git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git ~/.claude/skills/vibesec 2>/dev/null && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
 
-# owasp removed — 536 lines, massive overlap with vibesec (758 lines). vibesec is more comprehensive.
+# Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
+# Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
+# Individual plugins can be installed on-demand via: claude plugin marketplace add trailofbits/skills
+if [ ! -d ~/.claude/skills/trailofbits-modern-python ]; then
+  git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null
+  if [ -d /tmp/trailofbits-skills/plugins/modern-python ]; then
+    cp -r /tmp/trailofbits-skills/plugins/modern-python ~/.claude/skills/trailofbits-modern-python 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
+  else
+    warn "trailofbits: modern-python not found in repo"
+  fi
+  rm -rf /tmp/trailofbits-skills
+else ok "trailofbits: modern-python (exists)"; fi
 
-# HashiCorp Terraform
-if [ ! -d ~/.claude/skills/hashicorp ]; then
-  git clone --depth 1 https://github.com/hashicorp/agent-skills.git ~/.claude/skills/hashicorp 2>/dev/null && ok "hashicorp" || warn "hashicorp"
-else ok "hashicorp (exists)"; fi
-
-# Trail of Bits
-if [ ! -d ~/.claude/skills/trailofbits ]; then
-  git clone --depth 1 https://github.com/trailofbits/skills.git ~/.claude/skills/trailofbits 2>/dev/null && ok "trailofbits" || warn "trailofbits"
-else ok "trailofbits (exists)"; fi
-
-
-# skill-seekers REMOVED — generates static doc dumps that go stale
-# Claude discovers tool usage via --help at runtime, which is always current
-# The community skills above (superpowers, vibesec, hashicorp, trailofbits)
-# provide workflow patterns, not static docs — that's the right approach
+# Cleanup: remove full trailofbits/hashicorp clones from previous installs (token bloat)
+# These dumped 60+14 SKILL.md files into context at startup (~81K lines)
+if [ -d ~/.claude/skills/trailofbits ]; then
+  rm -rf ~/.claude/skills/trailofbits
+  ok "removed old trailofbits full clone (60 skills → 1 selective)"
+fi
+if [ -d ~/.claude/skills/hashicorp ]; then
+  rm -rf ~/.claude/skills/hashicorp
+  ok "removed old hashicorp full clone (14 skills → covered by infra-deploy)"
+fi
 
 # NotebookLM skill
 if [ ! -d ~/.claude/skills/nlm-cli ]; then
@@ -3010,8 +3003,6 @@ elif ! claude auth status &>/dev/null 2>&1; then
   echo "    claude plugin marketplace add anthropic/claude-plugins-official"
   echo "    claude plugin install hookify"
   echo "    claude plugin install code-review"
-  echo "    claude plugin install skill-creator"
-  echo "    claude plugin marketplace add trailofbits/skills"
 else
   # Register official marketplace if not already registered
   claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null \
@@ -3020,11 +3011,8 @@ else
   # Install plugins from official marketplace
   claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
-  claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
-
-  # Add community marketplaces
-  claude plugin marketplace add trailofbits/skills 2>/dev/null \
-    && ok "Trail of Bits security" || warn "trailofbits"
+  # skill-creator removed — adds 6+ skills to context, only needed when authoring skills
+  # Install on-demand if needed: claude plugin install skill-creator
 fi
 
 
@@ -3080,13 +3068,14 @@ echo -e "
     Claude Code:      native binary (auto-updates)
     Config:           ~/.claude/ (skills, hooks, commands, agents)
 
-  ${CYAN}Context budget:${NC}
-    CLAUDE.md:    ~800 tokens  (loaded every session)
-    Skills:       0 tokens     (loaded on demand)
+  ${CYAN}Context budget (startup):${NC}
+    CLAUDE.md:    ~1200 tokens (loaded every session)
+    Skills:       ~2-5K tokens (descriptions at startup, full content on trigger)
+    Rules:        ~500 tokens  (6 conditional rules)
     Commands:     0 tokens     (loaded on /command)
-    Agents:       0 tokens     (loaded on spawn)
+    Agents:       ~200 tokens  (descriptions only)
     CLI --help:   0 tokens     (lazy-loaded at runtime)
-    vs MCP equiv: 55,000-134,000 tokens saved
+    Total:        ~2-7K tokens of 200K context window
 
   ${CYAN}Next steps:${NC}
     source ~/.bashrc

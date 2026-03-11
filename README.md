@@ -65,7 +65,7 @@ Titan is a single bash script (~2800 lines) that transforms a fresh Ubuntu machi
 2. **Defense-in-depth safety** — 73 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
 3. **Auto-linting pipeline** — every file write is async-linted (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
 4. **Session persistence** — hooks automatically save/restore session state across conversations via handoff files and persistent memory
-5. **Discovery-based skills** — 11 inline skills and 5 community skill sets loaded on demand, not at startup
+5. **Discovery-based skills** — 11 inline skills + 3 selective community skills, descriptions loaded at startup (~2-5K tokens)
 6. **Audit trail** — every tool call logged to JSONL, desktop notifications, optional ntfy.sh alerts
 
 ### The Numbers
@@ -188,7 +188,6 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 
 *Preferences & settings:*
 - `thinking: true`, `outputStyle: explanatory`, `cleanupPeriodDays: 365`
-- `teammateMode: tmux`: agent teams display in split panes
 - `showTurnDuration: true`: timing visibility per response
 - `includeCoAuthoredBy: true`: auto-add Co-Authored-By to commits
 - `respectGitignore: true`: respect .gitignore in file operations
@@ -238,12 +237,13 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 - ntfy.sh notification on session end (set `NTFY_URL` env var to enable)
 - OpenTelemetry metrics export for usage tracking
 
-**Community Skills** (cloned from GitHub):
-- [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, brainstorming, verification before completion, writing plans
-- [VibeSec](https://github.com/BehiSecc/VibeSec-Skill) — Web application security (OWASP Top 10, language-specific patterns)
-- [HashiCorp](https://github.com/hashicorp/agent-skills) — Terraform agent skills
-- [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
-- [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
+**Community Skills** (selectively cloned from GitHub):
+- [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, brainstorming, verification before completion, writing plans (5 skills)
+- [VibeSec](https://github.com/BehiSecc/VibeSec-Skill) — Web application security (OWASP Top 10, language-specific patterns) (1 skill)
+- [Trail of Bits modern-python](https://github.com/trailofbits/skills) — Modern Python best practices (1 skill, selective — full repo has 60 skills)
+- [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill (1 skill)
+
+> **Removed in v3.6:** Full `trailofbits/skills` clone (60 SKILL.md / 71K lines) and full `hashicorp/agent-skills` clone (14 SKILL.md / 10K lines) — these dumped ~81K lines of blockchain scanners, fuzzing harnesses, and Packer builders into context. The inline `infra-deploy` and `security-scan` skills already cover those domains.
 
 **11 Slash Commands** (loaded only when invoked):
 - `/catchup` — Resume after /clear (reads git state + scratchpad + handoff.md)
@@ -266,8 +266,9 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 ### Phase 5b — Claude Code Plugins
 - [hookify](https://github.com/anthropics/claude-code-plugins) — Hook management and conversation analysis
 - [code-review](https://github.com/anthropics/claude-code-plugins) — PR code review
-- [skill-creator](https://github.com/anthropics/claude-code-plugins) — Create and optimize skills
-- Marketplaces: Anthropic official + Trail of Bits
+- Marketplace: Anthropic official
+
+> **Removed in v3.6:** `skill-creator` plugin (adds 6+ skills to startup context, only needed when authoring skills — install on-demand: `claude plugin install skill-creator`)
 
 ### Phase 6 — Shell Integration
 - PATH: `~/.local/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/go/bin`, `/usr/local/go/bin`
@@ -286,25 +287,33 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 ## Context Budget
 
 ```
-CLAUDE.md:          ~1200 tokens (loaded every session, includes memory protocol + compaction)
-settings.json:      0 tokens    (parsed by harness, not injected into context)
-11 inline skills:   0 tokens    (loaded on demand by relevance, ~800 lines total)
-6 conditional rules: 0 tokens   (loaded only when matching file types are open)
-community skills:   0 tokens    (loaded on demand)
-11 commands:        0 tokens    (loaded on /command)
-1 template:         0 tokens    (copied on /gh-action)
-3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
-3 agents:           0 tokens    (loaded on spawn)
-audit log:          0 tokens    (async JSONL, never loaded into context)
-CLI --help:         0 tokens    (lazy-loaded at runtime)
-MEMORY.md:          ~200 tokens (loaded every session, persistent project knowledge)
-handoff.md:         ~300 tokens (shown by session-start hook, cross-session state)
-─────────────────────────────────────
-Total startup:      ~1,700 tokens of 200,000
+Component           Startup cost     Notes
+─────────────────── ──────────────── ──────────────────────────────────
+System prompt        ~15K tokens     Built-in (unavoidable, includes tool defs)
+CLAUDE.md (global)   ~800 tokens     Loaded every session
+CLAUDE.md (project)  ~800 tokens     If present in project root
+MEMORY.md            ~200 tokens     First 200 lines of auto memory
+Skill descriptions   ~2-5K tokens    Name + description per skill (19 skills)
+                                     NOTE: per bug #14882, full content may load
+6 conditional rules  ~500 tokens     Loaded when matching file types are open
+11 commands          0 tokens        Loaded only on /command invocation
+3 agents             ~200 tokens     Descriptions in context, full on spawn
+Hook scripts         0 tokens        External processes, never in context
+settings.json        0 tokens        Parsed by harness, not injected
+Audit log            0 tokens        Async JSONL, never loaded
+CLI --help           0 tokens        Lazy-loaded at runtime
+─────────────────── ──────────────── ──────────────────────────────────
+Titan startup:       ~4-7K tokens    (excluding system prompt)
 
-vs MCP equivalent: 55,000-134,000 tokens at startup
-Savings:            98.5%+
+vs MCP equivalent:   55,000-134,000 tokens at startup
+Savings:             94-97%
 ```
+
+> **v3.5 had a hidden problem:** Full git clones of trailofbits (60 skills / 71K lines)
+> and hashicorp (14 skills / 10K lines) were being auto-discovered by Claude Code,
+> loading ~50-100K tokens at startup. Combined with `MAX_OUTPUT_TOKENS=64000` and
+> `EFFORT_LEVEL=high`, this caused rapid 5-hour and weekly usage limit exhaustion.
+> Fixed in v3.6 by selective skill installation and removing aggressive env vars.
 
 ---
 
@@ -405,7 +414,21 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.4
+### v3.6 (current) — Token Usage Optimization
+- **Fixed:** Full `trailofbits/skills` git clone (60 SKILL.md / 71K lines) replaced with selective `modern-python` only (1 skill)
+- **Fixed:** Full `hashicorp/agent-skills` git clone (14 SKILL.md / 10K lines) removed — covered by inline `infra-deploy` skill
+- **Removed:** `CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000` — was 2x default, each response could burn 64K tokens
+- **Removed:** `CLAUDE_CODE_EFFORT_LEVEL=high` — forced extended thinking on every request regardless of complexity
+- **Removed:** `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — each teammate clones full context (~7x token usage)
+- **Removed:** `teammateMode: tmux` — agent teams disabled by default
+- **Removed:** `skill-creator` plugin — adds 6+ skills to startup context, install on-demand when needed
+- **Removed:** `extraKnownMarketplaces` for trailofbits — individual plugins installable via `claude plugin marketplace add`
+- **Added:** Cleanup step removes old full trailofbits/hashicorp clones on re-run
+- **Fixed:** Context Budget section in README — was claiming "0 tokens" for skills, actual was 50-100K
+- **Impact:** ~60-70% reduction in per-session token usage, ~30-50% reduction in per-turn cost
+- Total: 155+ CLI tools, 11 skills + 8 community, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 2 plugins, 15 env vars
+
+### v3.5
 - Added: **Auto Memory Protocol** — mandatory rules in CLAUDE.md for when Claude MUST write to persistent memory
 - Added: `rules/memory.md` — always-active conditional rule enforcing memory discipline
 - Added: Session-start hook now displays actual handoff content (not just "file exists") + memory count
