@@ -92,7 +92,8 @@ sudo apt install -y \
   curl wget git build-essential unzip software-properties-common \
   lsb-release apt-transport-https gnupg ca-certificates \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
-  redis-tools aria2 btop miller
+  redis-tools aria2 btop miller \
+  inotify-tools expect asciinema at
 
 sudo apt autoremove -y
 
@@ -221,6 +222,7 @@ UV_TOOLS=(
   "awscli"          # aws — AWS CLI
   "ruff"            # ruff — Python linter (replaces flake8+black+isort+pyflakes)
   "ast-grep-cli"    # ast-grep, sg — structural code search
+  "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
 )
 
 for tool in "${UV_TOOLS[@]}"; do
@@ -240,6 +242,16 @@ echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 
+# sqlite-vec for local vector store (used by codebase indexing)
+if [[ ! -d "$HOME/.local/share/titan/vectordb" ]]; then
+  mkdir -p "$HOME/.local/share/titan/vectordb"
+  uv pip install --system sqlite-vec 2>/dev/null \
+    || uv pip install sqlite-vec --target "$HOME/.local/lib/python-libs" 2>/dev/null \
+    && ok "sqlite-vec" || warn "sqlite-vec (install manually: uv pip install sqlite-vec)"
+else
+  ok "sqlite-vec dir (exists)"
+fi
+
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
@@ -254,6 +266,7 @@ for tool in "${BUN_TOOLS[@]}"; do
 done
 
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { bun install -g @google/gemini-cli 2>/dev/null && ok "gemini-cli" || warn "gemini-cli"; }
+command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { bun install -g @mermaid-js/mermaid-cli 2>/dev/null && ok "mermaid-cli" || warn "mermaid-cli"; }
 # n8n — workflow automation server (NOT a CLI tool — runs as docker container)
 if command -v docker &>/dev/null; then
   docker pull n8nio/n8n:latest 2>/dev/null && ok "n8n docker image" || warn "n8n docker pull failed"
@@ -280,7 +293,7 @@ CARGO_CRATES=(
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
   bandwhich websocat bore-cli procs bottom hyperfine
   pueue watchexec-cli just starship atuin navi choose
-  xh mdbook tokei
+  xh mdbook tokei jnv
 )
 
 CARGO_FAIL=0
@@ -350,6 +363,7 @@ declare -A GO_MAP=(
   ["doctl"]="github.com/digitalocean/doctl/cmd/doctl@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
+  ["gum"]="github.com/charmbracelet/gum@latest"
 )
 
 for name in "${!GO_MAP[@]}"; do
@@ -607,7 +621,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   warn "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,commands,agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,commands,agents}
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -714,6 +728,9 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
       "Bash(shellcheck *)", "Bash(ruff *)", "Bash(semgrep *)",
       "Bash(hadolint *)", "Bash(actionlint *)", "Bash(typos *)", "Bash(codespell *)",
       "Bash(just *)", "Bash(task *)", "Bash(mise *)",
+      "Bash(tmux *)", "Bash(pueue *)", "Bash(pueued *)",
+      "Bash(mmdc *)", "Bash(gum *)", "Bash(asciinema *)",
+      "Bash(inotifywait *)", "Bash(jnv *)", "Bash(mitmproxy *)", "Bash(mitmdump *)",
       "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(wc *)",
       "Bash(sort *)", "Bash(uniq *)", "Bash(tr *)", "Bash(tee *)",
       "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(ls *)",
@@ -854,6 +871,7 @@ Never guess flags — always check help first.
 - `htmlq` — extract data from HTML using CSS selectors.
 - `csvkit` — CSV processing suite (csvlook, csvstat, csvsql).
 - `choose` — select columns from output. Use over `cut`.
+- `jnv` — interactive JSON viewer with jq filtering.
 
 **Git Operations:**
 - `gh` — GitHub operations (PRs, issues, releases, actions). Always prefer over browser.
@@ -894,7 +912,7 @@ Never guess flags — always check help first.
 - `age` — simple file encryption.
 - `infisical` — secrets management platform CLI.
 
-**Networking & HTTP:**
+**Networking & HTTP/Proxy:**
 - `xh` — HTTP requests. Use over curl for readability.
 - `httpie` (http) — alternative HTTP client with JSON support.
 - `doggo` — DNS lookups. Use over dig.
@@ -904,6 +922,7 @@ Never guess flags — always check help first.
 - `grpcurl` — interact with gRPC services.
 - `aria2c` — accelerated downloads.
 - `bore` — expose local ports publicly (tunneling).
+- `mitmproxy` — intercept/inspect/modify HTTP/HTTPS traffic.
 
 **Security & Scanning:**
 - `nmap` — network and port scanning.
@@ -940,6 +959,11 @@ Never guess flags — always check help first.
 - `entr` — simple file watcher.
 - `mkcert` — generate trusted local HTTPS certificates.
 - `dippy` — auto-approve safe commands for Claude Code.
+- `inotifywait` — watch files for changes and trigger commands.
+- `expect` — automate interactive CLI tools.
+- `gum` — pretty prompts, spinners, and styled output for scripts.
+- `asciinema` — record terminal sessions for sharing.
+- `mmdc` — render mermaid diagrams to PNG/SVG/PDF.
 
 **Cloud CLIs:**
 - `aws` — AWS operations.
@@ -1246,7 +1270,7 @@ next blank line or next category header.
 
 ### Valid categories
 Search & Find, File Viewing & Management, Text & Data Wrangling, Git Operations,
-Code Quality, Containers & Kubernetes, Infrastructure, Networking & HTTP,
+Code Quality, Containers & Kubernetes, Infrastructure, Networking & HTTP/Proxy,
 Security & Scanning, Databases, System Monitoring, Development Workflow,
 Cloud CLIs, AI Tools, Documentation, Terminal Productivity
 
@@ -1269,6 +1293,371 @@ Inside `"allow": [` block. Add `"Bash(<binary> *)"` after any existing
 similar permission line.
 LOCATIONS
 ok "skill: add-cli-tool (references)"
+
+# ─── Skill: tmux-control ───
+cat > "$CLAUDE_DIR/skills/tmux-control/SKILL.md" << 'SKILL'
+---
+description: Control tmux sessions — create panes, run commands, read output, monitor processes
+triggers:
+  - tmux
+  - terminal pane
+  - run in background
+  - monitor process
+  - split pane
+  - send keys
+---
+
+# tmux Control
+
+Use tmux to run, monitor, and control background processes.
+
+## Core Commands
+```bash
+# Session management
+tmux new-session -d -s <name>          # create detached session
+tmux list-sessions                      # list sessions
+tmux kill-session -t <name>             # kill session
+
+# Pane operations
+tmux split-window -h -t <session>       # horizontal split
+tmux split-window -v -t <session>       # vertical split
+tmux select-pane -t <session>:<pane>    # switch pane
+
+# Send commands to panes
+tmux send-keys -t <session>:<pane> '<command>' Enter
+
+# Capture pane output (read what's on screen)
+tmux capture-pane -t <session>:<pane> -p          # current screen
+tmux capture-pane -t <session>:<pane> -p -S -50   # last 50 lines
+
+# Wait for command to finish (check if prompt returned)
+tmux send-keys -t <session> 'echo DONE_MARKER' Enter
+# Then capture-pane and grep for DONE_MARKER
+```
+
+## Patterns
+
+### Run and monitor a dev server
+```bash
+tmux new-session -d -s dev
+tmux send-keys -t dev 'npm run dev' Enter
+sleep 2
+tmux capture-pane -t dev -p  # check if started
+```
+
+### Run parallel tasks
+```bash
+tmux new-session -d -s work
+tmux send-keys -t work 'make build' Enter
+tmux split-window -h -t work
+tmux send-keys -t work:0.1 'make test' Enter
+```
+
+### Read output from a running process
+```bash
+tmux capture-pane -t <session> -p -S -100  # last 100 lines
+```
+
+## Rules
+1. Always use `-d` (detached) when creating sessions from Claude.
+2. Use `capture-pane -p` to read output — never try to interact with TUI apps.
+3. Name sessions descriptively: `dev`, `build`, `logs`, `deploy`.
+4. Clean up: `tmux kill-session -t <name>` when done.
+5. For interactive tools (htop, vim), tell the user to open them manually.
+SKILL
+ok "skill: tmux-control"
+
+# ─── Skill: workspace ───
+cat > "$CLAUDE_DIR/skills/workspace/SKILL.md" << 'SKILL'
+---
+description: Project workspace configuration — auto-detect commands, _workspace.json convention, .envrc templates
+triggers:
+  - workspace
+  - project setup
+  - _workspace.json
+  - how to build
+  - how to test
+  - how to deploy
+  - envrc
+  - project config
+---
+
+# Workspace Configuration
+
+## _workspace.json Convention
+Projects can include a `_workspace.json` at the root:
+
+```json
+{
+  "name": "my-app",
+  "commands": {
+    "dev": "bun dev",
+    "build": "bun run build",
+    "test": "bun test",
+    "lint": "ruff check . && shellcheck **/*.sh",
+    "deploy": "terraform apply -auto-approve"
+  },
+  "main_branch": "main",
+  "language": "typescript",
+  "framework": "next.js"
+}
+```
+
+## Auto-Detection (when no _workspace.json exists)
+Detect project type from files present:
+
+| File | Type | Dev | Test | Lint |
+|------|------|-----|------|------|
+| `package.json` | Node/Bun | `bun dev` | `bun test` | `bun lint` |
+| `pyproject.toml` | Python | `uv run dev` | `uv run pytest` | `ruff check .` |
+| `Cargo.toml` | Rust | `cargo run` | `cargo test` | `cargo clippy` |
+| `go.mod` | Go | `go run .` | `go test ./...` | `golangci-lint run` |
+| `Makefile` | Make | `make dev` | `make test` | `make lint` |
+| `justfile` | Just | `just dev` | `just test` | `just lint` |
+| `Taskfile.yml` | Task | `task dev` | `task test` | `task lint` |
+| `Dockerfile` | Docker | `docker compose up` | — | `hadolint Dockerfile` |
+| `terraform/` | Terraform | — | `terraform plan` | `tflint` |
+
+## .envrc Templates
+When setting up a new project with `direnv`:
+
+### Python
+```bash
+# .envrc
+layout python3
+export DATABASE_URL="postgres://localhost/myapp_dev"
+```
+
+### Node
+```bash
+# .envrc
+use mise
+export NODE_ENV=development
+```
+
+### General
+```bash
+# .envrc
+dotenv_if_exists .env.local
+PATH_add bin
+```
+
+## Workflow
+1. Check for `_workspace.json` first.
+2. If absent, auto-detect from project files.
+3. Use detected commands for `/ship`, `/scan`, testing.
+4. Suggest creating `_workspace.json` if project is complex.
+5. Use `direnv allow` after creating `.envrc`.
+SKILL
+ok "skill: workspace"
+
+# ─── Skill: pueue-orchestrator ───
+cat > "$CLAUDE_DIR/skills/pueue-orchestrator/SKILL.md" << 'SKILL'
+---
+description: Parallel task orchestration with pueue — queue builds, tests, scans in parallel
+triggers:
+  - pueue
+  - parallel tasks
+  - task queue
+  - run in parallel
+  - background tasks
+  - orchestrate
+---
+
+# Pueue Task Orchestrator
+
+Use `pueue` to run multiple tasks in parallel with dependency management.
+
+## Setup
+```bash
+pueued -d                    # start daemon (if not running)
+pueue status                 # check status
+pueue parallel 4             # allow 4 parallel tasks (default: 1)
+```
+
+## Core Operations
+```bash
+# Add tasks
+pueue add -- 'ruff check .'                    # add to default group
+pueue add --label "lint-py" -- 'ruff check .'  # with label
+pueue add --after 0 -- 'bun test'              # run after task 0
+
+# Groups (for organizing)
+pueue group add build
+pueue group add test
+pueue add --group build -- 'make build'
+pueue add --group test -- 'bun test'
+
+# Monitor
+pueue status                 # see all tasks
+pueue log <id>               # see output of task
+pueue follow <id>            # stream output live
+
+# Control
+pueue pause <id>             # pause task
+pueue start <id>             # resume task
+pueue kill <id>              # kill task
+pueue clean                  # remove finished tasks
+pueue reset                  # kill all, clean everything
+```
+
+## Orchestration Patterns
+
+### Pre-push pipeline (parallel lint + test, then scan)
+```bash
+pueued -d 2>/dev/null || true
+pueue parallel 3
+LINT=$(pueue add --print-task-id -- 'ruff check . && shellcheck **/*.sh')
+TEST=$(pueue add --print-task-id -- 'bun test')
+pueue add --after "$LINT,$TEST" -- 'gitleaks detect --verbose'
+pueue wait  # blocks until all done
+pueue status
+```
+
+### Build + deploy with dependencies
+```bash
+BUILD=$(pueue add --print-task-id --label build -- 'docker build -t app .')
+SCAN=$(pueue add --print-task-id --after "$BUILD" --label scan -- 'trivy image app')
+pueue add --after "$SCAN" --label deploy -- 'docker push app'
+```
+
+### Parallel security scans
+```bash
+pueue parallel 5
+pueue add --label secrets -- 'gitleaks detect --verbose'
+pueue add --label deps -- 'osv-scanner -r .'
+pueue add --label sast -- 'semgrep --config auto .'
+pueue add --label container -- 'trivy image myapp:latest'
+pueue add --label iac -- 'tflint --recursive'
+pueue wait
+```
+
+## Rules
+1. Always start `pueued -d` before adding tasks.
+2. Set `pueue parallel N` based on task type (CPU-bound: nproc, IO-bound: higher).
+3. Use `--print-task-id` to capture IDs for dependencies.
+4. Use `pueue wait` to block until pipeline completes.
+5. Check `pueue log <id>` for failures, not just exit codes.
+6. Run `pueue clean` after reviewing results.
+SKILL
+ok "skill: pueue-orchestrator"
+
+# ─── Skill: diagrams ───
+cat > "$CLAUDE_DIR/skills/diagrams/SKILL.md" << 'SKILL'
+---
+description: Generate architecture and flow diagrams using mermaid-cli (mmdc)
+triggers:
+  - diagram
+  - mermaid
+  - architecture diagram
+  - flow chart
+  - sequence diagram
+  - generate diagram
+  - visualize
+  - erd
+  - class diagram
+---
+
+# Diagram Generation
+
+Use `mmdc` (mermaid-cli) to render diagrams as PNG/SVG.
+
+## Usage
+```bash
+# Write mermaid to file, then render
+cat > /tmp/diagram.mmd << 'EOF'
+graph TD
+    A[Client] --> B[API Gateway]
+    B --> C[Auth Service]
+    B --> D[App Service]
+    D --> E[(Database)]
+EOF
+
+mmdc -i /tmp/diagram.mmd -o diagram.png          # PNG output
+mmdc -i /tmp/diagram.mmd -o diagram.svg           # SVG output
+mmdc -i /tmp/diagram.mmd -o diagram.png -w 1200   # custom width
+mmdc -i /tmp/diagram.mmd -o diagram.pdf           # PDF output
+```
+
+## Diagram Types
+
+### Architecture / System Design
+```mermaid
+graph TD
+    LB[Load Balancer] --> S1[Server 1]
+    LB --> S2[Server 2]
+    S1 --> DB[(PostgreSQL)]
+    S2 --> DB
+    S1 --> Cache[(Redis)]
+    S2 --> Cache
+```
+
+### Sequence Diagram
+```mermaid
+sequenceDiagram
+    Client->>API: POST /login
+    API->>Auth: validate(credentials)
+    Auth-->>API: token
+    API-->>Client: 200 OK {token}
+```
+
+### Entity Relationship
+```mermaid
+erDiagram
+    USER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT ||--o{ LINE_ITEM : "ordered in"
+```
+
+### Git Flow
+```mermaid
+gitgraph
+    commit
+    branch feature
+    commit
+    commit
+    checkout main
+    merge feature
+    commit
+```
+
+### State Diagram
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Review: submit
+    Review --> Approved: approve
+    Review --> Draft: request changes
+    Approved --> Deployed: deploy
+    Deployed --> [*]
+```
+
+### Flowchart (CI/CD Pipeline)
+```mermaid
+graph LR
+    A[Push] --> B[Lint]
+    A --> C[Test]
+    B --> D{All Pass?}
+    C --> D
+    D -->|Yes| E[Build]
+    D -->|No| F[Notify]
+    E --> G[Deploy]
+```
+
+## Workflow
+1. Write mermaid syntax to a `.mmd` file.
+2. Render with `mmdc -i input.mmd -o output.png`.
+3. For docs, use SVG: `mmdc -i input.mmd -o output.svg`.
+4. Store diagrams in `docs/diagrams/` or project root.
+5. Reference in README: `![Architecture](docs/diagrams/arch.png)`.
+
+## Tips
+- Use `graph TD` (top-down) or `graph LR` (left-right) for direction.
+- Keep diagrams focused — one concept per diagram.
+- Use descriptive node IDs: `DB[(PostgreSQL)]` not `A[(DB)]`.
+- For large systems, break into multiple diagrams.
+SKILL
+ok "skill: diagrams"
 
 # obra/superpowers (multiple useful skills)
 if [ ! -d ~/.claude/skills/tdd ]; then
@@ -1379,6 +1768,16 @@ Group by domain (search, data, git, security, infra, etc). If $ARGUMENTS provide
 CMD
 ok "command: /tools"
 
+cat > "$CLAUDE_DIR/commands/workspace-init.md" << 'CMD'
+Initialize workspace for the current project:
+1. Detect project type from files (package.json, pyproject.toml, Cargo.toml, go.mod, etc.)
+2. Create `_workspace.json` with detected commands (dev, build, test, lint, deploy)
+3. If no `.envrc` exists, create one with `direnv` template for the project type
+4. Run `direnv allow` if `.envrc` was created
+5. Show the user the generated config and ask for adjustments
+CMD
+ok "command: /workspace-init"
+
 # ─── Agents ───
 cat > "$CLAUDE_DIR/agents/researcher.md" << 'AGENT'
 ---
@@ -1471,6 +1870,7 @@ eval "$(atuin init bash)"
 eval "$(mise activate bash)"
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 export GIT_PAGER="delta"
+command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
 
 if ! grep -q "Titan CLI Arsenal" ~/.bashrc 2>/dev/null; then
