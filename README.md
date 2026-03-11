@@ -3,20 +3,25 @@
 **One script. Fresh Ubuntu to fully armed Claude Code workstation.**
 
 ```bash
-chmod +x titan-setup.sh
-./titan-setup.sh              # uses $(whoami) as engineer name
-source ~/.bashrc
-claude    # authenticate
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh)
 ```
+
+That's it. One command. Everything installs automatically.
 
 **Options:**
 ```bash
-./titan-setup.sh --name "Alice"   # set engineer name for Claude config
-./titan-setup.sh --dry-run        # preview without making changes
-./titan-setup.sh --help           # show usage
+# With custom engineer name
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh) --name "Alice"
+
+# Preview without making changes
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh) --dry-run
+
+# Or clone and run locally
+git clone https://github.com/SutanuNandigrami/titan-setup.git && cd titan-setup
+./titan-setup.sh --name "Alice"
 ```
 
-That's it. No other scripts, no tar files, no manual steps.
+After install: `source ~/.bashrc && claude` to authenticate.
 
 ### Prerequisites
 - **OS:** Ubuntu 22.04+ (or Debian-based)

@@ -635,10 +635,8 @@ else ok "step-cli (exists)"; fi
 # comby — structural code search/replace that understands syntax
 if ! command -v comby &>/dev/null; then
   sudo apt install -y libpcre3-dev 2>/dev/null
-  bash <(curl -sL get.comby.dev) << 'COMBY_EOF'
-y
-COMBY_EOF
-  command -v comby &>/dev/null && ok "comby" || warn "comby install failed"
+  echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
+    && ok "comby" || warn "comby install failed"
 else ok "comby (exists)"; fi
 
 # runme — execute code blocks from Markdown runbooks
