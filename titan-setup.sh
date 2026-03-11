@@ -946,11 +946,10 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "CLAUDE_CODE_ENABLE_TASKS": "1",
     "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "16000",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "PATH": "TITAN_PATH_PLACEHOLDER"
   },
   "preferences": {
-    "thinking": true,
-    "outputStyle": "explanatory",
     "cleanupPeriodDays": 365
   },
   "showTurnDuration": true,

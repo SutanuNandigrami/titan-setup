@@ -405,7 +405,7 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 ## Changelog
 
-### v3.5 (current)
+### v3.5
 - Fixed: PATH exports for cargo, uv, bun moved outside install if/else branches — tools were invisible on re-runs when already installed
 - Fixed: Added `PATH` to Claude Code `settings.json` env block with expanded absolute paths — tools like `gitleaks` in `~/go/bin` are now discoverable in every Claude Code session without sourcing `.bashrc`
 - Fixed: README audit — corrected permission counts (8 allow, 73 deny), command count (11 not 12), tool count (155+), CLAUDE.md token estimate (~1200), added missing tools/features
@@ -420,7 +420,14 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.6 (current) — Token Usage Optimization
+### v3.7 (current) — Output verbosity + model call reduction
+
+- **Removed:** `outputStyle: "explanatory"` — this actively instructed Claude to be verbose on every request AND injected mid-conversation reminders; removing it re-enables the default concise output mode
+- **Removed:** `thinking: true` — enabled extended thinking globally, adding 1K–10K thinking tokens per turn; use `/think` or plan mode when extended reasoning is actually needed
+- **Added:** `DISABLE_NON_ESSENTIAL_MODEL_CALLS=1` — suppresses AI-generated flavor text (spinner verbs, decorative status messages) that consume real model tokens
+- **Impact:** Estimated 20-40% further reduction in per-turn output token cost; thinking mode is now opt-in
+
+### v3.6 — Token Usage Optimization
 - **Fixed:** Full `trailofbits/skills` git clone (60 SKILL.md / 71K lines) replaced with selective `modern-python` only (1 skill)
 - **Fixed:** Full `hashicorp/agent-skills` git clone (14 SKILL.md / 10K lines) removed — covered by inline `infra-deploy` skill
 - **Removed:** `CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000` — was 2x default, each response could burn 64K tokens
