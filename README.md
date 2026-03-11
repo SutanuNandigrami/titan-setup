@@ -136,7 +136,7 @@ n8n (workflow automation server)
 - OpenTelemetry metrics export for usage tracking
 
 **Community Skills** (cloned from GitHub):
-- [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, root cause tracing, defense in depth, brainstorming
+- [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, brainstorming, verification before completion, writing plans
 - [VibeSec](https://github.com/BehiSecc/VibeSec-Skill) — Web application security (OWASP Top 10, language-specific patterns)
 - [HashiCorp](https://github.com/hashicorp/agent-skills) — Terraform agent skills
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
@@ -155,9 +155,10 @@ n8n (workflow automation server)
 - `/gh-action` — Set up Claude Code GitHub Action for CI/CD integration
 - `/context` — Pack repo into AI-optimized context file using repomix
 
-**2 Subagents:**
+**3 Subagents:**
 - `researcher` — Read-only codebase explorer
 - `planner` — Architecture planning before implementation
+- `reviewer` — Code review (correctness, security, style, performance, testing)
 
 ### Phase 5b — Claude Code Plugins
 - [hookify](https://github.com/anthropics/claude-code-plugins) — Hook management and conversation analysis
@@ -189,7 +190,7 @@ community skills:   0 tokens    (loaded on demand)
 12 commands:        0 tokens    (loaded on /command)
 1 template:         0 tokens    (copied on /gh-action)
 3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
-2 agents:           0 tokens    (loaded on spawn)
+3 agents:           0 tokens    (loaded on spawn)
 audit log:          0 tokens    (async JSONL, never loaded into context)
 CLI --help:         0 tokens    (lazy-loaded at runtime)
 MEMORY.md:          ~200 tokens (loaded every session, persistent project knowledge)
@@ -308,7 +309,10 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `/context` command — pack repo with repomix for AI-optimized context
 - Fixed: `/remember` command — removed hardcoded path, now uses dynamic auto memory directory
 - Fixed: `/catchup` command — now reads auto memory + handoff.md
-- Total: 155+ CLI tools, 11 skills, 6 rules, 12 commands, 3 hooks, 1 template, 3 plugins
+- Added: `reviewer` agent to script (was live-only, would be lost on re-run)
+- Fixed: Superpowers skills updated to match upstream repo (root-cause-tracing/defense-in-depth → verification-before-completion/writing-plans)
+- Fixed: Live config fully synced with script (CLAUDE.md, cli-tools, security-scan, researcher agent)
+- Total: 155+ CLI tools, 11 skills, 6 rules, 12 commands, 3 hooks, 1 template, 3 agents, 3 plugins
 
 ### v3.3
 - Added: `claude-squad` (Go) — multi-agent terminal management with tmux
