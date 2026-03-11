@@ -14,6 +14,11 @@ set -euo pipefail
 # ║   6. Shell integration + verification                           ║
 # ║                                                                  ║
 # ║  Safe to re-run: skips already-installed components             ║
+# ║                                                                  ║
+# ║  Security note: This script uses curl|bash for several official  ║
+# ║  installers (rustup, uv, bun, mise, docker, helm, etc). Review  ║
+# ║  URLs before running. Two community packages (Claude Desktop,    ║
+# ║  Claude Cowork) install from patrickjaja.github.io via sudo.     ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 CYAN='\033[0;36m'
@@ -49,7 +54,7 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --name)    ENGINEER_NAME="$2"; shift 2 ;;
+    --name)    [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     -h|--help) usage ;;
     *) fail "Unknown option: $1"; usage ;;
@@ -66,6 +71,18 @@ if $DRY_RUN; then
   echo "  Shell integration: ~/.bashrc"
   exit 0
 fi
+
+# ─── Temp directory for downloads ───
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+# ─── Architecture detection ───
+UNAME_ARCH=$(uname -m)
+case "$UNAME_ARCH" in
+  x86_64)  ARCH_AMD="amd64"; ARCH_GO="amd64"; ARCH_RUST="x86_64"; ARCH_FULL="x86_64" ;;
+  aarch64) ARCH_AMD="arm64"; ARCH_GO="arm64"; ARCH_RUST="aarch64"; ARCH_FULL="aarch64" ;;
+  *) fail "Unsupported architecture: $UNAME_ARCH"; exit 1 ;;
+esac
 
 section "Phase 1/6 — System Prerequisites"
 
@@ -146,11 +163,14 @@ if command -v go &>/dev/null; then
 else
   echo "  Installing Go..."
   GO_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -1)
-  wget -q "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz"
-  sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "${GO_VERSION}.linux-amd64.tar.gz"
-  rm "${GO_VERSION}.linux-amd64.tar.gz"
-  export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
-  ok "go installed: $(go version)"
+  if [[ -z "$GO_VERSION" ]]; then
+    warn "Failed to fetch Go version — skipping"
+  else
+    wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_VERSION}.linux-${ARCH_GO}.tar.gz"
+    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$WORKDIR/${GO_VERSION}.linux-${ARCH_GO}.tar.gz"
+    export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
+    ok "go installed: $(go version)"
+  fi
 fi
 export GOPATH="$HOME/go"
 export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
@@ -217,19 +237,23 @@ for tool in "${UV_TOOLS[@]}"; do
 done
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
-uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"
-uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"
+command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
+command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
 BUN_TOOLS=("trash-cli" "tldr")
 for tool in "${BUN_TOOLS[@]}"; do
-  echo -n "  Installing $tool..."
-  bun install -g "$tool" &>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
+    ok "$tool (exists)"
+  else
+    echo -n "  Installing $tool..."
+    bun install -g "$tool" &>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  fi
 done
 
-bun install -g @google/gemini-cli 2>/dev/null && ok "gemini-cli" || warn "gemini-cli"
+command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { bun install -g @google/gemini-cli 2>/dev/null && ok "gemini-cli" || warn "gemini-cli"; }
 # n8n — workflow automation server (NOT a CLI tool — runs as docker container)
 if command -v docker &>/dev/null; then
   docker pull n8nio/n8n:latest 2>/dev/null && ok "n8n docker image" || warn "n8n docker pull failed"
@@ -237,9 +261,9 @@ if command -v docker &>/dev/null; then
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
-bun install -g notebooklm-cli 2>/dev/null && ok "notebooklm-cli" || warn "notebooklm-cli"
-bun install -g @kilocode/cli 2>/dev/null && ok "kilocode" || warn "kilocode"
-bun install -g vercel 2>/dev/null && ok "vercel" || warn "vercel"
+command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { bun install -g notebooklm-cli 2>/dev/null && ok "notebooklm-cli" || warn "notebooklm-cli"; }
+command -v kilocode &>/dev/null && ok "kilocode (exists)" || { bun install -g @kilocode/cli 2>/dev/null && ok "kilocode" || warn "kilocode"; }
+command -v vercel &>/dev/null && ok "vercel (exists)" || { bun install -g vercel 2>/dev/null && ok "vercel" || warn "vercel"; }
 
 # ─── Rust tools via cargo ───
 echo -e "\n  ${CYAN}Rust tools (cargo):${NC}"
@@ -353,10 +377,13 @@ fi
 if command -v lazydocker &>/dev/null; then
   ok "lazydocker (exists)"
 else
-  echo -n "  Installing lazydocker (binary)..."
   LAZYDOCKER_VERSION=$(curl -s https://api.github.com/repos/jesseduffield/lazydocker/releases/latest | jq -r .tag_name)
-  curl -sL "https://github.com/jesseduffield/lazydocker/releases/download/${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION#v}_Linux_x86_64.tar.gz" | tar xz -C /tmp lazydocker \
-    && sudo mv /tmp/lazydocker /usr/local/bin/ && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  if [[ -z "$LAZYDOCKER_VERSION" || "$LAZYDOCKER_VERSION" == "null" ]]; then
+    warn "lazydocker — failed to fetch version"
+  else
+    curl -sL "https://github.com/jesseduffield/lazydocker/releases/download/${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION#v}_Linux_${ARCH_FULL}.tar.gz" | tar xz -C "$WORKDIR" lazydocker \
+      && sudo mv "$WORKDIR/lazydocker" /usr/local/bin/ && ok "lazydocker" || warn "lazydocker install failed"
+  fi
 fi
 
 # ctop — archived project, go install broken, use pinned binary release
@@ -364,7 +391,7 @@ if command -v ctop &>/dev/null; then
   ok "ctop (exists)"
 else
   echo -n "  Installing ctop (binary)..."
-  sudo wget -qO /usr/local/bin/ctop https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64 2>/dev/null \
+  sudo wget -qO /usr/local/bin/ctop "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" 2>/dev/null \
     && sudo chmod +x /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
@@ -397,21 +424,21 @@ echo -e "\n  ${CYAN}Binary installs:${NC}"
 
 # kubectl
 if ! command -v kubectl &>/dev/null; then
-  curl -sLO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-  sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm -f kubectl
+  curl -sL -o "$WORKDIR/kubectl" "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH_AMD}/kubectl"
+  sudo install -o root -g root -m 0755 "$WORKDIR/kubectl" /usr/local/bin/kubectl
   ok "kubectl"
 else ok "kubectl (exists)"; fi
 
 # k9s
 if ! command -v k9s &>/dev/null; then
-  curl -sS https://webi.sh/k9s | sh 2>/dev/null
-  ok "k9s"
+  curl -sS https://webi.sh/k9s | sh 2>/dev/null \
+    && ok "k9s" || warn "k9s install failed"
 else ok "k9s (exists)"; fi
 
 # helm
 if ! command -v helm &>/dev/null; then
-  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null
-  ok "helm"
+  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null \
+    && ok "helm" || warn "helm install failed"
 else ok "helm (exists)"; fi
 
 # terraform + packer
@@ -436,30 +463,30 @@ else ok "infracost (exists)"; fi
 
 # hadolint
 if ! command -v hadolint &>/dev/null; then
-  sudo wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-  sudo chmod +x /usr/local/bin/hadolint
-  ok "hadolint"
+  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-${ARCH_FULL}" \
+    && sudo chmod +x /usr/local/bin/hadolint \
+    && ok "hadolint" || warn "hadolint install failed"
 else ok "hadolint (exists)"; fi
 
 # duckdb
 if ! command -v duckdb &>/dev/null; then
-  curl -sLO https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
-  unzip -qo duckdb_cli-linux-amd64.zip && sudo mv duckdb /usr/local/bin/ && rm -f duckdb_cli-linux-amd64.zip
+  curl -sL -o "$WORKDIR/duckdb.zip" "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${ARCH_AMD}.zip"
+  unzip -qo "$WORKDIR/duckdb.zip" -d "$WORKDIR" && sudo mv "$WORKDIR/duckdb" /usr/local/bin/
   ok "duckdb"
 else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
-  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add - 2>/dev/null
-  echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
+  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   sudo apt update -qq && sudo apt install -y -qq trivy
   ok "trivy"
 else ok "trivy (exists)"; fi
 
 # mc (MinIO client)
 if ! command -v mc &>/dev/null; then
-  curl -sLO https://dl.min.io/client/mc/release/linux-amd64/mc
-  chmod +x mc && sudo mv mc /usr/local/bin/
+  curl -sL -o "$WORKDIR/mc" "https://dl.min.io/client/mc/release/linux-${ARCH_AMD}/mc"
+  chmod +x "$WORKDIR/mc" && sudo mv "$WORKDIR/mc" /usr/local/bin/
   ok "mc"
 else ok "mc (exists)"; fi
 
@@ -474,27 +501,28 @@ else ok "gh (exists)"; fi
 
 # fzf
 if ! command -v fzf &>/dev/null; then
-  git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf 2>/dev/null
-  yes | ~/.fzf/install --all --no-bash --no-zsh --no-fish 2>/dev/null
-  ok "fzf"
+  git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf 2>/dev/null \
+    && yes | ~/.fzf/install --all --no-bash --no-zsh --no-fish 2>/dev/null \
+    && ok "fzf" || warn "fzf install failed"
 else ok "fzf (exists)"; fi
 
 # ShellCheck linter (latest binary, apt version is ancient)
 
 SHELLCHECK_VERSION=$(curl -s https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq -r .tag_name)
-if ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
-  wget -qO shellcheck.tar.xz "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
-  tar xf shellcheck.tar.xz && sudo mv "shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ && rm -rf shellcheck*
-  ok "shellcheck ($SHELLCHECK_VERSION)"
+if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
+  warn "shellcheck — failed to fetch version, keeping existing"
+elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
+  wget -qO "$WORKDIR/shellcheck.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${ARCH_FULL}.tar.xz"
+  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ \
+    && ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
 else ok "shellcheck (exists)"; fi
 
 # yazi (file manager — cargo build is broken due to rand_core conflict)
 if ! command -v yazi &>/dev/null; then
-  curl -sLO https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.zip
-  unzip -qo yazi-x86_64-unknown-linux-gnu.zip
-  sudo mv yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/
-  sudo mv yazi-x86_64-unknown-linux-gnu/ya /usr/local/bin/
-  rm -rf yazi-*
+  curl -sL -o "$WORKDIR/yazi.zip" "https://github.com/sxyazi/yazi/releases/latest/download/yazi-${ARCH_RUST}-unknown-linux-gnu.zip"
+  unzip -qo "$WORKDIR/yazi.zip" -d "$WORKDIR"
+  sudo mv "$WORKDIR/yazi-${ARCH_RUST}-unknown-linux-gnu/yazi" /usr/local/bin/
+  sudo mv "$WORKDIR/yazi-${ARCH_RUST}-unknown-linux-gnu/ya" /usr/local/bin/
   ok "yazi"
 else ok "yazi (exists)"; fi
 
@@ -563,6 +591,12 @@ fi
 
 
 section "Phase 5/6 — Deploy ~/.claude/ Config"
+
+# sd is required for template substitution (installed via cargo in Phase 3)
+if ! command -v sd &>/dev/null; then
+  warn "sd not found — falling back to sed for template substitution"
+  sd() { sed -i "s|$1|$2|g" "$3"; }
+fi
 
 CLAUDE_DIR="$HOME/.claude"
 

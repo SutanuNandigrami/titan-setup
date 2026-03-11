@@ -4,12 +4,26 @@
 
 ```bash
 chmod +x titan-setup.sh
-./titan-setup.sh
+./titan-setup.sh              # uses $(whoami) as engineer name
 source ~/.bashrc
 claude    # authenticate
 ```
 
+**Options:**
+```bash
+./titan-setup.sh --name "Alice"   # set engineer name for Claude config
+./titan-setup.sh --dry-run        # preview without making changes
+./titan-setup.sh --help           # show usage
+```
+
 That's it. No other scripts, no tar files, no manual steps.
+
+### Prerequisites
+- **OS:** Ubuntu 22.04+ (or Debian-based)
+- **Arch:** x86_64 or aarch64 (auto-detected)
+- **Access:** `sudo` required for system packages and binary installs
+- **Network:** Internet access for downloads
+- **Time:** ~30-45 minutes on first run (Rust crates compile from source)
 
 ---
 
@@ -28,11 +42,12 @@ That's it. No other scripts, no tar files, no manual steps.
 | **bun** | npm, npx | JS CLI tools |
 | **Go** | — | Go CLI tools |
 | **mise** | asdf, nvm, pyenv | Runtime version management |
+| **Docker** | — | Container runtime (via get.docker.com) |
 
 ### Phase 3 — 100+ CLI Tools
 
 **Python (via `uv tool install`):**
-httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project
+httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project
 
 **JS (via `bun install -g`):**
 trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline
@@ -51,8 +66,10 @@ n8n (workflow automation server)
 
 ### Phase 4 — Claude Code
 - Native binary installer (auto-updates, no Node.js dependency)
-- Claude Desktop (Linux, via community package)
-- Claude Cowork Service
+- Claude Desktop (Linux, via community package) *
+- Claude Cowork Service *
+
+> \* Community packages from [patrickjaja.github.io](https://github.com/patrickjaja) — not official Anthropic releases. Review before installing.
 
 ### Phase 5 — `~/.claude/` Global Config
 
@@ -91,6 +108,12 @@ n8n (workflow automation server)
 - `researcher` — Read-only codebase explorer
 - `planner` — Architecture planning before implementation
 
+### Phase 5b — Claude Code Plugins
+- [hookify](https://github.com/anthropics/claude-code-plugins) — Hook management and conversation analysis
+- [code-review](https://github.com/anthropics/claude-code-plugins) — PR code review
+- [skill-creator](https://github.com/anthropics/claude-code-plugins) — Create and optimize skills
+- Marketplaces: Anthropic official + Trail of Bits
+
 ### Phase 6 — Shell Integration
 - PATH: `~/.local/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/go/bin`
 - Prompts: starship
@@ -108,7 +131,7 @@ n8n (workflow automation server)
 ```
 CLAUDE.md:        ~800 tokens  (loaded every session)
 settings.json:    0 tokens     (parsed by harness)
-5 inline skills:  0 tokens     (loaded on demand by relevance, ~340 lines total)
+5 inline skills:  0 tokens     (loaded on demand by relevance, ~385 lines total)
 community skills: 0 tokens     (loaded on demand)
 7 commands:       0 tokens     (loaded on /command)
 2 agents:         0 tokens     (loaded on spawn)
