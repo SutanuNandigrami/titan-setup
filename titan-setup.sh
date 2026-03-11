@@ -258,7 +258,7 @@ fi
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
-BUN_TOOLS=("trash-cli" "tldr")
+BUN_TOOLS=("trash-cli" "tldr" "prettier")
 for tool in "${BUN_TOOLS[@]}"; do
   if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
     ok "$tool (exists)"
@@ -308,7 +308,7 @@ CARGO_CRATES=(
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
   bandwhich websocat bore-cli procs bottom hyperfine
   pueue watchexec-cli just starship atuin navi choose
-  xh mdbook tokei jnv
+  xh mdbook tokei jnv ouch
 )
 
 CARGO_FAIL=0
@@ -392,6 +392,7 @@ declare -A GO_MAP=(
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
   ["gum"]="github.com/charmbracelet/gum@latest"
   ["act"]="github.com/nektos/act@latest"
+  ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
 )
 
 for name in "${!GO_MAP[@]}"; do
@@ -601,6 +602,26 @@ if ! command -v cloudflared &>/dev/null; then
     && ok "cloudflared" || warn "cloudflared install failed"
 else ok "cloudflared (exists)"; fi
 
+# syft — SBOM generation for containers and filesystems
+if ! command -v syft &>/dev/null; then
+  curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin \
+    && ok "syft" || warn "syft install failed"
+else ok "syft (exists)"; fi
+
+# grype — vulnerability scanner for containers and filesystems (pairs with syft)
+if ! command -v grype &>/dev/null; then
+  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin \
+    && ok "grype" || warn "grype install failed"
+else ok "grype (exists)"; fi
+
+# step-cli — certificate inspection, generation, and TLS debugging
+if ! command -v step &>/dev/null; then
+  STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+  curl -sL -o "$WORKDIR/step-cli.deb" "https://dl.smallstep.com/gh-release/cli/gh-release-header/v${STEP_VERSION}/step-cli_${STEP_VERSION}_${ARCH_AMD}.deb" \
+    && sudo dpkg -i "$WORKDIR/step-cli.deb" &>/dev/null \
+    && ok "step-cli ${STEP_VERSION}" || warn "step-cli install failed"
+else ok "step-cli (exists)"; fi
+
 
 section "Phase 4/6 — Claude Code CLI"
 
@@ -694,6 +715,9 @@ NEVER guess flags. Discover tools on demand:
 | CSV | `xsv` or `miller` | awk |
 | SQL on files | `duckdb` | sqlite3 |
 | HTML extraction | `htmlq` | regex |
+| Compress/extract | `ouch` | tar/unzip/7z |
+| Format shell | `shfmt` | manual |
+| Format web files | `prettier` | manual |
 
 ## CLI Tools That Replace MCPs — use these instead
 | Domain | CLI tool | Replaces MCP |
@@ -711,8 +735,10 @@ NEVER guess flags. Discover tools on demand:
 | SQL on files | `duckdb` | — |
 | HTTP/APIs | `xh` | Fetch MCP |
 | Secrets scan | `gitleaks`, `trufflehog` | — |
-| Vuln scan | `trivy`, `nuclei` | — |
+| Vuln scan | `trivy`, `nuclei`, `grype` | — |
+| SBOM | `syft` | — |
 | Static analysis | `semgrep` | — |
+| Certificates | `step`, `mkcert` | — |
 
 ## Workflow Rules — IMPORTANT
 1. **Branch first**: Never commit directly to `main`.
@@ -868,6 +894,7 @@ Never guess flags — always check help first.
 - `broot` — interactive directory navigation.
 - `yazi` — full terminal file manager when needed.
 - `zoxide` — smart directory jumping.
+- `ouch` — universal compress/decompress (tar, zip, 7z, zstd, gz, xz, bz2).
 
 **Text & Data Wrangling:**
 - `jq` — JSON processing. Always use for JSON manipulation.
@@ -901,6 +928,8 @@ Never guess flags — always check help first.
 - `codespell` — fix common misspellings.
 - `hadolint` — lint Dockerfiles.
 - `actionlint` — lint GitHub Actions workflows.
+- `shfmt` — auto-format shell scripts (pairs with shellcheck).
+- `prettier` — format YAML, JSON, Markdown, HTML, CSS consistently.
 
 **Containers & Kubernetes:**
 - `lazydocker` — Docker management UI.
@@ -946,6 +975,9 @@ Never guess flags — always check help first.
 - `sqlmap` — SQL injection testing.
 - `parry` — prompt injection scanner for LLM apps.
 - `sherlock` — username search across social networks.
+- `syft` — generate SBOMs for containers and filesystems.
+- `grype` — vulnerability scanner (pairs with syft for full supply chain coverage).
+- `step` — inspect/generate certificates, debug TLS issues.
 
 **Databases:**
 - `duckdb` — run SQL on local files (CSV, Parquet, JSON). Extremely powerful.
@@ -1040,8 +1072,10 @@ Before any push to remote, run this sequence:
 
 ## Container Security
 1. `trivy image <image>` — scan container image
-2. `dive <image>` — check image layer efficiency
-3. `hadolint Dockerfile` — lint Dockerfile for best practices
+2. `syft <image>` — generate SBOM (Software Bill of Materials)
+3. `grype <image>` — scan SBOM/image for known vulnerabilities
+4. `dive <image>` — check image layer efficiency
+5. `hadolint Dockerfile` — lint Dockerfile for best practices
 
 ## Infrastructure Security
 1. `trivy config .` — scan Terraform/CloudFormation for misconfigs
@@ -1053,6 +1087,16 @@ Before any push to remote, run this sequence:
 2. `nuclei -u <target>` — template-based vuln scanning
 3. `nikto -h <target>` — web server scanning
 4. `ffuf -u <url>/FUZZ -w <wordlist>` — directory fuzzing
+
+## Supply Chain Security
+1. `syft dir:.` — generate SBOM for project directory
+2. `grype sbom:./sbom.json` — scan SBOM for known CVEs
+3. `grype dir:.` — scan project directly for vulnerable dependencies
+
+## TLS & Certificate Debugging
+1. `step certificate inspect <cert.pem>` — view certificate details
+2. `step certificate inspect https://<domain>` — inspect remote TLS cert
+3. `step certificate create` — generate self-signed certs for testing
 
 ## System Hardening
 1. `lynis audit system` — full system security audit
