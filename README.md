@@ -258,10 +258,16 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 - `/gh-action` — Set up Claude Code GitHub Action for CI/CD integration
 - `/context` — Pack repo into AI-optimized context file using repomix
 
-**3 Subagents:**
-- `researcher` — Read-only codebase explorer
-- `planner` — Architecture planning before implementation
-- `reviewer` — Code review (correctness, security, style, performance, testing)
+**3 Subagents** (with model routing):
+- `researcher` — Read-only codebase explorer (**Haiku** — fast, cheap for search tasks)
+- `planner` — Architecture planning before implementation (**Opus** — deep reasoning)
+- `reviewer` — Code review (correctness, security, style, performance, testing) (**Sonnet** — balanced)
+
+**Model Routing:**
+- Lead session: `opusplan` — Opus in plan mode (Shift+Tab), Sonnet in execution mode
+- Subagent default: `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`
+- Per-agent overrides: `model:` field in agent frontmatter (haiku/sonnet/opus)
+- Switch mid-session: `/model` command
 
 ### Phase 5b — Claude Code Plugins
 - [hookify](https://github.com/anthropics/claude-code-plugins) — Hook management and conversation analysis
@@ -425,6 +431,8 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - **Removed:** `extraKnownMarketplaces` for trailofbits — individual plugins installable via `claude plugin marketplace add`
 - **Added:** Cleanup step removes old full trailofbits/hashicorp clones on re-run
 - **Fixed:** Context Budget section in README — was claiming "0 tokens" for skills, actual was 50-100K
+- **Added:** `opusplan` as default model — Opus for planning (Shift+Tab), Sonnet for execution
+- **Added:** Per-agent model routing — researcher (Haiku), planner (Opus), reviewer (Sonnet)
 - **Impact:** ~60-70% reduction in per-session token usage, ~30-50% reduction in per-turn cost
 - Total: 155+ CLI tools, 11 skills + 8 community, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 2 plugins, 15 env vars
 

@@ -1197,6 +1197,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "hookify@claude-plugins-official": true,
     "code-review@claude-plugins-official": true
   },
+  "model": "opusplan",
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
@@ -1211,49 +1212,10 @@ sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
 sd 'TITAN_HOME_PLACEHOLDER' "$HOME" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
 
-# ─── ccstatusline config (Powerline statusline for Claude Code) ───
-CCSTATUS_DIR="$HOME/.config/ccstatusline"
-mkdir -p "$CCSTATUS_DIR"
-cat > "$CCSTATUS_DIR/settings.json" << 'CCSTATUSLINE'
-{
-  "version": 3,
-  "lines": [
-    [
-      { "id": "1", "type": "model", "color": "#1e1e2e", "backgroundColor": "#89b4fa", "bold": true, "rawValue": true },
-      { "id": "2", "type": "thinking-effort", "color": "#1e1e2e", "backgroundColor": "#cba6f7", "rawValue": true },
-      { "id": "3", "type": "git-branch", "color": "#1e1e2e", "backgroundColor": "#a6e3a1", "bold": true, "metadata": { "hideNoGit": "true" } },
-      { "id": "4", "type": "git-changes", "color": "#1e1e2e", "backgroundColor": "#f9e2af", "metadata": { "hideNoGit": "true" } },
-      { "id": "5", "type": "current-working-dir", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true, "metadata": { "segments": "3", "fishStyle": "true", "homeAbbreviation": "true" } },
-      { "id": "6", "type": "context-percentage-usable", "color": "#1e1e2e", "backgroundColor": "#94e2d5", "rawValue": true },
-      { "id": "7", "type": "context-bar", "color": "#94e2d5", "backgroundColor": "#1e1e2e", "metadata": { "displayMode": "short" } }
-    ],
-    [
-      { "id": "8", "type": "tokens-total", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true },
-      { "id": "9", "type": "output-speed", "color": "#1e1e2e", "backgroundColor": "#cba6f7", "rawValue": true, "metadata": { "window": "30" } },
-      { "id": "10", "type": "session-cost", "color": "#1e1e2e", "backgroundColor": "#f9e2af", "rawValue": true },
-      { "id": "11", "type": "block-timer", "color": "#1e1e2e", "backgroundColor": "#f38ba8", "rawValue": true },
-      { "id": "12", "type": "session-clock", "color": "#1e1e2e", "backgroundColor": "#89b4fa", "rawValue": true },
-      { "id": "13", "type": "session-usage", "color": "#1e1e2e", "backgroundColor": "#a6e3a1", "rawValue": true },
-      { "id": "14", "type": "weekly-usage", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true }
-    ],
-    []
-  ],
-  "flexMode": "full-minus-40",
-  "compactThreshold": 60,
-  "colorLevel": 3,
-  "inheritSeparatorColors": true,
-  "globalBold": false,
-  "powerline": {
-    "enabled": true,
-    "separators": ["\ue0b0"],
-    "separatorInvertBackground": [false],
-    "startCaps": ["\ue0b6"],
-    "endCaps": ["\ue0b4"],
-    "autoAlign": true
-  }
-}
-CCSTATUSLINE
-ok "ccstatusline config (Catppuccin Mocha Powerline theme)"
+# ccstatusline config is user-managed via `ccstatusline` TUI editor
+# The script installs the binary (bun install -g ccstatusline) but does NOT
+# write config — run `ccstatusline` interactively to customize
+ok "ccstatusline (config is user-managed, run 'ccstatusline' to customize)"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
@@ -2904,6 +2866,7 @@ cat > "$CLAUDE_DIR/agents/researcher.md" << 'AGENT'
 ---
 name: researcher
 description: Read-only codebase explorer. Use for investigating code patterns, finding files, understanding architecture.
+model: haiku
 tools:
   - Read
   - Glob
@@ -2920,6 +2883,7 @@ cat > "$CLAUDE_DIR/agents/planner.md" << 'AGENT'
 ---
 name: planner
 description: Architecture planning agent. Explores codebase and produces implementation plans before code is written.
+model: opus
 tools:
   - Read
   - Glob
@@ -2936,6 +2900,7 @@ cat > "$CLAUDE_DIR/agents/reviewer.md" << 'AGENT'
 ---
 name: reviewer
 description: Code review agent. Reviews diffs, checks for bugs, security issues, style violations, and provides actionable feedback.
+model: sonnet
 tools:
   - Read
   - Glob
