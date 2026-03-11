@@ -162,16 +162,30 @@ else
 fi
 
 # ─── Go ───
+GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
+GO_NEED_INSTALL=false
 if command -v go &>/dev/null; then
-  ok "go already installed: $(go version)"
+  GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+')
+  GO_LATEST_VER=${GO_LATEST#go}
+  # Compare major.minor — upgrade if current < latest major.minor
+  GO_CUR_MINOR=$(echo "$GO_CURRENT" | cut -d. -f1-2)
+  GO_LAT_MINOR=$(echo "$GO_LATEST_VER" | cut -d. -f1-2)
+  if [ "$(printf '%s\n%s' "$GO_CUR_MINOR" "$GO_LAT_MINOR" | sort -V | head -1)" != "$GO_LAT_MINOR" ]; then
+    echo "  Go $GO_CURRENT is outdated (latest: $GO_LATEST_VER) — upgrading..."
+    GO_NEED_INSTALL=true
+  else
+    ok "go already installed: $(go version)"
+  fi
 else
   echo "  Installing Go..."
-  GO_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -1)
-  if [[ -z "$GO_VERSION" ]]; then
+  GO_NEED_INSTALL=true
+fi
+if [ "$GO_NEED_INSTALL" = true ]; then
+  if [[ -z "$GO_LATEST" ]]; then
     warn "Failed to fetch Go version — skipping"
   else
-    wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_VERSION}.linux-${ARCH_GO}.tar.gz"
-    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$WORKDIR/${GO_VERSION}.linux-${ARCH_GO}.tar.gz"
+    wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
+    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
     export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
     ok "go installed: $(go version)"
   fi
