@@ -2380,6 +2380,14 @@ ${DIFF_STAT:-No changes}
 ${LAST_CONTEXT:-No transcript context available}
 EOF
 
+# Prune JSONL session files: keep newest 30, delete anything older than 180 days
+find "$HOME/.claude/projects" -name "*.jsonl" -mtime +180 -delete 2>/dev/null || true
+# Also cap total at 30 across all project dirs
+mapfile -t ALL_JSONL < <(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
+if [[ ${#ALL_JSONL[@]} -gt 30 ]]; then
+  printf '%s\n' "${ALL_JSONL[@]:30}" | xargs -r rm -f 2>/dev/null || true
+fi
+
 exit 0
 HOOK
 chmod +x "$CLAUDE_DIR/hooks/pre-compact.sh"
@@ -2745,6 +2753,13 @@ if [ ! -d ~/.claude/skills/tdd ]; then
     cp -r /tmp/superpowers/skills/brainstorming ~/.claude/skills/brainstorming 2>/dev/null || true
     cp -r /tmp/superpowers/skills/verification-before-completion ~/.claude/skills/verification-before-completion 2>/dev/null || true
     cp -r /tmp/superpowers/skills/writing-plans ~/.claude/skills/writing-plans 2>/dev/null || true
+    # Add paths scoping to large skills so they don't load on every session (bug #14882)
+    if [ -f ~/.claude/skills/tdd/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/tdd/SKILL.md 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.go", "**/*.rs", "**/*.java", "**/*.cpp", "**/*.c", "**/*.rb", "**/test*", "**/spec*", "**/*_test*", "**/*_spec*", "**/pytest.ini", "**/jest.config*", "**/go.mod"]' ~/.claude/skills/tdd/SKILL.md
+    fi
+    if [ -f ~/.claude/skills/systematic-debugging/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/systematic-debugging/SKILL.md 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' ~/.claude/skills/systematic-debugging/SKILL.md
+    fi
     ok "superpowers skills"
   else
     warn "superpowers clone failed"
@@ -2758,6 +2773,10 @@ fi
 if [ ! -d ~/.claude/skills/vibesec ]; then
   git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git ~/.claude/skills/vibesec 2>/dev/null && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
+# Add paths scoping to vibesec (758 lines — only load for web/security files)
+if [ -f ~/.claude/skills/vibesec/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/vibesec/SKILL.md 2>/dev/null; then
+  sed -i '3a paths: ["**/*.html", "**/*.htm", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.py", "**/routes*", "**/auth*", "**/views*", "**/controllers*", "**/api*", "**/nginx*", "**/Dockerfile*", "**/docker-compose*"]' ~/.claude/skills/vibesec/SKILL.md
+fi
 
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
 # Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
@@ -2771,6 +2790,18 @@ if [ ! -d ~/.claude/skills/trailofbits-modern-python ]; then
   fi
   rm -rf /tmp/trailofbits-skills
 else ok "trailofbits: modern-python (exists)"; fi
+# Fix SKILL.md path: plugin structure nests SKILL.md under skills/modern-python/, Claude expects root
+# Also add paths scoping so it only loads for Python files
+if [ -f ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md ] \
+   && [ ! -f ~/.claude/skills/trailofbits-modern-python/SKILL.md ]; then
+  sed '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+    ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md \
+    > ~/.claude/skills/trailofbits-modern-python/SKILL.md
+  ok "trailofbits: SKILL.md fixed at root with paths scoping"
+elif [ -f ~/.claude/skills/trailofbits-modern-python/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/trailofbits-modern-python/SKILL.md 2>/dev/null; then
+  sed -i '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+    ~/.claude/skills/trailofbits-modern-python/SKILL.md
+fi
 
 # Cleanup: remove full trailofbits/hashicorp clones from previous installs (token bloat)
 # These dumped 60+14 SKILL.md files into context at startup (~81K lines)
@@ -2789,6 +2820,10 @@ if [ ! -d ~/.claude/skills/nlm-cli ]; then
   cp -r /tmp/nlm-cli/nlm-cli-skill ~/.claude/skills/nlm-cli 2>/dev/null && ok "notebooklm skill" || warn "notebooklm skill"
   rm -rf /tmp/nlm-cli
 else ok "notebooklm skill (exists)"; fi
+# Add tight paths scoping to nlm-cli (350 lines, very niche — only load when nlm files present)
+if [ -f ~/.claude/skills/nlm-cli/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/nlm-cli/SKILL.md 2>/dev/null; then
+  sed -i '3a paths: ["**/nlm*", "**/.nlm*", "**/notebooklm*", "**/.notebooklm*"]' ~/.claude/skills/nlm-cli/SKILL.md
+fi
 
 # ─── Commands ───
 cat > "$CLAUDE_DIR/commands/catchup.md" << 'CMD'

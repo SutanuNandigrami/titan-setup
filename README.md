@@ -420,7 +420,14 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.8 (current) — Smart memory: on-demand retrieval, zero startup cost
+### v3.9 (current) — Context audit: skill scoping + JSONL pruning
+
+- **Fixed:** 4 large skills (vibesec 758L, tdd 371L, nlm-cli 350L, systematic-debugging 296L) had no `paths:` frontmatter — per bug #14882, all skill content loads at startup; added `paths:` scoping so each skill only loads when relevant file types are open
+- **Fixed:** `trailofbits-modern-python` had SKILL.md buried at `skills/modern-python/SKILL.md` — Claude Code couldn't load it; created root `SKILL.md` with proper `paths:` scoping for Python files
+- **Added:** JSONL session file pruning to `pre-compact.sh` — deletes files >180 days old, caps total at 30; prevents unbounded disk accumulation
+- **Impact:** Startup context reduced by up to 1,775 lines (vibesec+tdd+nlm+sysdbg) on typical non-web/non-test sessions; Python sessions now get modern-python guidance for the first time
+
+### v3.8 — Smart memory: on-demand retrieval, zero startup cost
 
 - **Fixed:** `SessionStart` hook `matcher: ""` fired on every startup AND every resume — changed to `matcher: "startup|compact"` (skips redundant resume firing, always fires post-compaction for amnesia prevention)
 - **Fixed:** `UserPromptSubmit` hook `echo 'Success'` was injecting the word "Success" as context into every single prompt — replaced with keyword-triggered memory injection (`prompt-memory-inject.sh`)
