@@ -705,7 +705,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   warn "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules}
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -795,7 +795,17 @@ NEVER guess flags. Discover tools on demand:
 ## Context Hygiene
 - Use subagents for research to keep main context clean.
 - Write plans to `_scratchpad.md`, not just chat.
-- When compacting, always preserve: current branch, modified files, test status, blockers.
+- At session start, check `~/.claude/memory/handoff.md` — it contains auto-saved state from the previous session.
+
+## Compaction Protocol
+When context is being compacted, ALWAYS preserve in the summary:
+1. **Current task** — what you are working on and why
+2. **Branch name** — the active git branch
+3. **Modified files** — all files changed in this session
+4. **Test status** — last test commands and pass/fail results
+5. **Blockers** — any unresolved errors or open questions
+6. **Key decisions** — architectural or design choices made
+7. **Next steps** — what needs to happen next
 CLAUDEMD
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/CLAUDE.md"
 ok "CLAUDE.md"
@@ -889,6 +899,42 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
           {
             "type": "command",
             "command": "msg=$(jq -r '.message // \"Claude needs attention\"'); notify-send 'Claude Code' \"$msg\" 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-compact.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-end.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start.sh",
             "timeout": 5
           }
         ]
@@ -1990,6 +2036,285 @@ systemctl --user daemon-reload
 SKILL
 ok "skill: process-supervisor"
 
+# ─── Hook Scripts (Memory/Context Management) ───
+
+cat > "$CLAUDE_DIR/hooks/pre-compact.sh" << 'HOOK'
+#!/usr/bin/env bash
+# PreCompact hook — auto-save session state before compaction
+set -euo pipefail
+
+MEMORY_DIR="$HOME/.claude/memory"
+HANDOFF="$MEMORY_DIR/handoff.md"
+mkdir -p "$MEMORY_DIR"
+
+# Read input JSON from stdin
+INPUT=$(cat)
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
+
+# Capture git state
+BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
+STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
+DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+
+# Extract last assistant messages from transcript (if available)
+LAST_CONTEXT=""
+if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
+  LAST_CONTEXT=$(tail -100 "$TRANSCRIPT" 2>/dev/null \
+    | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null \
+    | tail -c 3000 || true)
+fi
+
+# Write handoff file
+cat > "$HANDOFF" << EOF
+---
+timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+session_id: ${SESSION_ID}
+branch: ${BRANCH}
+trigger: pre-compact
+---
+
+# Session Handoff
+
+## Branch
+\`${BRANCH}\`
+
+## Modified Files
+\`\`\`
+${MODIFIED:-No modified files}
+\`\`\`
+
+## Git Status
+\`\`\`
+${STATUS:-Clean working tree}
+\`\`\`
+
+## Diff Summary
+\`\`\`
+${DIFF_STAT:-No changes}
+\`\`\`
+
+## Last Context
+${LAST_CONTEXT:-No transcript context available}
+EOF
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/pre-compact.sh"
+ok "hook: pre-compact.sh"
+
+cat > "$CLAUDE_DIR/hooks/session-end.sh" << 'HOOK'
+#!/usr/bin/env bash
+# Stop hook — capture final session state for next session
+set -euo pipefail
+
+MEMORY_DIR="$HOME/.claude/memory"
+HANDOFF="$MEMORY_DIR/handoff.md"
+mkdir -p "$MEMORY_DIR"
+
+# Read input JSON from stdin
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
+LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // empty' 2>/dev/null | head -c 2000)
+
+# Capture git state
+BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
+STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
+DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+
+# Write handoff file
+cat > "$HANDOFF" << EOF
+---
+timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+session_id: ${SESSION_ID}
+branch: ${BRANCH}
+trigger: session-end
+---
+
+# Session Handoff
+
+## Branch
+\`${BRANCH}\`
+
+## Modified Files
+\`\`\`
+${MODIFIED:-No modified files}
+\`\`\`
+
+## Git Status
+\`\`\`
+${STATUS:-Clean working tree}
+\`\`\`
+
+## Diff Summary
+\`\`\`
+${DIFF_STAT:-No changes}
+\`\`\`
+
+## Last Assistant Message
+${LAST_MSG:-No message captured}
+EOF
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/session-end.sh"
+ok "hook: session-end.sh"
+
+cat > "$CLAUDE_DIR/hooks/session-start.sh" << 'HOOK'
+#!/usr/bin/env bash
+# SessionStart hook — notify about previous session state
+set -euo pipefail
+
+HANDOFF="$HOME/.claude/memory/handoff.md"
+
+# Check if handoff exists and is less than 24 hours old
+if [[ -f "$HANDOFF" ]]; then
+  FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0) ))
+  if (( FILE_AGE < 86400 )); then
+    echo "[Memory] Previous session state available at ~/.claude/memory/handoff.md ($(( FILE_AGE / 60 ))m ago)" >&2
+  fi
+fi
+
+exit 0
+HOOK
+chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
+ok "hook: session-start.sh"
+
+# ─── .claudeignore Template ───
+
+cat > "$CLAUDE_DIR/claudeignore-template" << 'IGNORE'
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pnp.*
+
+# Build output
+dist/
+build/
+out/
+.next/
+.nuxt/
+target/
+coverage/
+*.egg-info/
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terragrunt-cache/
+
+# Version control internals
+.git/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Large / binary files
+*.wasm
+*.sqlite
+*.db
+*.zip
+*.tar.gz
+*.tgz
+
+# Secrets (defense in depth)
+.env
+.env.*
+*.pem
+*.key
+IGNORE
+ok "template: claudeignore-template"
+
+# ─── Conditional Rules ───
+
+cat > "$CLAUDE_DIR/rules/python.md" << 'RULE'
+---
+paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/requirements*.txt"]
+---
+# Python Rules
+- Use type hints on all function signatures
+- Use `ruff check` and `ruff format` — never `black`, `flake8`, `isort`
+- Use `uv` for package management — never `pip install`
+- Prefer `pathlib.Path` over `os.path`
+- Use `logging` module, never bare `print()` for diagnostics
+- Docstrings on public functions (Google style)
+- Target Python 3.10+ (use `match`, `X | Y` union types)
+RULE
+ok "rule: python.md"
+
+cat > "$CLAUDE_DIR/rules/shell.md" << 'RULE'
+---
+paths: ["**/*.sh", "**/*.bash", "**/justfile"]
+---
+# Shell Rules
+- Start scripts with `set -euo pipefail`
+- Always quote variables: `"$var"` not `$var`
+- Run `shellcheck` before executing any script
+- Use `shfmt` for formatting
+- Prefer `[[` over `[` for conditionals
+- Use `command -v` not `which` for existence checks
+- Arrays: `"${arr[@]}"` with quotes
+RULE
+ok "rule: shell.md"
+
+cat > "$CLAUDE_DIR/rules/terraform.md" << 'RULE'
+---
+paths: ["**/*.tf", "**/*.tfvars", "**/*.hcl", "**/terraform/**"]
+---
+# Terraform Rules
+- Always `terraform fmt` before commit
+- Always `terraform plan` before `terraform apply` — never `-auto-approve` in production
+- Run `tflint` and `trivy config .` before applying
+- Use `infracost` to estimate cost impact
+- One resource per file where practical
+- Use modules for reusable infrastructure
+- Secrets via `sops` or `infisical` — never plaintext in `.tf` files
+- State files (`.tfstate`) must never be committed
+RULE
+ok "rule: terraform.md"
+
+cat > "$CLAUDE_DIR/rules/docker.md" << 'RULE'
+---
+paths: ["**/Dockerfile*", "**/docker-compose*", "**/compose.yaml", "**/compose.yml"]
+---
+# Docker Rules
+- Lint with `hadolint` before building
+- Scan images with `trivy image` before pushing
+- Generate SBOM with `syft` and scan with `grype`
+- Use multi-stage builds to minimize image size
+- Pin base image versions — no `:latest` in production
+- Use `dive` to analyze layer efficiency
+- Run as non-root user
+- Verify signatures with `cosign verify` when pulling third-party images
+RULE
+ok "rule: docker.md"
+
+cat > "$CLAUDE_DIR/rules/security.md" << 'RULE'
+---
+paths: ["**/*"]
+---
+# Security Rules (Always Active)
+- Run `gitleaks detect` before any `git push`
+- Never commit secrets, tokens, API keys, or credentials
+- Never hardcode passwords — use env vars or secret managers (`sops`, `infisical`, `age`)
+- Scan dependencies: `osv-scanner` or `grype dir:.`
+- Review all `curl | bash` commands before execution
+- Check TLS certs with `step certificate inspect` when debugging HTTPS issues
+- Decode JWTs with `jwt decode <token>` — never trust unverified tokens
+RULE
+ok "rule: security.md"
+
 # ─── /remember command ───
 cat > "$CLAUDE_DIR/commands/remember.md" << 'CMD'
 Save a piece of knowledge to persistent memory for use across sessions.
@@ -2059,6 +2384,7 @@ else ok "notebooklm skill (exists)"; fi
 # ─── Commands ───
 cat > "$CLAUDE_DIR/commands/catchup.md" << 'CMD'
 Read git branch, last 10 commits, `git status`, and if they exist: `_scratchpad.md` and `_handoff.md`.
+Also check `~/.claude/memory/handoff.md` — this is auto-generated by session hooks and contains structured state from the last session. Prioritize it if present.
 Summarize: what branch, what's changed, any pending work. Then ask what to work on.
 CMD
 ok "command: /catchup"
