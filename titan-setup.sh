@@ -264,6 +264,7 @@ done
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { uv tool install claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk"; }
 
 # sqlite-vec for local vector store (used by codebase indexing)
 if [[ ! -d "$HOME/.local/share/titan/vectordb" ]]; then
@@ -910,6 +911,14 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "CLAUDE_CODE_STATUSLINE": "ccstatusline",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+    "CLAUDE_CODE_EFFORT_LEVEL": "high",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85",
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "BASH_MAX_TIMEOUT_MS": "600000",
     "PATH": "TITAN_PATH_PLACEHOLDER"
   },
   "preferences": {
@@ -917,6 +926,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "outputStyle": "explanatory",
     "cleanupPeriodDays": 365
   },
+  "teammateMode": "tmux",
+  "showTurnDuration": true,
   "permissions": {
     "allow": [
       "Bash(*)",
@@ -1047,6 +1058,56 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
             "type": "command",
             "command": "bash ~/.claude/hooks/session-start.sh",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-end.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), tool: .tool_name, error: (.error // .tool_input | tostring | .[0:300])}' >> ~/.claude/logs/failures.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"subagent_stop\", agent: (.agent_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Success' || true",
+            "timeout": 3
           }
         ]
       }
