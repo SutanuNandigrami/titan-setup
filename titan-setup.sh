@@ -95,7 +95,8 @@ sudo apt install -y \
   redis-tools aria2 btop miller \
   inotify-tools expect asciinema at \
   lnav imagemagick maim xdotool \
-  universal-ctags chafa
+  universal-ctags chafa \
+  libclang-dev cmake libxml2-dev libcurl4-openssl-dev
 
 sudo apt autoremove -y
 
@@ -283,7 +284,7 @@ else
   ok "playwright (exists)"
 fi
 
-# n8n — workflow automation server (NOT a CLI tool — runs as docker container)
+# n8n — workflow automation server (runs as systemd user service via docker)
 if command -v docker &>/dev/null; then
   # Try without sudo first, fall back to sudo (user may not be in docker group yet)
   if docker pull n8nio/n8n:latest 2>/dev/null || sudo docker pull n8nio/n8n:latest 2>/dev/null; then
@@ -291,7 +292,37 @@ if command -v docker &>/dev/null; then
   else
     warn "n8n docker pull failed (check: sudo docker pull n8nio/n8n:latest)"
   fi
-  echo "    Run with: docker run -p 5678:5678 -v ~/.n8n:/home/node/.n8n n8nio/n8n"
+
+  # Fix n8n data directory permissions (container runs as uid 1000)
+  mkdir -p "$HOME/.n8n"
+  if [ "$(stat -c %u "$HOME/.n8n" 2>/dev/null)" != "1000" ]; then
+    sudo chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || true
+  fi
+
+  # Create systemd user service for n8n
+  mkdir -p "$HOME/.config/systemd/user"
+  DOCKER_BIN=$(command -v docker)
+  cat > "$HOME/.config/systemd/user/n8n.service" << SERVICEEOF
+[Unit]
+Description=n8n workflow automation
+After=default.target
+
+[Service]
+Type=simple
+ExecStartPre=-${DOCKER_BIN} rm -f n8n
+ExecStart=${DOCKER_BIN} run --rm --name n8n -p 5678:5678 -v %h/.n8n:/home/node/.n8n n8nio/n8n
+ExecStop=${DOCKER_BIN} stop n8n
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+SERVICEEOF
+
+  systemctl --user daemon-reload 2>/dev/null || true
+  systemctl --user enable n8n 2>/dev/null || true
+  systemctl --user start n8n 2>/dev/null || true
+  ok "n8n service (systemctl --user status n8n | http://localhost:5678)"
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
@@ -322,6 +353,8 @@ for crate in "${CARGO_CRATES[@]}"; do
   echo -n "  $crate..."
   if cargo install "$crate" &>/dev/null; then
     echo -e " ${GREEN}✓${NC}"
+  elif cargo install "$crate" --locked &>/dev/null; then
+    echo -e " ${GREEN}✓ (locked)${NC}"
   else
     echo -e " ${YELLOW}⚠ failed (try: cargo install $crate)${NC}"
     ((CARGO_FAIL++)) || true

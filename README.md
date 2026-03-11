@@ -35,7 +35,7 @@ After install: `source ~/.bashrc && claude` to authenticate.
 ## What it installs
 
 ### Phase 1 — System Prerequisites
-- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`, `universal-ctags`, `chafa`
+- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`, `universal-ctags`, `chafa`, `libclang-dev`, `cmake`, `libxml2-dev`, `libcurl4-openssl-dev`
 - Linux tuning: inotify watchers (524288), file descriptor limits (65535)
 - Git defaults: `main` branch, rebase pull, autocrlf input
 
@@ -66,8 +66,8 @@ lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, a
 **Binary downloads:**
 kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared, syft, grype, step-cli, comby, runme
 
-**Docker images:**
-n8n (workflow automation server)
+**Docker services (systemd user units):**
+n8n (workflow automation — auto-starts on login, http://localhost:5678)
 
 ### Phase 4 — Claude Code
 - Native binary installer (auto-updates, no Node.js dependency)
@@ -309,6 +309,10 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `/context` command — pack repo with repomix for AI-optimized context
 - Fixed: `/remember` command — removed hardcoded path, now uses dynamic auto memory directory
 - Fixed: `/catchup` command — now reads auto memory + handoff.md
+- Fixed: Cargo crates failing randomly — added `libclang-dev`, `cmake`, `libxml2-dev`, `libcurl4-openssl-dev` to apt deps
+- Fixed: Cargo install now falls back to `--locked` before giving up
+- Fixed: n8n permission error (`~/.n8n` owned by root) — now fixes ownership to uid 1000
+- Changed: n8n runs as systemd user service (auto-starts, survives reboots, http://localhost:5678)
 - Added: `reviewer` agent to script (was live-only, would be lost on re-run)
 - Fixed: Superpowers skills updated to match upstream repo (root-cause-tracing/defense-in-depth → verification-before-completion/writing-plans)
 - Fixed: Live config fully synced with script (CLAUDE.md, cli-tools, security-scan, researcher agent)
