@@ -137,9 +137,11 @@ if command -v cargo &>/dev/null; then
 else
   echo "  Installing Rust..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  source "$HOME/.cargo/env"
   ok "cargo installed: $(cargo --version)"
 fi
+# Ensure cargo binaries are on PATH for the rest of this script
+# shellcheck source=/dev/null
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 # ─── uv (replaces pip, pipx, venv, pyenv) ───
 if command -v uv &>/dev/null; then
@@ -147,9 +149,10 @@ if command -v uv &>/dev/null; then
 else
   echo "  Installing uv..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="$HOME/.local/bin:$PATH"
   ok "uv installed: $(uv --version)"
 fi
+# Ensure uv/uvx binaries are on PATH for the rest of this script
+export PATH="$HOME/.local/bin:$PATH"
 
 # ─── bun (replaces npm, npx for CLI tools) ───
 if command -v bun &>/dev/null; then
@@ -157,9 +160,10 @@ if command -v bun &>/dev/null; then
 else
   echo "  Installing bun..."
   curl -fsSL https://bun.sh/install | bash
-  export PATH="$HOME/.bun/bin:$PATH"
   ok "bun installed: $(bun --version)"
 fi
+# Ensure bun globals are on PATH for the rest of this script
+export PATH="$HOME/.bun/bin:$PATH"
 
 # ─── Go ───
 GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
