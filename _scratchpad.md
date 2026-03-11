@@ -1,23 +1,22 @@
-# Power Tools Implementation Plan
+# Power Tools Round 2
 
-## Tool Installs (add to titan-setup.sh Phase 3)
-- [ ] 1. `inotify-tools` (inotifywait) — apt install
-- [ ] 2. `expect` — apt install
-- [ ] 3. `mermaid-cli` (mmdc) — bun install -g @mermaid-js/mermaid-cli
-- [ ] 4. `asciinema` — apt install
-- [ ] 5. `jnv` — cargo install
-- [ ] 6. `gum` — go install (charm)
-- [ ] 7. `mitmproxy` — uv tool install
-- [ ] 8. `at` — apt install (atd)
+## Tool Installs
+- [ ] 1. `lnav` — apt install
+- [ ] 2. `cookiecutter` — uv tool install
+- [ ] 3. `playwright` — bun install (+ browsers)
+- [ ] 4. `imagemagick` — apt install
+- [ ] 5. `maim` + `xdotool` — apt install
+- [ ] 6. `cloudflared` — binary or apt
+- [ ] 7. `act` — go install (nektos/act)
+- [ ] 8. `visidata` — uv tool install
+- [ ] 9. `nushell` — cargo install (nu)
 
-## Skills (add to titan-setup.sh Phase 5)
-- [ ] 9. `tmux-control` skill — send-keys, split panes, read output
-- [ ] 10. `workspace` skill — _workspace.json convention + auto-detect
-- [ ] 11. `pueue-orchestrator` skill — parallel task orchestration
-- [ ] 12. `diagrams` skill — mermaid rendering + architecture diagrams
+## Skills
+- [ ] 10. `/remember` command — structured memory persistence
+- [ ] 11. `deploy` skill — provider auto-detection
+- [ ] 12. `process-supervisor` skill — systemd user units
 
-## Config Updates
-- [ ] 13. `direnv` .envrc template in workspace skill
-- [ ] 14. sqlite-vec setup for local codebase indexing
-- [ ] 15. Update README with all additions
-- [ ] 16. Update cli-tools SKILL.md with new tools
+## Config
+- [ ] 13. Tool permissions for all new tools
+- [ ] 14. Update cli-tools SKILL.md
+- [ ] 15. Update README
