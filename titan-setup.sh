@@ -804,6 +804,25 @@ NEVER guess flags. Discover tools on demand:
 - Write plans to `_scratchpad.md`, not just chat.
 - At session start, check `~/.claude/memory/handoff.md` — it contains auto-saved state from the previous session.
 
+## Auto Memory Protocol — MANDATORY
+You have a persistent memory directory. Use it. This is not optional.
+
+**MUST write to auto memory when:**
+1. User says "remember this" or uses `/remember` — immediately
+2. You discover a project convention or architecture pattern — after confirming it
+3. A debugging session reveals a non-obvious fix — after the fix works
+4. User corrects you on something — immediately update/remove the wrong memory
+5. You learn a user preference from their feedback — after 2+ consistent signals
+6. A key decision is made (tool choice, architecture, workflow) — after the decision
+
+**MUST NOT write to memory:**
+- Speculative conclusions from reading one file
+- Session-specific temporary state (use `_scratchpad.md` instead)
+- Anything that duplicates CLAUDE.md or project CLAUDE.md
+
+**How:** Use the Write/Edit tools on files in your auto memory directory.
+Keep `MEMORY.md` under 150 lines. Create topic files for details.
+
 ## Compaction Protocol
 When context is being compacted, ALWAYS preserve in the summary:
 1. **Current task** — what you are working on and why
@@ -2098,6 +2117,7 @@ BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
 STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
 DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+RECENT_COMMITS=$(git log --oneline -10 2>/dev/null || true)
 
 # Extract last assistant messages from transcript (if available)
 LAST_CONTEXT=""
@@ -2121,7 +2141,12 @@ trigger: pre-compact
 ## Branch
 \`${BRANCH}\`
 
-## Modified Files
+## Recent Commits
+\`\`\`
+${RECENT_COMMITS:-No commits}
+\`\`\`
+
+## Modified Files (uncommitted)
 \`\`\`
 ${MODIFIED:-No modified files}
 \`\`\`
@@ -2164,6 +2189,7 @@ BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null || true)
 STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
 DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
+RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || true)
 
 # Write handoff file
 cat > "$HANDOFF" << EOF
@@ -2179,7 +2205,12 @@ trigger: session-end
 ## Branch
 \`${BRANCH}\`
 
-## Modified Files
+## Recent Commits (this session)
+\`\`\`
+${RECENT_COMMITS:-No commits}
+\`\`\`
+
+## Modified Files (uncommitted)
 \`\`\`
 ${MODIFIED:-No modified files}
 \`\`\`
@@ -2205,16 +2236,36 @@ ok "hook: session-end.sh"
 
 cat > "$CLAUDE_DIR/hooks/session-start.sh" << 'HOOK'
 #!/usr/bin/env bash
-# SessionStart hook — notify about previous session state
+# SessionStart hook — load previous session state and memory reminders
 set -euo pipefail
 
 HANDOFF="$HOME/.claude/memory/handoff.md"
 
-# Check if handoff exists and is less than 24 hours old
+# Show handoff from previous session (if recent)
 if [[ -f "$HANDOFF" ]]; then
   FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0) ))
   if (( FILE_AGE < 86400 )); then
-    echo "[Memory] Previous session state available at ~/.claude/memory/handoff.md ($(( FILE_AGE / 60 ))m ago)" >&2
+    echo "[Memory] Previous session handoff ($(( FILE_AGE / 60 ))m ago):" >&2
+    head -30 "$HANDOFF" >&2
+    echo "---" >&2
+  fi
+fi
+
+# Remind about auto memory files
+MEMORY_COUNT=$(find "$HOME/.claude/projects/" -name "MEMORY.md" 2>/dev/null | wc -l)
+if (( MEMORY_COUNT > 0 )); then
+  echo "[Memory] ${MEMORY_COUNT} project memory file(s) available." >&2
+else
+  echo "[Memory] No project memories yet. Use /remember or write to auto memory directory." >&2
+fi
+
+# Rotate audit log if over 10MB
+AUDIT_LOG="$HOME/.claude/logs/audit.jsonl"
+if [[ -f "$AUDIT_LOG" ]]; then
+  AUDIT_SIZE=$(stat -c %s "$AUDIT_LOG" 2>/dev/null || echo 0)
+  if (( AUDIT_SIZE > 10485760 )); then
+    mv "$AUDIT_LOG" "${AUDIT_LOG}.$(date +%s).bak"
+    echo "[Audit] Log rotated (was $(( AUDIT_SIZE / 1048576 ))MB)" >&2
   fi
 fi
 
@@ -2356,21 +2407,36 @@ paths: ["**/*"]
 RULE
 ok "rule: security.md"
 
+cat > "$CLAUDE_DIR/rules/memory.md" << 'RULE'
+---
+paths: ["**/*"]
+---
+# Memory Discipline (Always Active)
+- When you discover a non-obvious fix after debugging: write it to auto memory
+- When user corrects you: immediately update or remove the wrong memory entry
+- When a key architectural decision is made: record it in auto memory
+- When user explicitly says "remember": use /remember or write directly to MEMORY.md
+- NEVER write speculative or unverified conclusions to memory
+- Check existing memory before writing — update, don't duplicate
+RULE
+ok "rule: memory.md"
+
 # ─── /remember command ───
 cat > "$CLAUDE_DIR/commands/remember.md" << 'CMD'
 Save a piece of knowledge to persistent memory for use across sessions.
 
-1. Read the current memory file at `~/.claude/projects/-opt-projects/memory/MEMORY.md` (create if missing)
-2. Parse `$ARGUMENTS` — the user wants to remember this fact/preference/pattern
-3. Check if a similar memory already exists — update it instead of duplicating
-4. Categorize the memory:
+1. Find your auto memory directory (shown in system prompt as "persistent auto memory directory at ...")
+2. Read `MEMORY.md` in that directory (create if missing)
+3. Parse `$ARGUMENTS` — the user wants to remember this fact/preference/pattern
+4. Check if a similar memory already exists — update it instead of duplicating
+5. Categorize the memory:
    - **Preferences**: workflow, tool, style choices
    - **Patterns**: code patterns, naming conventions, architecture decisions
    - **Solutions**: fixes for recurring problems
    - **Project context**: key files, APIs, deployment targets
-5. Append to the appropriate section in MEMORY.md
-6. If MEMORY.md exceeds 150 lines, consider creating topic-specific files and linking from MEMORY.md
-7. Confirm what was saved and where
+6. Append to the appropriate section in MEMORY.md
+7. If MEMORY.md exceeds 150 lines, create topic-specific files and link from MEMORY.md
+8. Confirm what was saved and where
 CMD
 ok "command: /remember"
 
@@ -2426,7 +2492,8 @@ else ok "notebooklm skill (exists)"; fi
 cat > "$CLAUDE_DIR/commands/catchup.md" << 'CMD'
 Read git branch, last 10 commits, `git status`, and if they exist: `_scratchpad.md` and `_handoff.md`.
 Also check `~/.claude/memory/handoff.md` — this is auto-generated by session hooks and contains structured state from the last session. Prioritize it if present.
-Summarize: what branch, what's changed, any pending work. Then ask what to work on.
+Also check your auto memory directory for `MEMORY.md` — it contains persistent knowledge from previous sessions.
+Summarize: what branch, what's changed, any pending work, and what you remember. Then ask what to work on.
 CMD
 ok "command: /catchup"
 
@@ -2493,6 +2560,15 @@ Initialize workspace for the current project:
 5. Show the user the generated config and ask for adjustments
 CMD
 ok "command: /workspace-init"
+
+cat > "$CLAUDE_DIR/commands/context.md" << 'CMD'
+Pack the current repo into an AI-optimized context file using repomix:
+1. Run `repomix` in the current directory (respects .gitignore)
+2. Report: total files, token count, output path
+3. If tokens > 100K, suggest: `repomix --include "src/**"` to narrow scope
+4. If $ARGUMENTS provided, pass as `repomix --include "$ARGUMENTS"`
+CMD
+ok "command: /context"
 
 # ─── GitHub Actions Template ───
 cat > "$CLAUDE_DIR/templates/claude-code-action.yml" << 'TEMPLATE'

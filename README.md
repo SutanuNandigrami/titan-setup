@@ -86,7 +86,7 @@ n8n (workflow automation server)
 - PostToolUse audit hook: async JSONL logging of all tool calls to `~/.claude/logs/audit.jsonl`
 - PreCompact hook: auto-saves session state (branch, files, context) to `~/.claude/memory/handoff.md`
 - Stop hook: captures final state + sends ntfy notification (configurable via `NTFY_URL` env var)
-- SessionStart hook: notifies about available previous session state
+- SessionStart hook: displays handoff content + memory status + audit log rotation
 - Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
 - Tool search: `auto:5` threshold for MCP lazy loading
 - OpenTelemetry export: `CLAUDE_CODE_ENABLE_TELEMETRY=1`
@@ -106,19 +106,24 @@ n8n (workflow automation server)
 - `deploy` — Auto-detect provider (Vercel/Docker/Terraform/K8s/Cloudflare), pre-deploy checks
 - `process-supervisor` — Manage background services with systemd user units
 
-**5 Conditional Rules** (loaded only when matching files are open, 0 tokens otherwise):
+**6 Conditional Rules** (loaded only when matching files are open, 0 tokens otherwise):
 - `rules/python.md` — Type hints, ruff, uv, Python 3.10+ patterns
 - `rules/shell.md` — shellcheck, set -euo pipefail, quoting rules
 - `rules/terraform.md` — Plan before apply, tflint, infracost, state hygiene
 - `rules/docker.md` — hadolint, trivy, syft/grype, multi-stage builds
 - `rules/security.md` — Always active: gitleaks, no secrets, dependency scanning
+- `rules/memory.md` — Always active: enforces memory discipline (write on debug fix, correction, decision)
 
 **Memory/Context Management:**
 - 3 hook scripts (`~/.claude/hooks/`) for automatic session state persistence
-- `~/.claude/memory/handoff.md` — auto-generated cross-session state file
+- `~/.claude/memory/handoff.md` — auto-generated cross-session state file (now includes recent commits)
 - `~/.claude/claudeignore-template` — copy to project roots to exclude build artifacts
-- Enhanced `/catchup` command reads handoff.md for warm-start
+- Enhanced `/catchup` command reads handoff.md + auto memory for warm-start
 - CLAUDE.md compaction protocol preserves 7 critical context fields
+- **Auto Memory Protocol** — mandatory rules for when Claude MUST write to persistent memory
+- `rules/memory.md` — always-active rule enforcing memory discipline
+- Session-start hook displays actual handoff content (not just "file exists")
+- Audit log auto-rotation at 10MB (in session-start hook)
 
 **GitHub Actions Integration:**
 - `~/.claude/templates/claude-code-action.yml` — ready-to-use CI/CD template
@@ -137,7 +142,7 @@ n8n (workflow automation server)
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
 - [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
 
-**10 Slash Commands** (loaded only when invoked):
+**12 Slash Commands** (loaded only when invoked):
 - `/catchup` — Resume after /clear (reads git state + scratchpad + handoff.md)
 - `/handoff` — Write session state to _handoff.md before ending
 - `/ship` — Full pipeline: lint → test → scan → commit → push → PR
@@ -148,6 +153,7 @@ n8n (workflow automation server)
 - `/workspace-init` — Auto-detect project type, generate `_workspace.json` + `.envrc`
 - `/remember` — Save knowledge to persistent memory across sessions
 - `/gh-action` — Set up Claude Code GitHub Action for CI/CD integration
+- `/context` — Pack repo into AI-optimized context file using repomix
 
 **2 Subagents:**
 - `researcher` — Read-only codebase explorer
@@ -175,20 +181,21 @@ n8n (workflow automation server)
 ## Context Budget
 
 ```
-CLAUDE.md:          ~1000 tokens (loaded every session, includes compaction protocol)
+CLAUDE.md:          ~1200 tokens (loaded every session, includes memory protocol + compaction)
 settings.json:      0 tokens    (parsed by harness)
 11 inline skills:   0 tokens    (loaded on demand by relevance, ~800 lines total)
-5 conditional rules: 0 tokens   (loaded only when matching file types are open)
+6 conditional rules: 0 tokens   (loaded only when matching file types are open)
 community skills:   0 tokens    (loaded on demand)
-10 commands:        0 tokens    (loaded on /command)
+12 commands:        0 tokens    (loaded on /command)
 1 template:         0 tokens    (copied on /gh-action)
 3 hook scripts:     0 tokens    (fire at lifecycle events, output stays external)
 2 agents:           0 tokens    (loaded on spawn)
 audit log:          0 tokens    (async JSONL, never loaded into context)
 CLI --help:         0 tokens    (lazy-loaded at runtime)
-handoff.md:         ~200 tokens (loaded on /catchup or session-start, cross-session state)
+MEMORY.md:          ~200 tokens (loaded every session, persistent project knowledge)
+handoff.md:         ~300 tokens (shown by session-start hook, cross-session state)
 ─────────────────────────────────────
-Total startup:      ~1000 tokens of 200,000
+Total startup:      ~1700 tokens of 200,000
 
 vs MCP equivalent: 55,000-134,000 tokens at startup
 Savings:            98.5%+
@@ -292,7 +299,18 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Updated: Security-scan skill with recon pipeline and supply chain sections
 - Total: 150+ CLI tools, 11 skills, 5 rules, 9 commands, 3 hooks, 3 plugins
 
-### v3.3 (current)
+### v3.4 (current)
+- Added: **Auto Memory Protocol** — mandatory rules in CLAUDE.md for when Claude MUST write to persistent memory
+- Added: `rules/memory.md` — always-active conditional rule enforcing memory discipline
+- Added: Session-start hook now displays actual handoff content (not just "file exists") + memory count
+- Added: Audit log auto-rotation at 10MB (in session-start hook)
+- Added: Recent commits captured in handoff.md (both pre-compact and session-end)
+- Added: `/context` command — pack repo with repomix for AI-optimized context
+- Fixed: `/remember` command — removed hardcoded path, now uses dynamic auto memory directory
+- Fixed: `/catchup` command — now reads auto memory + handoff.md
+- Total: 155+ CLI tools, 11 skills, 6 rules, 12 commands, 3 hooks, 1 template, 3 plugins
+
+### v3.3
 - Added: `claude-squad` (Go) — multi-agent terminal management with tmux
 - Added: Async PostToolUse audit logging to `~/.claude/logs/audit.jsonl`
 - Added: Async PostToolUse lint hooks (non-blocking file writes)
