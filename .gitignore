@@ -1,0 +1,5 @@
+_scratchpad.md
+_handoff.md
+.env*
+*.pem
+*.key
