@@ -919,6 +919,9 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "600000",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "CLAUDE_CODE_ENABLE_TASKS": "1",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "16000",
     "PATH": "TITAN_PATH_PLACEHOLDER"
   },
   "preferences": {
@@ -928,6 +931,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
   },
   "teammateMode": "tmux",
   "showTurnDuration": true,
+  "includeCoAuthoredBy": true,
+  "respectGitignore": true,
   "permissions": {
     "allow": [
       "Bash(*)",
@@ -1108,6 +1113,58 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
             "type": "command",
             "command": "echo 'Success' || true",
             "timeout": 3
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"task_completed\", task: (.task_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"instructions_loaded\", file: (.file_path // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"config_change\", file: (.file_path // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"teammate_idle\", teammate: (.teammate_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
           }
         ]
       }

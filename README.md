@@ -148,21 +148,52 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 **CLAUDE.md** (~1200 tokens) — Tool routing tables, workflow rules, MCP replacement map, auto memory protocol, compaction protocol
 
 **settings.json** — Hooks, permissions, environment, preferences:
-- `PATH` env: all tool directories (`~/.cargo/bin`, `~/go/bin`, `~/.bun/bin`, `~/.local/bin`) injected as absolute paths so tools are discoverable in every Claude Code session
-- PreToolUse hooks: block `rm -rf`, force push, `pip install`, `npm -g`, commits on main/master, `chmod 777`, `kill -9`, unsafe piping, destructive infra/k8s/docker operations
-- PostToolUse hooks: async auto-lint on write/edit (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
-- PostToolUse audit hook: async JSONL logging of all tool calls to `~/.claude/logs/audit.jsonl`
-- Notification hook: desktop notifications via `notify-send`
-- PreCompact hook: auto-saves session state (branch, files, context) to `~/.claude/memory/handoff.md`
-- Stop hook: captures final state + sends ntfy notification (configurable via `NTFY_URL` env var)
-- SessionStart hook: displays handoff content + memory status + audit log rotation
-- Permissions: 8 wildcard allow rules, 73 deny rules (Bash, Read, Edit, Write — covering destructive commands, sensitive files, credential paths)
-- Preferences: `thinking: true`, `outputStyle: explanatory`, `cleanupPeriodDays: 365`
+
+*Environment variables (18 total, zero context cost):*
+- `PATH`: all tool directories injected as absolute paths for every session
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000`: maximum output per response
+- `CLAUDE_CODE_EFFORT_LEVEL=high`: maximum reasoning depth (adaptive thinking)
+- `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=85`: trigger compaction at 85% (default ~83.5%)
+- `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1`: preserve working directory across commands
+- `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`: faster model for subagents, Opus for lead
+- `CLAUDE_CODE_ENABLE_TASKS=1`: enable task list system for tracking work
+- `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS=16000`: larger file reads
+- `BASH_DEFAULT_TIMEOUT_MS=300000`: 5min default bash timeout (up from 2min)
+- `BASH_MAX_TIMEOUT_MS=600000`: 10min max bash timeout
+- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`: reduce network noise
+- `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1`: no interruptions
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`: parallel agents in worktrees
+- `CLAUDE_CODE_ENABLE_TELEMETRY=1`: OpenTelemetry export
+- `CLAUDE_CODE_STATUSLINE=ccstatusline`: terminal status display
+
+*Lifecycle hooks (13 events wired, all zero context cost):*
+- `PreToolUse`: block destructive commands (rm -rf, force push, pip, npm, commits on main, chmod 777, kill -9, unsafe piping, infra/k8s/docker destruction)
+- `PreToolUse` (file guard): block edits to .env, credentials, secrets, .pem, .key
+- `PostToolUse` (lint): async auto-lint (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
+- `PostToolUse` (audit): async JSONL logging of all tool calls
+- `PostToolUseFailure`: async failure logging to `failures.jsonl`
+- `Notification`: desktop notifications via `notify-send`
+- `SubagentStop`: track subagent lifecycle in audit log
+- `PreCompact`: auto-save session state before context compaction
+- `Stop`: capture final state + ntfy notification
+- `SessionStart`: display handoff + memory status + audit log rotation
+- `SessionEnd`: reliable final state capture at session termination
+- `UserPromptSubmit`: prompt-level hook point for enforcement
+- `TaskCompleted`: log task completions to audit trail
+- `InstructionsLoaded`: track when CLAUDE.md/rules load
+- `ConfigChange`: audit configuration changes mid-session
+- `TeammateIdle`: track agent team coordination events
+
+*Permissions:* 8 wildcard allow rules, 73 deny rules (Bash, Read, Edit, Write)
+
+*Preferences & settings:*
+- `thinking: true`, `outputStyle: explanatory`, `cleanupPeriodDays: 365`
+- `teammateMode: tmux`: agent teams display in split panes
+- `showTurnDuration: true`: timing visibility per response
+- `includeCoAuthoredBy: true`: auto-add Co-Authored-By to commits
+- `respectGitignore: true`: respect .gitignore in file operations
 - Tool search: `auto:5` threshold for deferred tool loading
-- OpenTelemetry export: `CLAUDE_CODE_ENABLE_TELEMETRY=1`
-- Agent Teams: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` for parallel Claude instances in git worktrees
-- Status line: `CLAUDE_CODE_STATUSLINE=ccstatusline` for terminal status display
-- Plugin/marketplace config preserved across re-runs (`enabledPlugins`, `extraKnownMarketplaces`)
+- Plugin/marketplace config preserved across re-runs
 
 **11 Inline Skills** (loaded on demand, 0 startup tokens):
 - `cli-tools` — Full reference for 155+ installed CLI tools by category
@@ -364,7 +395,15 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Fixed: Added `PATH` to Claude Code `settings.json` env block with expanded absolute paths — tools like `gitleaks` in `~/go/bin` are now discoverable in every Claude Code session without sourcing `.bashrc`
 - Fixed: README audit — corrected permission counts (8 allow, 73 deny), command count (11 not 12), tool count (155+), CLAUDE.md token estimate (~1200), added missing tools/features
 - Added: "Why Titan" section explaining CLI-over-MCP architecture and design principles
-- Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 3 hooks, 1 template, 3 agents, 3 plugins
+- Added: 8 new power env vars — `MAX_OUTPUT_TOKENS=64000`, `EFFORT_LEVEL=high`, `AUTOCOMPACT_PCT=85`, `BASH_TIMEOUT=5m/10m`, `MAINTAIN_PROJECT_CWD`, `DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_FEEDBACK_SURVEY`
+- Added: `SUBAGENT_MODEL=sonnet` — faster model for subagents while lead uses Opus
+- Added: `ENABLE_TASKS=1` — task list system for tracking work across sessions
+- Added: `FILE_READ_MAX_OUTPUT_TOKENS=16000` — larger file reads
+- Added: 5 new lifecycle hooks — `SessionEnd`, `PostToolUseFailure`, `SubagentStop`, `TaskCompleted`, `TeammateIdle`
+- Added: 2 audit hooks — `InstructionsLoaded`, `ConfigChange` for tracking config/rules changes
+- Added: `teammateMode: tmux`, `showTurnDuration: true`, `includeCoAuthoredBy: true`, `respectGitignore: true`
+- Added: `claude-agent-sdk` via uv — programmatic agent building
+- Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
 ### v3.4
 - Added: **Auto Memory Protocol** — mandatory rules in CLAUDE.md for when Claude MUST write to persistent memory
