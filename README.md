@@ -269,13 +269,6 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 - Per-agent overrides: `model:` field in agent frontmatter (haiku/sonnet/opus)
 - Switch mid-session: `/model` command
 
-**Built-in Claude Code Features (v2.1.69+, no setup needed):**
-- `/remote-control` — Mobile/web remote session bridge; start on desktop, control from phone via claude.ai. Requires **Claude Max** subscription.
-- `/voice` — Voice STT input (push-to-talk, space bar). Supports 20 languages. Rebindable via `keybindings.json` (`voice:pushToTalk`).
-- `/remote-env` — Configure remote cloud environments for Claude Code on the Web (`--remote` flag).
-- `/cost` — Show token usage for current session.
-- `/context` — Show context window fill breakdown.
-
 ### Phase 5b — Claude Code Plugins
 - [hookify](https://github.com/anthropics/claude-code-plugins) — Hook management and conversation analysis
 - [code-review](https://github.com/anthropics/claude-code-plugins) — PR code review
@@ -431,7 +424,6 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 - **Fixed:** `claude-agent-sdk` install — `uv pip install --system` blocked on Ubuntu 24.04 externally-managed Python; switched to `pip3 install --user`
 - **Fixed:** `claude-squad` install — `go install github.com/smtg-ai/claude-squad@latest` fails due to go.mod module path mismatch (`claude-squad` ≠ `github.com/smtg-ai/claude-squad`); switched to binary download from GitHub releases
-- **Docs:** Added built-in Claude Code v2.1.69+ features — `/remote-control` (Claude Max), `/voice` STT, `/remote-env`, `/cost`, `/context`
 - **Note:** claude-squad was NOT removed by v3.6 — that removed the built-in `AGENT_TEAMS` env var; claude-squad is a separate tmux-based multi-agent tool
 
 ### v3.7 — Output verbosity + model call reduction
