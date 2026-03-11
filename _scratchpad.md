@@ -1,23 +1,23 @@
-# Titan Setup — Public Release Fixes
+# Power Tools Implementation Plan
 
-## Script Bugs
-- [x] 1. Guard `--name` against missing arg (crashes with `set -u`)
-- [x] 2. Use temp dir for all downloads (Go, kubectl, duckdb, shellcheck, yazi, mc)
-- [x] 3. Add arch detection (x86_64 vs aarch64)
-- [x] 4. Validate curl responses for version vars (GO_VERSION, LAZYDOCKER_VERSION, SHELLCHECK_VERSION)
-- [x] 5. Add `sd` dependency check before Phase 5 (fallback to sed)
-- [x] 6. Fix unconditional success messages (k9s, helm, hadolint, fzf)
-- [x] 7. Add existence checks for bun/uv one-off installs
+## Tool Installs (add to titan-setup.sh Phase 3)
+- [ ] 1. `inotify-tools` (inotifywait) — apt install
+- [ ] 2. `expect` — apt install
+- [ ] 3. `mermaid-cli` (mmdc) — bun install -g @mermaid-js/mermaid-cli
+- [ ] 4. `asciinema` — apt install
+- [ ] 5. `jnv` — cargo install
+- [ ] 6. `gum` — go install (charm)
+- [ ] 7. `mitmproxy` — uv tool install
+- [ ] 8. `at` — apt install (atd)
 
-## Security
-- [x] 8. Replace deprecated `apt-key add` with signed-by keyring pattern for trivy
-- [x] 9. Add checksum note/disclaimer for curl|bash installs (in script header)
+## Skills (add to titan-setup.sh Phase 5)
+- [ ] 9. `tmux-control` skill — send-keys, split panes, read output
+- [ ] 10. `workspace` skill — _workspace.json convention + auto-detect
+- [ ] 11. `pueue-orchestrator` skill — parallel task orchestration
+- [ ] 12. `diagrams` skill — mermaid rendering + architecture diagrams
 
-## README Gaps
-- [x] 10. Document CLI options (--name, --dry-run, --help)
-- [x] 11. Add prerequisites section (Ubuntu, x86_64/arm64, sudo, internet, runtime)
-- [x] 12. Document Phase 5b (Plugins)
-- [x] 13. Add Docker engine to documented installs
-- [x] 14. Add ansible-lint to tools list
-- [x] 15. Fix skills line count (~340 → ~385)
-- [x] 16. Add disclaimer for third-party packages (Claude Desktop/Cowork)
+## Config Updates
+- [ ] 13. `direnv` .envrc template in workspace skill
+- [ ] 14. sqlite-vec setup for local codebase indexing
+- [ ] 15. Update README with all additions
+- [ ] 16. Update cli-tools SKILL.md with new tools

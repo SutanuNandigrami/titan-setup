@@ -30,7 +30,7 @@ That's it. No other scripts, no tar files, no manual steps.
 ## What it installs
 
 ### Phase 1 — System Prerequisites
-- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`
+- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`
 - Linux tuning: inotify watchers (524288), file descriptor limits (65535)
 - Git defaults: `main` branch, rebase pull, autocrlf input
 
@@ -47,16 +47,16 @@ That's it. No other scripts, no tar files, no manual steps.
 ### Phase 3 — 100+ CLI Tools
 
 **Python (via `uv tool install`):**
-httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project
+httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project, mitmproxy
 
 **JS (via `bun install -g`):**
-trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline
+trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc)
 
 **Rust (via `cargo install`):**
-ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, tokei, recall (from git), parry (from git), spotify_player, claude-tmux (from git)
+ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, tokei, jnv, recall (from git), parry (from git), spotify_player, claude-tmux (from git)
 
 **Go (via `go install`):**
-lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks
+lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum
 
 **Binary downloads:**
 kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical
@@ -81,12 +81,16 @@ n8n (workflow automation server)
 - Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
 - Tool search: `auto:5` threshold for MCP lazy loading
 
-**5 Inline Skills** (loaded on demand, 0 startup tokens):
-- `cli-tools` — Full reference for 100+ installed CLI tools by category (162 lines)
-- `security-scan` — Pre-push, container, infra, network scanning workflows (39 lines)
+**9 Inline Skills** (loaded on demand, 0 startup tokens):
+- `cli-tools` — Full reference for 100+ installed CLI tools by category
+- `security-scan` — Pre-push, container, infra, network scanning workflows
 - `git-workflow` — Branch naming, conventional commits, PR flow
-- `infra-deploy` — Terraform, Ansible, Docker, K8s workflows (45 lines)
-- `add-cli-tool` — Register new CLI tools across setup script + live config (~90 lines)
+- `infra-deploy` — Terraform, Ansible, Docker, K8s workflows
+- `add-cli-tool` — Register new CLI tools across setup script + live config
+- `tmux-control` — Create panes, send commands, read output, monitor processes
+- `workspace` — `_workspace.json` convention, project auto-detection, `.envrc` templates
+- `pueue-orchestrator` — Parallel task orchestration (lint + test + scan pipelines)
+- `diagrams` — Generate architecture/flow/ER/sequence diagrams via mermaid-cli
 
 **Community Skills** (cloned from GitHub):
 - [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, root cause tracing, defense in depth, brainstorming
@@ -95,7 +99,7 @@ n8n (workflow automation server)
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
 - [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
 
-**7 Slash Commands** (loaded only when invoked):
+**8 Slash Commands** (loaded only when invoked):
 - `/catchup` — Resume after /clear (reads git state + scratchpad)
 - `/handoff` — Write session state to _handoff.md before ending
 - `/ship` — Full pipeline: lint → test → scan → commit → push → PR
@@ -103,6 +107,7 @@ n8n (workflow automation server)
 - `/scan` — Security scan (secrets, vulns, IaC, containers)
 - `/review` — Code review current branch against main
 - `/tools` — List all installed CLI tools by package manager
+- `/workspace-init` — Auto-detect project type, generate `_workspace.json` + `.envrc`
 
 **2 Subagents:**
 - `researcher` — Read-only codebase explorer
@@ -123,6 +128,7 @@ n8n (workflow automation server)
 - Version management: mise
 - Fuzzy finding: fzf
 - Git diffs: delta (side-by-side, line numbers)
+- Task queue: pueue daemon (auto-started)
 
 ---
 
@@ -131,9 +137,9 @@ n8n (workflow automation server)
 ```
 CLAUDE.md:        ~800 tokens  (loaded every session)
 settings.json:    0 tokens     (parsed by harness)
-5 inline skills:  0 tokens     (loaded on demand by relevance, ~385 lines total)
+9 inline skills:  0 tokens     (loaded on demand by relevance, ~600 lines total)
 community skills: 0 tokens     (loaded on demand)
-7 commands:       0 tokens     (loaded on /command)
+8 commands:       0 tokens     (loaded on /command)
 2 agents:         0 tokens     (loaded on spawn)
 CLI --help:       0 tokens     (lazy-loaded at runtime)
 ─────────────────────────────────────
@@ -226,7 +232,27 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 ## Changelog
 
-### v2.3 (current)
+### v3.0 (current)
+- Added: CLI options `--name`, `--dry-run`, `--help` for public use
+- Added: Architecture detection (x86_64/aarch64) for all binary downloads
+- Added: `inotify-tools`, `expect`, `asciinema`, `at` to system packages
+- Added: `mitmproxy` (uv), `mermaid-cli` (bun), `jnv` (cargo), `gum` (go)
+- Added: `sqlite-vec` for local vector store / codebase indexing
+- Added: 4 new skills — `tmux-control`, `workspace`, `pueue-orchestrator`, `diagrams`
+- Added: `/workspace-init` command for project setup
+- Added: `pueued` daemon auto-start in shell integration
+- Added: `bash-preexec` download + source (fixes atuin history recording)
+- Fixed: All downloads use temp dir instead of CWD
+- Fixed: Version fetches validated before use (Go, lazydocker, shellcheck)
+- Fixed: Unconditional success messages (k9s, helm, hadolint, fzf)
+- Fixed: Bun/uv one-off installs now skip if already installed
+- Fixed: Deprecated `apt-key` replaced with `signed-by` keyring for trivy
+- Fixed: `--name` arg guard against missing value
+- Fixed: `sd` fallback to `sed` if cargo install failed
+- Security: Added disclaimer for `curl|bash` installs and community packages
+- Removed: All hardcoded personal info (parameterized via `--name`)
+
+### v2.3
 - Fixed: `lazydocker` go install broken (Docker API conflict) → binary release download
 - Fixed: `mkcert` wrong Go module path (`github.com/FiloSottile/mkcert` → `filippo.io/mkcert`)
 - Fixed: `age` wrong Go module path (`github.com/FiloSottile/age` → `filippo.io/age`)
