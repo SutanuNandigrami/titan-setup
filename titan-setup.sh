@@ -100,6 +100,32 @@ sudo apt install -y \
 
 sudo apt autoremove -y
 
+# ─── JetBrains Mono Nerd Font (required for Powerline statusline) ───
+if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
+  ok "JetBrainsMono Nerd Font already installed"
+else
+  echo -n "  Installing JetBrainsMono Nerd Font..."
+  FONT_DIR="$HOME/.local/share/fonts"
+  mkdir -p "$FONT_DIR"
+  TMPFONT=$(mktemp -d)
+  curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
+    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+  tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
+  cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
+  fc-cache -f "$FONT_DIR" 2>/dev/null
+  rm -rf "$TMPFONT"
+  ok "JetBrainsMono Nerd Font installed"
+fi
+
+# Set Cosmic Terminal font if running on COSMIC desktop
+if command -v cosmic-term &>/dev/null; then
+  COSMIC_TERM_DIR="$HOME/.config/cosmic/com.system76.CosmicTerm/v1"
+  mkdir -p "$COSMIC_TERM_DIR"
+  echo '"JetBrainsMono Nerd Font"' > "$COSMIC_TERM_DIR/font_name"
+  echo '14' > "$COSMIC_TERM_DIR/font_size"
+  ok "Cosmic Terminal font set to JetBrainsMono Nerd Font 14"
+fi
+
 # ─── Linux tuning ───
 section "Linux Tuning"
 
@@ -264,7 +290,8 @@ done
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
-python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { uv tool install claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk"; }
+# claude-agent-sdk is a library (not a CLI tool) — install as a uv-managed package
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { uv pip install --system claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install claude-agent-sdk)"; }
 
 # sqlite-vec for local vector store (used by codebase indexing)
 if [[ ! -d "$HOME/.local/share/titan/vectordb" ]]; then
@@ -279,7 +306,7 @@ fi
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
-BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix")
+BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix" "ccstatusline")
 for tool in "${BUN_TOOLS[@]}"; do
   if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
     ok "$tool (exists)"
@@ -1186,7 +1213,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
-    "command": "bash TITAN_HOME_PLACEHOLDER/.claude/statusline-command.sh"
+    "command": "ccstatusline",
+    "padding": 0
   }
 }
 SETTINGS
@@ -1195,6 +1223,50 @@ TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/l
 sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
 sd 'TITAN_HOME_PLACEHOLDER' "$HOME" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
+
+# ─── ccstatusline config (Powerline statusline for Claude Code) ───
+CCSTATUS_DIR="$HOME/.config/ccstatusline"
+mkdir -p "$CCSTATUS_DIR"
+cat > "$CCSTATUS_DIR/settings.json" << 'CCSTATUSLINE'
+{
+  "version": 3,
+  "lines": [
+    [
+      { "id": "1", "type": "model", "color": "#1e1e2e", "backgroundColor": "#89b4fa", "bold": true, "rawValue": true },
+      { "id": "2", "type": "thinking-effort", "color": "#1e1e2e", "backgroundColor": "#cba6f7", "rawValue": true },
+      { "id": "3", "type": "git-branch", "color": "#1e1e2e", "backgroundColor": "#a6e3a1", "bold": true, "metadata": { "hideNoGit": "true" } },
+      { "id": "4", "type": "git-changes", "color": "#1e1e2e", "backgroundColor": "#f9e2af", "metadata": { "hideNoGit": "true" } },
+      { "id": "5", "type": "current-working-dir", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true, "metadata": { "segments": "3", "fishStyle": "true", "homeAbbreviation": "true" } },
+      { "id": "6", "type": "context-percentage-usable", "color": "#1e1e2e", "backgroundColor": "#94e2d5", "rawValue": true },
+      { "id": "7", "type": "context-bar", "color": "#94e2d5", "backgroundColor": "#1e1e2e", "metadata": { "displayMode": "short" } }
+    ],
+    [
+      { "id": "8", "type": "tokens-total", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true },
+      { "id": "9", "type": "output-speed", "color": "#1e1e2e", "backgroundColor": "#cba6f7", "rawValue": true, "metadata": { "window": "30" } },
+      { "id": "10", "type": "session-cost", "color": "#1e1e2e", "backgroundColor": "#f9e2af", "rawValue": true },
+      { "id": "11", "type": "block-timer", "color": "#1e1e2e", "backgroundColor": "#f38ba8", "rawValue": true },
+      { "id": "12", "type": "session-clock", "color": "#1e1e2e", "backgroundColor": "#89b4fa", "rawValue": true },
+      { "id": "13", "type": "session-usage", "color": "#1e1e2e", "backgroundColor": "#a6e3a1", "rawValue": true },
+      { "id": "14", "type": "weekly-usage", "color": "#cdd6f4", "backgroundColor": "#313244", "rawValue": true }
+    ],
+    []
+  ],
+  "flexMode": "full-minus-40",
+  "compactThreshold": 60,
+  "colorLevel": 3,
+  "inheritSeparatorColors": true,
+  "globalBold": false,
+  "powerline": {
+    "enabled": true,
+    "separators": ["\ue0b0"],
+    "separatorInvertBackground": [false],
+    "startCaps": ["\ue0b6"],
+    "endCaps": ["\ue0b4"],
+    "autoAlign": true
+  }
+}
+CCSTATUSLINE
+ok "ccstatusline config (Catppuccin Mocha Powerline theme)"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
