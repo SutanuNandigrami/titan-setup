@@ -285,7 +285,12 @@ fi
 
 # n8n — workflow automation server (NOT a CLI tool — runs as docker container)
 if command -v docker &>/dev/null; then
-  docker pull n8nio/n8n:latest 2>/dev/null && ok "n8n docker image" || warn "n8n docker pull failed"
+  # Try without sudo first, fall back to sudo (user may not be in docker group yet)
+  if docker pull n8nio/n8n:latest 2>/dev/null || sudo docker pull n8nio/n8n:latest 2>/dev/null; then
+    ok "n8n docker image"
+  else
+    warn "n8n docker pull failed (check: sudo docker pull n8nio/n8n:latest)"
+  fi
   echo "    Run with: docker run -p 5678:5678 -v ~/.n8n:/home/node/.n8n n8nio/n8n"
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
