@@ -1182,12 +1182,18 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
         "repo": "trailofbits/skills"
       }
     }
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "statusLine": {
+    "type": "command",
+    "command": "bash TITAN_HOME_PLACEHOLDER/.claude/statusline-command.sh"
   }
 }
 SETTINGS
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
 TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+sd 'TITAN_HOME_PLACEHOLDER' "$HOME" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
 
 # ─── Skills ───
@@ -2458,6 +2464,36 @@ exit 0
 HOOK
 chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
 ok "hook: session-start.sh"
+
+# ─── Status Line Script ───
+cat > "$CLAUDE_DIR/statusline-command.sh" << 'STATUSLINE'
+#!/usr/bin/env bash
+# Claude Code statusLine command
+# Mirrors PS1: user@host:dir (green/blue), plus model and context usage
+
+input=$(cat)
+
+cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // "?"')
+model=$(echo "$input" | jq -r '.model.display_name // "?"')
+remaining=$(echo "$input" | jq -r '.context_window.remaining_percentage // empty')
+
+# Shorten home directory to ~
+home="$HOME"
+short_cwd="${cwd/#$home/~}"
+
+# Build context indicator
+if [ -n "$remaining" ]; then
+  ctx_part=" [ctx:${remaining}%]"
+else
+  ctx_part=""
+fi
+
+# green=\033[01;32m  reset=\033[00m  blue=\033[01;34m  dim=\033[02m
+printf '\033[01;32m%s@%s\033[00m:\033[01;34m%s\033[00m\033[02m  %s%s\033[00m' \
+  "$(whoami)" "$(hostname -s)" "$short_cwd" "$model" "$ctx_part"
+STATUSLINE
+chmod +x "$CLAUDE_DIR/statusline-command.sh"
+ok "statusline-command.sh"
 
 # ─── .claudeignore Template ───
 
