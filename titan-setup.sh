@@ -93,7 +93,8 @@ sudo apt install -y \
   lsb-release apt-transport-https gnupg ca-certificates \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
   redis-tools aria2 btop miller \
-  inotify-tools expect asciinema at
+  inotify-tools expect asciinema at \
+  lnav imagemagick maim xdotool
 
 sudo apt autoremove -y
 
@@ -223,6 +224,8 @@ UV_TOOLS=(
   "ruff"            # ruff — Python linter (replaces flake8+black+isort+pyflakes)
   "ast-grep-cli"    # ast-grep, sg — structural code search
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
+  "cookiecutter"    # cookiecutter — project scaffolding from templates
+  "visidata"        # vd — TUI spreadsheet for CSV, JSON, SQLite, Parquet
 )
 
 for tool in "${UV_TOOLS[@]}"; do
@@ -267,6 +270,18 @@ done
 
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { bun install -g @google/gemini-cli 2>/dev/null && ok "gemini-cli" || warn "gemini-cli"; }
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { bun install -g @mermaid-js/mermaid-cli 2>/dev/null && ok "mermaid-cli" || warn "mermaid-cli"; }
+
+# playwright — browser automation and E2E testing
+if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
+  bun install -g playwright 2>/dev/null && ok "playwright" || warn "playwright"
+  # Install chromium browser (skip if no display or CI)
+  if command -v playwright &>/dev/null; then
+    playwright install chromium 2>/dev/null && ok "playwright chromium" || warn "playwright chromium (install manually: playwright install chromium)"
+  fi
+else
+  ok "playwright (exists)"
+fi
+
 # n8n — workflow automation server (NOT a CLI tool — runs as docker container)
 if command -v docker &>/dev/null; then
   docker pull n8nio/n8n:latest 2>/dev/null && ok "n8n docker image" || warn "n8n docker pull failed"
@@ -337,6 +352,18 @@ if ! command -v spotify_player &>/dev/null; then
   fi
 else ok "spotify_player (exists)"; fi
 
+# nushell — structured data shell (large compile, separate from batch)
+if ! command -v nu &>/dev/null; then
+  echo -n "  nu (nushell)..."
+  if cargo install nu 2>/dev/null; then
+    echo -e " ${GREEN}✓${NC}"
+  elif cargo install nu --locked 2>/dev/null; then
+    echo -e " ${GREEN}✓ (locked)${NC}"
+  else
+    echo -e " ${YELLOW}⚠ build failed — try: cargo install nu manually${NC}"
+  fi
+else ok "nu (exists)"; fi
+
 # ─── Go tools (with existence checks — skip if already installed) ───
 echo -e "\n  ${CYAN}Go tools:${NC}"
 
@@ -364,6 +391,7 @@ declare -A GO_MAP=(
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
   ["gum"]="github.com/charmbracelet/gum@latest"
+  ["act"]="github.com/nektos/act@latest"
 )
 
 for name in "${!GO_MAP[@]}"; do
@@ -566,6 +594,13 @@ if ! command -v infisical &>/dev/null; then
   sudo apt-get install -y infisical 2>/dev/null && ok "infisical" || warn "infisical"
 else ok "infisical (exists)"; fi
 
+# cloudflared — Cloudflare tunnels
+if ! command -v cloudflared &>/dev/null; then
+  curl -sL -o "$WORKDIR/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_AMD}" \
+    && sudo install -m 0755 "$WORKDIR/cloudflared" /usr/local/bin/cloudflared \
+    && ok "cloudflared" || warn "cloudflared install failed"
+else ok "cloudflared (exists)"; fi
+
 
 section "Phase 4/6 — Claude Code CLI"
 
@@ -621,7 +656,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   warn "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,commands,agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents}
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -731,6 +766,10 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
       "Bash(tmux *)", "Bash(pueue *)", "Bash(pueued *)",
       "Bash(mmdc *)", "Bash(gum *)", "Bash(asciinema *)",
       "Bash(inotifywait *)", "Bash(jnv *)", "Bash(mitmproxy *)", "Bash(mitmdump *)",
+      "Bash(playwright *)", "Bash(act *)", "Bash(cloudflared *)",
+      "Bash(lnav *)", "Bash(cookiecutter *)", "Bash(vd *)", "Bash(nu *)",
+      "Bash(maim *)", "Bash(xdotool *)", "Bash(convert *)", "Bash(identify *)",
+      "Bash(systemctl --user *)", "Bash(journalctl --user *)", "Bash(loginctl enable-linger *)",
       "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(wc *)",
       "Bash(sort *)", "Bash(uniq *)", "Bash(tr *)", "Bash(tee *)",
       "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(ls *)",
@@ -872,6 +911,8 @@ Never guess flags — always check help first.
 - `csvkit` — CSV processing suite (csvlook, csvstat, csvsql).
 - `choose` — select columns from output. Use over `cut`.
 - `jnv` — interactive JSON viewer with jq filtering.
+- `vd` (visidata) — TUI spreadsheet for CSV, JSON, SQLite, Parquet.
+- `nu` (nushell) — structured data shell, everything is a table.
 
 **Git Operations:**
 - `gh` — GitHub operations (PRs, issues, releases, actions). Always prefer over browser.
@@ -923,6 +964,7 @@ Never guess flags — always check help first.
 - `aria2c` — accelerated downloads.
 - `bore` — expose local ports publicly (tunneling).
 - `mitmproxy` — intercept/inspect/modify HTTP/HTTPS traffic.
+- `cloudflared` — Cloudflare tunnels (persistent URLs, auth, HTTPS).
 
 **Security & Scanning:**
 - `nmap` — network and port scanning.
@@ -964,6 +1006,13 @@ Never guess flags — always check help first.
 - `gum` — pretty prompts, spinners, and styled output for scripts.
 - `asciinema` — record terminal sessions for sharing.
 - `mmdc` — render mermaid diagrams to PNG/SVG/PDF.
+- `cookiecutter` — scaffold projects from templates.
+- `act` — run GitHub Actions locally in Docker.
+- `playwright` — browser automation, E2E testing, screenshots.
+- `maim` — screenshot tool (capture screen regions).
+- `xdotool` — automate X11 window/keyboard/mouse actions.
+- `lnav` — structured log viewer with filtering and highlighting.
+- `convert` (imagemagick) — resize, annotate, convert images.
 
 **Cloud CLIs:**
 - `aws` — AWS operations.
@@ -1658,6 +1707,232 @@ graph LR
 - For large systems, break into multiple diagrams.
 SKILL
 ok "skill: diagrams"
+
+# ─── Skill: deploy ───
+cat > "$CLAUDE_DIR/skills/deploy/SKILL.md" << 'SKILL'
+---
+description: Deploy applications — auto-detect provider from project files, run the right deploy commands
+triggers:
+  - deploy
+  - ship to production
+  - push to prod
+  - release
+  - deploy to vercel
+  - deploy to docker
+  - terraform apply
+  - helm upgrade
+---
+
+# Deploy Skill
+
+Auto-detect deployment target from project files and run the correct commands.
+
+## Provider Detection
+
+| File/Dir | Provider | Deploy Command |
+|----------|----------|---------------|
+| `vercel.json` or `.vercel/` | Vercel | `vercel --prod` |
+| `Dockerfile` + no k8s | Docker | `docker compose up -d --build` |
+| `docker-compose.yml` | Docker Compose | `docker compose up -d --build` |
+| `fly.toml` | Fly.io | `fly deploy` |
+| `terraform/` or `*.tf` | Terraform | `terraform plan && terraform apply` |
+| `k8s/` or `helm/` | Kubernetes | `helm upgrade` or `kubectl apply` |
+| `serverless.yml` | Serverless | `serverless deploy` |
+| `netlify.toml` | Netlify | `netlify deploy --prod` |
+| `railway.json` | Railway | `railway up` |
+| `Procfile` | Heroku-like | Platform-specific |
+
+## Pre-Deploy Checklist
+1. Run tests: detect from `_workspace.json` or auto-detect
+2. Run linter: `ruff check .` / `bun lint` / `cargo clippy`
+3. Scan secrets: `gitleaks detect --verbose`
+4. Scan vulnerabilities: `trivy fs .` or `osv-scanner -r .`
+5. Build: detect from project type
+6. Deploy: run provider command
+
+## Patterns
+
+### Vercel
+```bash
+vercel --prod
+```
+
+### Docker + Registry
+```bash
+docker build -t registry.example.com/app:latest .
+trivy image registry.example.com/app:latest
+docker push registry.example.com/app:latest
+```
+
+### Terraform
+```bash
+cd terraform/
+terraform init
+terraform plan -out=tfplan
+# Show plan and ask for confirmation
+terraform apply tfplan
+```
+
+### Kubernetes (Helm)
+```bash
+helm upgrade --install app ./helm/app \
+  --namespace production \
+  --values helm/app/values-prod.yaml \
+  --wait --timeout 5m
+kubectl rollout status deployment/app -n production
+```
+
+### Cloudflare Tunnel (expose local)
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+## Rules
+1. ALWAYS run pre-deploy checklist before deploying.
+2. ALWAYS show the plan/diff and ask for confirmation before applying.
+3. Never deploy directly to production without user confirmation.
+4. Use `_workspace.json` deploy command if available.
+5. For Terraform, always `plan` before `apply`.
+6. Tag releases: `git tag v$(date +%Y%m%d.%H%M)` after successful deploy.
+SKILL
+ok "skill: deploy"
+
+# ─── Skill: process-supervisor ───
+cat > "$CLAUDE_DIR/skills/process-supervisor/SKILL.md" << 'SKILL'
+---
+description: Manage long-running processes with systemd user units — dev servers, daemons, watchers
+triggers:
+  - systemd
+  - service
+  - keep running
+  - daemon
+  - supervisor
+  - background service
+  - auto restart
+  - user unit
+---
+
+# Process Supervisor (systemd user units)
+
+Manage persistent background processes without root using systemd user units.
+
+## Setup
+```bash
+# Enable lingering (services run even when logged out)
+loginctl enable-linger $(whoami)
+
+# Unit files go here
+mkdir -p ~/.config/systemd/user/
+```
+
+## Creating a Service
+
+### Template
+```ini
+# ~/.config/systemd/user/<name>.service
+[Unit]
+Description=<description>
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=<command>
+Restart=on-failure
+RestartSec=5
+WorkingDirectory=%h/<project-dir>
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+```
+
+### Example: Dev Server
+```ini
+[Unit]
+Description=Next.js Dev Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/user/.bun/bin/bun dev
+WorkingDirectory=%h/projects/my-app
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+### Example: File Watcher
+```ini
+[Unit]
+Description=Auto-lint on file change
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/inotifywait -m -r -e modify --format '%%w%%f' src/ | while read f; do ruff check "$f" --fix 2>/dev/null; done
+WorkingDirectory=%h/projects/my-app
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+## Management Commands
+```bash
+# Reload after creating/editing units
+systemctl --user daemon-reload
+
+# Start/stop/restart
+systemctl --user start <name>
+systemctl --user stop <name>
+systemctl --user restart <name>
+
+# Enable on boot
+systemctl --user enable <name>
+
+# Check status and logs
+systemctl --user status <name>
+journalctl --user -u <name> -f        # follow logs
+journalctl --user -u <name> --since today
+
+# List all user units
+systemctl --user list-units --type=service
+
+# Disable and remove
+systemctl --user disable <name>
+systemctl --user stop <name>
+rm ~/.config/systemd/user/<name>.service
+systemctl --user daemon-reload
+```
+
+## Rules
+1. Always use `--user` flag — never create system-level services.
+2. Use `%h` for home directory in unit files (expands automatically).
+3. Set `Restart=on-failure` for services that should auto-recover.
+4. Use `WorkingDirectory` to set the correct project path.
+5. Run `daemon-reload` after any unit file changes.
+6. Check `journalctl --user -u <name>` for debugging.
+7. For one-off tasks, prefer `pueue` over systemd.
+SKILL
+ok "skill: process-supervisor"
+
+# ─── /remember command ───
+cat > "$CLAUDE_DIR/commands/remember.md" << 'CMD'
+Save a piece of knowledge to persistent memory for use across sessions.
+
+1. Read the current memory file at `~/.claude/projects/-opt-projects/memory/MEMORY.md` (create if missing)
+2. Parse `$ARGUMENTS` — the user wants to remember this fact/preference/pattern
+3. Check if a similar memory already exists — update it instead of duplicating
+4. Categorize the memory:
+   - **Preferences**: workflow, tool, style choices
+   - **Patterns**: code patterns, naming conventions, architecture decisions
+   - **Solutions**: fixes for recurring problems
+   - **Project context**: key files, APIs, deployment targets
+5. Append to the appropriate section in MEMORY.md
+6. If MEMORY.md exceeds 150 lines, consider creating topic-specific files and linking from MEMORY.md
+7. Confirm what was saved and where
+CMD
+ok "command: /remember"
 
 # obra/superpowers (multiple useful skills)
 if [ ! -d ~/.claude/skills/tdd ]; then

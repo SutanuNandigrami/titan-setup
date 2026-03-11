@@ -30,7 +30,7 @@ That's it. No other scripts, no tar files, no manual steps.
 ## What it installs
 
 ### Phase 1 — System Prerequisites
-- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`
+- APT packages: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `build-essential`, `miller`, `inotify-tools`, `expect`, `asciinema`, `at`, `lnav`, `imagemagick`, `maim`, `xdotool`
 - Linux tuning: inotify watchers (524288), file descriptor limits (65535)
 - Git defaults: `main` branch, rebase pull, autocrlf input
 
@@ -47,19 +47,19 @@ That's it. No other scripts, no tar files, no manual steps.
 ### Phase 3 — 100+ CLI Tools
 
 **Python (via `uv tool install`):**
-httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project, mitmproxy
+httpie, yq, semgrep, csvkit (12 commands), codespell, ansible-core (9 commands), ansible-lint, sqlmap, pgcli, litecli, awscli, ruff, ast-grep-cli, ccusage, sherlock-project, mitmproxy, cookiecutter, visidata
 
 **JS (via `bun install -g`):**
-trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc)
+trash-cli, tldr, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc), playwright
 
 **Rust (via `cargo install`):**
-ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, tokei, jnv, recall (from git), parry (from git), spotify_player, claude-tmux (from git)
+ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, tokei, jnv, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git)
 
 **Go (via `go install`):**
-lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum
+lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act
 
 **Binary downloads:**
-kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical
+kubectl, k9s, helm, terraform, packer, tflint, infracost, hadolint, duckdb, trivy, mc (MinIO), gh (GitHub CLI), fzf, shellcheck, yazi, lazydocker (binary release), ctop (v0.7.7 pinned), trufflehog (official script), dippy, infisical, cloudflared
 
 **Docker images:**
 n8n (workflow automation server)
@@ -81,7 +81,7 @@ n8n (workflow automation server)
 - Permissions: 70+ allow rules, 22 deny rules (including Write denies for sensitive paths)
 - Tool search: `auto:5` threshold for MCP lazy loading
 
-**9 Inline Skills** (loaded on demand, 0 startup tokens):
+**11 Inline Skills** (loaded on demand, 0 startup tokens):
 - `cli-tools` — Full reference for 100+ installed CLI tools by category
 - `security-scan` — Pre-push, container, infra, network scanning workflows
 - `git-workflow` — Branch naming, conventional commits, PR flow
@@ -91,6 +91,8 @@ n8n (workflow automation server)
 - `workspace` — `_workspace.json` convention, project auto-detection, `.envrc` templates
 - `pueue-orchestrator` — Parallel task orchestration (lint + test + scan pipelines)
 - `diagrams` — Generate architecture/flow/ER/sequence diagrams via mermaid-cli
+- `deploy` — Auto-detect provider (Vercel/Docker/Terraform/K8s/Cloudflare), pre-deploy checks
+- `process-supervisor` — Manage background services with systemd user units
 
 **Community Skills** (cloned from GitHub):
 - [obra/superpowers](https://github.com/obra/superpowers) — TDD, systematic debugging, root cause tracing, defense in depth, brainstorming
@@ -99,7 +101,7 @@ n8n (workflow automation server)
 - [Trail of Bits](https://github.com/trailofbits/skills) — Security analysis skills
 - [NotebookLM CLI](https://github.com/jacob-bd/notebooklm-cli) — Google NotebookLM skill
 
-**8 Slash Commands** (loaded only when invoked):
+**9 Slash Commands** (loaded only when invoked):
 - `/catchup` — Resume after /clear (reads git state + scratchpad)
 - `/handoff` — Write session state to _handoff.md before ending
 - `/ship` — Full pipeline: lint → test → scan → commit → push → PR
@@ -108,6 +110,7 @@ n8n (workflow automation server)
 - `/review` — Code review current branch against main
 - `/tools` — List all installed CLI tools by package manager
 - `/workspace-init` — Auto-detect project type, generate `_workspace.json` + `.envrc`
+- `/remember` — Save knowledge to persistent memory across sessions
 
 **2 Subagents:**
 - `researcher` — Read-only codebase explorer
@@ -137,9 +140,9 @@ n8n (workflow automation server)
 ```
 CLAUDE.md:        ~800 tokens  (loaded every session)
 settings.json:    0 tokens     (parsed by harness)
-9 inline skills:  0 tokens     (loaded on demand by relevance, ~600 lines total)
+11 inline skills: 0 tokens     (loaded on demand by relevance, ~800 lines total)
 community skills: 0 tokens     (loaded on demand)
-8 commands:       0 tokens     (loaded on /command)
+9 commands:       0 tokens     (loaded on /command)
 2 agents:         0 tokens     (loaded on spawn)
 CLI --help:       0 tokens     (lazy-loaded at runtime)
 ─────────────────────────────────────
@@ -232,7 +235,15 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 
 ## Changelog
 
-### v3.0 (current)
+### v3.1 (current)
+- Added: `lnav`, `imagemagick`, `maim`, `xdotool` to system packages
+- Added: `cookiecutter`, `visidata` (uv), `playwright` (bun), `nu`/nushell (cargo), `act` (go), `cloudflared` (binary)
+- Added: 2 new skills — `deploy` (auto-detect provider), `process-supervisor` (systemd user units)
+- Added: `/remember` command for persistent cross-session memory
+- Added: Tool permissions for all new tools including `systemctl --user` and `journalctl --user`
+- Total: 130+ CLI tools, 11 skills, 9 commands, 3 plugins
+
+### v3.0
 - Added: CLI options `--name`, `--dry-run`, `--help` for public use
 - Added: Architecture detection (x86_64/aarch64) for all binary downloads
 - Added: `inotify-tools`, `expect`, `asciinema`, `at` to system packages
