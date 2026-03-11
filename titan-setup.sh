@@ -909,7 +909,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "ENABLE_TOOL_SEARCH": "auto:5",
     "CLAUDE_CODE_STATUSLINE": "ccstatusline",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "PATH": "TITAN_PATH_PLACEHOLDER"
   },
   "preferences": {
     "thinking": true,
@@ -1067,6 +1068,8 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
 }
 SETTINGS
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
 
 # ─── Skills ───
