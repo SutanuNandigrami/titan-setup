@@ -27,6 +27,46 @@ ok()      { echo -e "  ${GREEN}✓${NC} $1"; }
 warn()    { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail()    { echo -e "  ${RED}✗${NC} $1"; }
 
+# ─── CLI Options ───
+ENGINEER_NAME=""
+DRY_RUN=false
+
+usage() {
+  cat <<USAGE
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  --name NAME   Your name for Claude config (default: \$(whoami))
+  --dry-run     Print what would be done without making changes
+  -h, --help    Show this help message
+
+Examples:
+  $(basename "$0") --name "Alice"
+  $(basename "$0") --dry-run
+USAGE
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --name)    ENGINEER_NAME="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=true; shift ;;
+    -h|--help) usage ;;
+    *) fail "Unknown option: $1"; usage ;;
+  esac
+done
+
+# Default name from system if not provided
+ENGINEER_NAME="${ENGINEER_NAME:-$(whoami)}"
+
+if $DRY_RUN; then
+  warn "Dry run mode — no changes will be made"
+  echo "  Engineer name: $ENGINEER_NAME"
+  echo "  Claude config: ~/.claude/"
+  echo "  Shell integration: ~/.bashrc"
+  exit 0
+fi
+
 section "Phase 1/6 — System Prerequisites"
 
 sudo apt update && sudo apt upgrade -y
@@ -537,7 +577,7 @@ mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflo
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
-# Sutanu — Global Operating Manual
+# TITAN_ENGINEER_NAME — Global Operating Manual
 
 ## Preferences
 - Be direct. Skip preambles.
@@ -609,13 +649,14 @@ NEVER guess flags. Discover tools on demand:
 - Write plans to `_scratchpad.md`, not just chat.
 - When compacting, always preserve: current branch, modified files, test status, blockers.
 CLAUDEMD
+sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/CLAUDE.md"
 ok "CLAUDE.md"
 
 # ─── settings.json ───
 cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
 {
   "env": {
-    "ENGINEER_NAME": "Sutanu",
+    "ENGINEER_NAME": "TITAN_ENGINEER_NAME",
     "DEFAULT_BRANCH": "main",
     "ENABLE_TOOL_SEARCH": "auto:5",
     "CLAUDE_CODE_STATUSLINE": "ccstatusline"
@@ -733,6 +774,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
   }
 }
 SETTINGS
+sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
 
 # ─── Skills ───
