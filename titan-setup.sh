@@ -39,9 +39,6 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
-CCFLARE_PROXY=false
-CCFLARE_LOGLEVEL="INFO"
-CCFLARE_OAUTH_ACCOUNT=""
 
 usage() {
   cat <<USAGE
@@ -56,15 +53,11 @@ Options:
   --ccflare-skip           Skip better-ccflare install entirely
   --ccflare-port PORT      Proxy port (default: 8080)
   --ccflare-host HOST      Bind address (default: 127.0.0.1)
-  --ccflare-proxy          Auto-enable ANTHROPIC_BASE_URL without prompting
-  --ccflare-loglevel LVL   Log level: DEBUG|INFO|WARN|ERROR (default: INFO)
-  --ccflare-oauth NAME     Pre-add a Claude OAuth account with given name
 
   -h, --help               Show this help message
 
 Examples:
   $(basename "$0") --name "Alice"
-  $(basename "$0") --name "Alice" --ccflare-proxy --ccflare-oauth primary
   $(basename "$0") --name "Alice" --ccflare-skip
   $(basename "$0") --dry-run
 USAGE
@@ -79,9 +72,6 @@ while [[ $# -gt 0 ]]; do
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
     --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
     --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
-    --ccflare-proxy)   CCFLARE_PROXY=true; shift ;;
-    --ccflare-loglevel) [[ $# -ge 2 ]] || { fail "--ccflare-loglevel requires a value"; usage; }; CCFLARE_LOGLEVEL="$2"; shift 2 ;;
-    --ccflare-oauth)   [[ $# -ge 2 ]] || { fail "--ccflare-oauth requires a value"; usage; }; CCFLARE_OAUTH_ACCOUNT="$2"; shift 2 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
   esac
@@ -408,18 +398,6 @@ fi
 # Distributes requests across Claude OAuth, Vertex AI, Z.ai, OpenRouter, local models
 # Dashboard: http://${CCFLARE_HOST}:${CCFLARE_PORT} | Docs: https://github.com/tombii/better-ccflare
 
-# Helper: write ANTHROPIC_BASE_URL to ~/.bashrc
-_ccflare_set_proxy() {
-  local url="http://${CCFLARE_HOST}:${CCFLARE_PORT}"
-  if ! grep -q "ANTHROPIC_BASE_URL" "$HOME/.bashrc" 2>/dev/null; then
-    printf '\n# better-ccflare proxy for Claude Code (multi-account load balancer)\nexport ANTHROPIC_BASE_URL=%s\n' "$url" >> "$HOME/.bashrc"
-    ok "ANTHROPIC_BASE_URL=$url added to ~/.bashrc"
-  else
-    ok "ANTHROPIC_BASE_URL already in ~/.bashrc"
-  fi
-  export ANTHROPIC_BASE_URL="$url"
-}
-
 if $CCFLARE_SKIP; then
   ok "better-ccflare (skipped — use --ccflare-* flags to configure)"
 else
@@ -505,178 +483,11 @@ SERVICEEOF
   systemctl --user enable better-ccflare 2>/dev/null || true
   systemctl --user start better-ccflare 2>/dev/null || true
   ok "better-ccflare service (http://${CCFLARE_HOST}:${CCFLARE_PORT})"
-
-  # Phase C: ANTHROPIC_BASE_URL — flag-driven or interactive
-  if $CCFLARE_PROXY; then
-    _ccflare_set_proxy
-  else
-    echo ""
-    echo -e "  ${CYAN}── better-ccflare: Claude Code integration ──${NC}"
-    echo "     Route Claude Code through the load balancer for multi-account support."
-    echo "     Sets: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
-    echo "     (skip this if you want to enable it manually later)"
-    echo ""
-    read -r -p "  Enable proxy integration? [y/N] " _CCFLARE_SETUP
-    if [[ "${_CCFLARE_SETUP:-}" =~ ^[Yy] ]]; then
-      _ccflare_set_proxy
-    fi
-  fi
-
-  # Phase D: Provider account setup — flag-driven first, then interactive menu
-  if [[ -n "$CCFLARE_OAUTH_ACCOUNT" ]]; then
-    better-ccflare --add-account "$CCFLARE_OAUTH_ACCOUNT" --mode claude-oauth --priority 0 2>&1 | grep -v '^\[dotenv' || true
-    ok "account: $CCFLARE_OAUTH_ACCOUNT (claude-oauth, priority 0)"
-  fi
-
-  # Interactive provider menu — shown when no flag-based accounts were added
-  if [[ -z "$CCFLARE_OAUTH_ACCOUNT" ]]; then
-    echo ""
-    echo -e "  ${CYAN}── better-ccflare: Add provider accounts ──${NC}"
-    echo "  Accounts define which Claude providers to load balance across."
-    echo "  You can add them now or later: better-ccflare --add-account NAME --mode MODE"
-    echo ""
-    echo "    1) Claude OAuth        (Pro/Team/Max — recommended)"
-    echo "    2) Console             (Claude API key OAuth)"
-    echo "    3) Z.ai                (higher rate limits, API key)"
-    echo "    4) AWS Bedrock         (AWS profile from ~/.aws/credentials)"
-    echo "    5) Kilo                (Kilo Gateway, API key)"
-    echo "    6) Minimax             (API key)"
-    echo "    7) NanoGPT             (API key)"
-    echo "    8) OpenAI-compatible   (OpenRouter, Together AI, Ollama, local)"
-    echo "    9) Anthropic-compatible (custom self-hosted endpoint)"
-    echo "    s) Skip — configure later"
-    echo ""
-
-    while true; do
-      read -r -p "  Add provider [1-9/s]: " _PROV
-      _ACCT_NAME="" _ACCT_PRI="" _KEY="" _ENDPOINT="" _PROFILE=""
-      case "${_PROV:-s}" in
-        1)
-          read -r -p "    Account name [claude-primary]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-claude-primary}"
-          read -r -p "    Priority 0-100 [0]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-0}"
-          better-ccflare --add-account "$_ACCT_NAME" --mode claude-oauth --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-          ok "account: $_ACCT_NAME (claude-oauth, priority $_ACCT_PRI)"
-          ;;
-        2)
-          read -r -p "    Account name [claude-console]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-claude-console}"
-          read -r -p "    Priority 0-100 [5]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-5}"
-          better-ccflare --add-account "$_ACCT_NAME" --mode console --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-          ok "account: $_ACCT_NAME (console, priority $_ACCT_PRI)"
-          ;;
-        3)
-          read -r -p "    Account name [zai-account]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-zai-account}"
-          read -r -p "    Z.ai API key: " _KEY
-          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-10}"
-          if [[ -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode zai --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (z.ai, priority $_ACCT_PRI)"
-          else
-            warn "skipped — no API key provided"
-          fi
-          ;;
-        4)
-          read -r -p "    Account name [bedrock]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-bedrock}"
-          read -r -p "    AWS profile name [default]: " _PROFILE
-          _PROFILE="${_PROFILE:-default}"
-          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-10}"
-          better-ccflare --add-account "$_ACCT_NAME" --mode bedrock --profile "$_PROFILE" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-          ok "account: $_ACCT_NAME (bedrock, profile=$_PROFILE)"
-          ;;
-        5)
-          read -r -p "    Account name [kilo]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-kilo}"
-          read -r -p "    Kilo API key: " _KEY
-          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-10}"
-          if [[ -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode kilo --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (kilo, priority $_ACCT_PRI)"
-          else
-            warn "skipped — no API key provided"
-          fi
-          ;;
-        6)
-          read -r -p "    Account name [minimax]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-minimax}"
-          read -r -p "    Minimax API key: " _KEY
-          read -r -p "    Priority 0-100 [20]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-20}"
-          if [[ -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode minimax --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (minimax, priority $_ACCT_PRI)"
-          else
-            warn "skipped — no API key provided"
-          fi
-          ;;
-        7)
-          read -r -p "    Account name [nanogpt]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-nanogpt}"
-          read -r -p "    NanoGPT API key: " _KEY
-          read -r -p "    Priority 0-100 [20]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-20}"
-          if [[ -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode nanogpt --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (nanogpt, priority $_ACCT_PRI)"
-          else
-            warn "skipped — no API key provided"
-          fi
-          ;;
-        8)
-          read -r -p "    Account name [openrouter]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-openrouter}"
-          echo "    Common endpoints:"
-          echo "      https://openrouter.ai/api/v1       (OpenRouter)"
-          echo "      https://api.together.xyz/v1        (Together AI)"
-          echo "      http://localhost:11434/v1           (Ollama — use dummy-key)"
-          read -r -p "    Endpoint URL: " _ENDPOINT
-          read -r -p "    API key (or 'dummy-key' for local): " _KEY
-          read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-50}"
-          if [[ -n "$_ENDPOINT" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode openai-compatible \
-              --api-key "${_KEY:-dummy-key}" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (openai-compatible, priority $_ACCT_PRI)"
-          else
-            warn "skipped — no endpoint provided"
-          fi
-          ;;
-        9)
-          read -r -p "    Account name [custom-api]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-custom-api}"
-          read -r -p "    Endpoint URL: " _ENDPOINT
-          read -r -p "    API key: " _KEY
-          read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-50}"
-          if [[ -n "$_ENDPOINT" && -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --mode anthropic-compatible \
-              --api-key "$_KEY" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
-            ok "account: $_ACCT_NAME (anthropic-compatible, priority $_ACCT_PRI)"
-          else
-            warn "skipped — need both endpoint and API key"
-          fi
-          ;;
-        s|S|"")
-          break
-          ;;
-        *)
-          echo "    Invalid choice — enter 1-9 or s"
-          ;;
-      esac
-      echo ""
-    done
-  fi
-
-  # Show final account list
-  echo ""
-  better-ccflare --list 2>/dev/null || true
+  echo "  Add accounts after install:"
+  echo "    better-ccflare --add-account NAME --mode claude-oauth"
+  echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
+  echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"
+  echo "  Then set: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
 fi  # end $CCFLARE_SKIP
 
 command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { run_q bun install -g notebooklm-cli && ok "notebooklm-cli" || warn "notebooklm-cli"; }
