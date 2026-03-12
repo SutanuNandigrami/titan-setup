@@ -625,7 +625,6 @@ SERVICEEOF
   echo "  Then set: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
 fi  # end $CCFLARE_SKIP
 
-command -v nlm-cli &>/dev/null && ok "notebooklm-cli (exists)" || { run_q bun install -g notebooklm-cli && ok "notebooklm-cli" || warn "notebooklm-cli"; }
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
 command -v vercel &>/dev/null && ok "vercel (exists)" || { run_q bun install -g vercel && ok "vercel" || warn "vercel"; }
 
@@ -1332,16 +1331,6 @@ if [ -d ~/.claude/skills/hashicorp ]; then
   ok "removed old hashicorp full clone (14 skills → covered by infra-deploy)"
 fi
 
-# NotebookLM skill
-if [ ! -d ~/.claude/skills/nlm-cli ]; then
-  git clone --depth 1 https://github.com/jacob-bd/notebooklm-cli.git /tmp/nlm-cli 2>/dev/null
-  cp -r /tmp/nlm-cli/nlm-cli-skill ~/.claude/skills/nlm-cli 2>/dev/null && ok "notebooklm skill" || warn "notebooklm skill"
-  rm -rf /tmp/nlm-cli
-else ok "notebooklm skill (exists)"; fi
-# Add tight paths scoping to nlm-cli (350 lines, very niche — only load when nlm files present)
-if [ -f ~/.claude/skills/nlm-cli/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/nlm-cli/SKILL.md 2>/dev/null; then
-  sed -i '3a paths: ["**/nlm*", "**/.nlm*", "**/notebooklm*", "**/.notebooklm*"]' ~/.claude/skills/nlm-cli/SKILL.md
-fi
 
 # ─── Commands ───
 install -Dm644 "$REPO_FILES/dot-claude/commands/catchup.md" "$CLAUDE_DIR/commands/catchup.md"
