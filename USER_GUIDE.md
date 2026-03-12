@@ -1528,8 +1528,8 @@ tmux integration for Claude Code. Enhanced multiplexing.
 
 ## Web & JavaScript
 
-#### gemini-cli
-Google Gemini CLI. Access Gemini AI from terminal.
+#### gemini-cli (`gemini`)
+Google Gemini CLI. Access Gemini AI from terminal. **Binary is `gemini`**, not `gemini-cli`.
 
 - Chat with Gemini
 - Ask questions
