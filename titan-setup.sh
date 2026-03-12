@@ -179,6 +179,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 fi
 
+# ─── Ensure we are in a readable working directory ───
+# exec sudo -u USER inherits root's CWD (/root) which USER may not be able to stat.
+# Go, some build tools, and mktemp -d with relative paths all call getcwd() and fail.
+cd "$HOME" || cd /tmp
+
 # ─── Log file for quiet mode ───
 LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
 # run_q: run a command, routing output to log file unless --verbose
@@ -301,6 +306,7 @@ if command -v bun &>/dev/null; then
 else
   echo "  Installing bun..."
   curl -fsSL https://bun.sh/install | bash
+  export PATH="$HOME/.bun/bin:$PATH"
   ok "bun installed: $(bun --version)"
 fi
 # Ensure bun globals are on PATH for the rest of this script
@@ -415,6 +421,16 @@ python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
+# Trust postinstall scripts for packages that need them (esbuild, puppeteer, canvas, etc.)
+# Also skip puppeteer chromium download — we install chromium via playwright separately
+cat > "$HOME/.bunfig.toml" << 'BUNFIG'
+[install]
+trustedDependencies = ["puppeteer", "esbuild", "@swc/core", "canvas", "node-gyp", "sharp", "fsevents"]
+
+[install.scopes]
+BUNFIG
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
+
 BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix" "ccstatusline")
 for tool in "${BUN_TOOLS[@]}"; do
   if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
@@ -431,10 +447,12 @@ command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install 
 # playwright — browser automation and E2E testing
 if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   run_q bun install -g playwright && ok "playwright" || warn "playwright"
-  # Install chromium + system deps (works headlessly on VPS; use --headless flag at runtime)
+  # Install chromium: apt deps need root, browser download runs as current user
   if command -v playwright &>/dev/null; then
-    run_q playwright install chromium --with-deps 2>/dev/null && ok "playwright chromium" \
-      || warn "playwright chromium (install manually: playwright install chromium --with-deps)"
+    # install-deps uses apt-get; titan has NOPASSWD sudo so playwright's internal sudo call works
+    sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >> "$LOG_FILE" 2>&1 || true
+    run_q playwright install chromium && ok "playwright chromium" \
+      || warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
   ok "playwright (exists)"
@@ -442,17 +460,20 @@ fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
 if command -v docker &>/dev/null; then
-  # Add user to docker group — sg activates it immediately without re-login
+  # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
+  sudo systemctl enable --now docker 2>/dev/null || true
 
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
-  # Pull image using sg to apply docker group in current session without re-login
-  if sg docker -c "docker pull n8nio/n8n:latest" 2>/dev/null; then
+  # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
+  if docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1 \
+      || sg docker -c "docker pull n8nio/n8n:latest" >> "$LOG_FILE" 2>&1 \
+      || sudo docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1; then
     ok "n8n docker image"
   else
-    warn "n8n docker pull failed (check: sudo docker pull n8nio/n8n:latest)"
+    warn "n8n docker pull failed (check: docker pull n8nio/n8n:latest)"
   fi
 
   # Fix n8n data directory permissions (container runs as uid 1000)
