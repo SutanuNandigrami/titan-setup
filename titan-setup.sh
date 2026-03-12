@@ -150,14 +150,8 @@ else
   ok "JetBrainsMono Nerd Font installed"
 fi
 
-# Set Cosmic Terminal font if running on COSMIC desktop
-if command -v cosmic-term &>/dev/null; then
-  COSMIC_TERM_DIR="$HOME/.config/cosmic/com.system76.CosmicTerm/v1"
-  mkdir -p "$COSMIC_TERM_DIR"
-  echo '"JetBrainsMono Nerd Font"' > "$COSMIC_TERM_DIR/font_name"
-  echo '14' > "$COSMIC_TERM_DIR/font_size"
-  ok "Cosmic Terminal font set to JetBrainsMono Nerd Font 14"
-fi
+# Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
+# JetBrainsMono Nerd Font is installed above and available to select.
 
 # ─── Linux tuning ───
 section "Linux Tuning"
