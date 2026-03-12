@@ -295,6 +295,7 @@ if command -v uv &>/dev/null; then
 else
   echo "  Installing uv..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
   ok "uv installed: $(uv --version)"
 fi
 # Ensure uv/uvx binaries are on PATH for the rest of this script
@@ -352,6 +353,13 @@ else
   curl https://mise.run | sh
   export PATH="$HOME/.local/bin:$PATH"
   ok "mise installed"
+fi
+# Activate mise in the current script session so shims (node, python, etc.) are on PATH.
+# .bashrc already has eval "$(mise activate bash)" via SHELL_BLOCK — this covers the script run itself.
+eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null)" 2>/dev/null || true
+# Install node LTS so bun postinstall scripts (puppeteer, mermaid-cli, etc.) can find `node`
+if ! command -v node &>/dev/null; then
+  run_q mise use -g node@lts && ok "node (via mise)" || warn "node install failed — bun postinstalls may need node"
 fi
 
 
