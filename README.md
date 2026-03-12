@@ -1,14 +1,23 @@
 # Titan Setup
 
+<br>
+
 **One script. Fresh Ubuntu to fully armed Claude Code workstation.**
 
-**[Video Guide — "The Claude Code Workstation"](https://notebooklm.google.com/notebook/a9711712-6d83-455b-9090-faf68664185f)** · AI-generated overview of this setup (NotebookLM)
+<br>
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh)
 ```
+<br>
 
 That's it. One command. Everything installs automatically.
+
+<br>
+
+![](titan)
+
+<br>
 
 **Options:**
 ```bash
