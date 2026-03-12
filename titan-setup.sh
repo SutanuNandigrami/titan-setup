@@ -423,9 +423,59 @@ _ccflare_set_proxy() {
 if $CCFLARE_SKIP; then
   ok "better-ccflare (skipped — use --ccflare-* flags to configure)"
 else
-  # Phase A: Install
+  # Phase A: Install from source with patches
+  # Upstream bugs: NULL constraint on refresh_token for kilo/zai/minimax/console CLI modes
+  # See: https://github.com/tombii/better-ccflare/issues/83
   if ! command -v better-ccflare &>/dev/null; then
-    run_q bun install -g better-ccflare && ok "better-ccflare" || warn "better-ccflare"
+    _BCF_SRC=$(mktemp -d -t bcf-src-XXXXXX)
+    _CLEANUP_DIRS+=("$_BCF_SRC")
+    if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then
+      # Patch: fix NULL constraint for refresh_token in CLI account creation
+      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" << 'PYEOF'
+import sys, pathlib
+f = pathlib.Path(sys.argv[1])
+c = f.read_text()
+for provider, values_placeholder, array_signature in [
+    ("claude-console-api", "NULL, NULL, NULL, ?, 0, 0", "validatedApiKey,\n\t\t\tnow,\n\t\t\tvalidatedPriority,\n\t\t\tcustomEndpoint"),
+    ("minimax",            "NULL, NULL, NULL, ?, 0, 0", "validatedApiKey,\n\t\t\tnow,\n\t\t\tvalidatedPriority,\n\t\t\tnull"),
+    ("zai",                "NULL, NULL, NULL, ?, ?, ?", "validatedApiKey,\n\t\t\tnow,\n\t\t\t0,"),
+    ("kilo",               "?, ?, ?, ?, ?, ?, ?",       None),  # separate pattern
+]:
+    if provider == "kilo":
+        old = '"kilo",\n\t\t\tvalidatedApiKey,\n\t\t\tnull,'
+        new = '"kilo",\n\t\t\tvalidatedApiKey,\n\t\t\tvalidatedApiKey,'
+    else:
+        old = f'"{provider}",\n\t\t\tvalidatedApiKey,\n\t\t\tnow,'
+        new = f'"{provider}",\n\t\t\tvalidatedApiKey,\n\t\t\tvalidatedApiKey,\n\t\t\tnow,'
+    c = c.replace(old, new)
+f.write_text(c)
+PYEOF
+      # Also fix SQL placeholders: NULL, NULL, NULL → ?, NULL, NULL for console/minimax/zai
+      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" << 'PYEOF'
+import sys, pathlib
+f = pathlib.Path(sys.argv[1])
+c = f.read_text()
+# Replace the SQL NULL,NULL,NULL with ?,NULL,NULL for API-key providers that store key as refresh_token
+# Only target the INSERT patterns that still have the old SQL (not already patched)
+c = c.replace(
+    ") VALUES (?, ?, ?, ?, NULL, NULL, NULL,",
+    ") VALUES (?, ?, ?, ?, ?, NULL, NULL,"
+)
+f.write_text(c)
+PYEOF
+      mkdir -p "$HOME/.bun/bin"
+      if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC" run build:cli; then
+        install -m 0755 "$_BCF_SRC/apps/cli/dist/better-ccflare" "$HOME/.bun/bin/better-ccflare"
+        install -m 0755 "$_BCF_SRC/apps/cli/dist/better-ccflare" "$HOME/.local/bin/better-ccflare"
+        ok "better-ccflare (built from source + NULL constraint patches applied)"
+      else
+        warn "better-ccflare build failed — falling back to npm binary (kilo/zai/minimax may have issues)"
+        run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+      fi
+    else
+      warn "better-ccflare repo clone failed — falling back to npm binary"
+      run_q bun install -g better-ccflare || warn "better-ccflare install failed"
+    fi
   else
     ok "better-ccflare (exists)"
   fi
