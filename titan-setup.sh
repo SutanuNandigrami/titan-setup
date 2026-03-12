@@ -647,10 +647,12 @@ run_q rustup update stable
 # Reduces cargo phase from hours to minutes on VPS
 if ! command -v cargo-binstall &>/dev/null; then
   echo -n "  cargo-binstall..."
-  curl -L --proto '=https' --tlsv1.2 -sSf \
-    https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-releases.sh \
-    | bash -s -- -y >> "$LOG_FILE" 2>&1 \
-    && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠ (will compile from source)${NC}"
+  _binstall_url="https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${ARCH_RUST}-unknown-linux-musl.tgz"
+  if curl -fsSL "$_binstall_url" 2>>"$LOG_FILE" | tar -xz -C ~/.cargo/bin 2>>"$LOG_FILE"; then
+    echo -e " ${GREEN}✓${NC}"
+  else
+    echo -e " ${YELLOW}⚠ (will compile from source)${NC}"
+  fi
 else
   ok "cargo-binstall (exists)"
 fi
