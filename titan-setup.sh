@@ -34,6 +34,7 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 
 # ─── CLI Options ───
 ENGINEER_NAME=""
+INSTALL_MODE=""
 DRY_RUN=false
 VERBOSE=false
 CCFLARE_SKIP=false
@@ -46,6 +47,7 @@ Usage: $(basename "$0") [OPTIONS]
 
 Options:
   --name NAME              Your name for Claude config (default: \$(whoami))
+  --mode desktop|vps       Installation profile (prompted interactively if omitted)
   --dry-run                Print what would be done without making changes
   -v, --verbose            Show all subprocess output (default: quiet, logs to file)
 
@@ -57,7 +59,8 @@ Options:
   -h, --help               Show this help message
 
 Examples:
-  $(basename "$0") --name "Alice"
+  $(basename "$0") --name "Alice" --mode desktop
+  $(basename "$0") --name "Alice" --mode vps
   $(basename "$0") --name "Alice" --ccflare-skip
   $(basename "$0") --dry-run
 USAGE
@@ -67,6 +70,9 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case $1 in
     --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
+    --mode)            [[ $# -ge 2 ]] || { fail "--mode requires a value (desktop|vps)"; usage; }
+                       [[ "$2" == "desktop" || "$2" == "vps" ]] || { fail "--mode must be 'desktop' or 'vps'"; usage; }
+                       INSTALL_MODE="$2"; shift 2 ;;
     --dry-run)         DRY_RUN=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
@@ -87,6 +93,20 @@ if $DRY_RUN; then
   echo "  Shell integration: ~/.bashrc"
   exit 0
 fi
+
+# ─── Installation profile ───
+if [[ -z "$INSTALL_MODE" ]]; then
+  echo -e "\n${CYAN}Select installation profile:${NC}"
+  echo "  1) Desktop  — full workstation setup"
+  echo "  2) VPS      — workstation + server extras"
+  read -rp "  Choice [1/2]: " _mode_choice
+  case "$_mode_choice" in
+    1) INSTALL_MODE="desktop" ;;
+    2) INSTALL_MODE="vps" ;;
+    *) fail "Invalid choice. Run with --mode desktop or --mode vps"; exit 1 ;;
+  esac
+fi
+echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
 # ─── Log file for quiet mode ───
 LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
@@ -1421,6 +1441,13 @@ echo -e "
     Go CLIs     → go install <path>@latest
     ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
 "
+
+# ─── VPS-specific installs ───
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  section "VPS extras"
+  # TODO: add VPS-specific installs here
+  ok "VPS extras: nothing configured yet — add installs above this line"
+fi
 
 # Open dashboards in browser on GUI systems; print URLs on headless VPS
 if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
