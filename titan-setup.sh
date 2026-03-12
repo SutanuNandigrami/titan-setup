@@ -419,7 +419,7 @@ command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install 
 if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   run_q bun install -g playwright && ok "playwright" || warn "playwright"
   # Install chromium browser (skip if no display or CI)
-  if command -v playwright &>/dev/null; then
+  if command -v playwright &>/dev/null && [[ "$INSTALL_MODE" == "desktop" ]]; then
     playwright install chromium 2>/dev/null && ok "playwright chromium" || warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
@@ -526,9 +526,15 @@ f.write_text(c)
 PYEOF
       mkdir -p "$HOME/.bun/bin"
       if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC" run build:cli; then
-        install -m 0755 "$_BCF_SRC/apps/cli/dist/better-ccflare" "$HOME/.bun/bin/better-ccflare"
-        install -m 0755 "$_BCF_SRC/apps/cli/dist/better-ccflare" "$HOME/.local/bin/better-ccflare"
-        ok "better-ccflare (built from source + NULL constraint patches applied)"
+        _BCF_DIST="$_BCF_SRC/apps/cli/dist/better-ccflare"
+        if [[ -f "$_BCF_DIST" ]]; then
+          install -m 0755 "$_BCF_DIST" "$HOME/.bun/bin/better-ccflare"
+          install -m 0755 "$_BCF_DIST" "$HOME/.local/bin/better-ccflare"
+          ok "better-ccflare (built from source + NULL constraint patches applied)"
+        else
+          warn "better-ccflare build succeeded but binary not found at $_BCF_DIST — falling back to npm"
+          run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+        fi
       else
         warn "better-ccflare build failed — falling back to npm binary (kilo/zai/minimax may have issues)"
         run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
