@@ -517,7 +517,12 @@ CARGO_CRATES=(
 )
 
 CARGO_FAIL=0
+_CARGO_LIST=$(cargo install --list 2>/dev/null)
 for crate in "${CARGO_CRATES[@]}"; do
+  if echo "$_CARGO_LIST" | grep -q "^${crate} v"; then
+    echo "  $crate (installed) ✓"
+    continue
+  fi
   echo -n "  $crate..."
   if run_q cargo install "$crate"; then
     echo -e " ${GREEN}✓${NC}"
@@ -774,7 +779,16 @@ if ! command -v trivy &>/dev/null; then
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   sudo apt update -qq && sudo apt install -y -qq trivy
   ok "trivy"
-else ok "trivy (exists)"; fi
+else
+  # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
+  if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
+    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
+    ok "trivy (key migrated)"
+  else
+    ok "trivy (exists)"
+  fi
+fi
 
 # mc (MinIO client)
 if ! command -v mc &>/dev/null; then
