@@ -1538,8 +1538,8 @@ Google Gemini CLI. Access Gemini AI from terminal. **Binary is `gemini`**, not `
 
 > **Example prompt:** "Ask Gemini about a coding problem"
 
-#### notebooklm-cli (`nlm-cli`)
-Google NotebookLM from terminal. Research and note-taking. **Binary is `nlm-cli`**.
+#### notebooklm-mcp-cli (`nlm`)
+Google NotebookLM from terminal — full API access. **Binary is `nlm`**. Install: `uv tool install notebooklm-mcp-cli`.
 
 - Create notebooks
 - Add sources

@@ -401,6 +401,7 @@ UV_TOOLS=(
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
   "cookiecutter"    # cookiecutter — project scaffolding from templates
   "visidata"        # vd — TUI spreadsheet for CSV, JSON, SQLite, Parquet
+  "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
 )
 
 for tool in "${UV_TOOLS[@]}"; do
@@ -1112,7 +1113,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   ok "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/nlm-cli,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
 mkdir -p "$HOME/.config/agt"
 
 # ─── Repo files (static content loaded from git repo) ────────────────────────
@@ -1197,6 +1198,10 @@ ok "skill: deploy"
 # ─── Skill: process-supervisor ───
 install -Dm644 "$REPO_FILES/dot-claude/skills/process-supervisor/SKILL.md" "$CLAUDE_DIR/skills/process-supervisor/SKILL.md"
 ok "skill: process-supervisor"
+
+# ─── Skill: nlm-cli ───
+install -Dm644 "$REPO_FILES/dot-claude/skills/nlm-cli/SKILL.md" "$CLAUDE_DIR/skills/nlm-cli/SKILL.md"
+ok "skill: nlm-cli"
 
 # ─── Hook Scripts (Memory/Context Management) ───
 
