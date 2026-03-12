@@ -1076,7 +1076,7 @@ mkdir -p "$HOME/.config/agt"
 REPO_FILES="${TITAN_REPO_FILES:-}"
 if [[ -z "$REPO_FILES" ]]; then
   _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
-  step "Fetching repo files..."
+  ok "Fetching repo files..."
   git clone --depth=1 --quiet \
     https://github.com/SutanuNandigrami/claude-titan-setup.git \
     "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
@@ -1094,7 +1094,6 @@ install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
 TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-sd 'TITAN_HOME_PLACEHOLDER' "$HOME" "$CLAUDE_DIR/settings.json"
 ok "settings.json"
 
 # ccstatusline config is user-managed via `ccstatusline` TUI editor
