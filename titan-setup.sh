@@ -106,7 +106,9 @@ echo "# titan-setup log — $(date)" > "$LOG_FILE"
 
 # ─── Temp directory for downloads ───
 WORKDIR=$(mktemp -d)
-trap 'rm -rf "$WORKDIR"' EXIT
+_CLEANUP_DIRS=("$WORKDIR")
+_do_cleanup() { rm -rf "${_CLEANUP_DIRS[@]}"; }
+trap '_do_cleanup' EXIT
 
 # ─── Architecture detection ───
 UNAME_ARCH=$(uname -m)
@@ -1079,8 +1081,7 @@ if [[ -z "$REPO_FILES" ]]; then
     https://github.com/SutanuNandigrami/claude-titan-setup.git \
     "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
   REPO_FILES="$_REPO_TMPDIR"
-  # shellcheck disable=SC2064
-  trap "rm -rf $_REPO_TMPDIR" EXIT
+  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
 fi
 
 # ─── CLAUDE.md ───
@@ -1152,25 +1153,20 @@ ok "skill: process-supervisor"
 # ─── Hook Scripts (Memory/Context Management) ───
 
 install -Dm755 "$REPO_FILES/dot-claude/hooks/pre-compact.sh" "$CLAUDE_DIR/hooks/pre-compact.sh"
-chmod +x "$CLAUDE_DIR/hooks/pre-compact.sh"
 ok "hook: pre-compact.sh"
 
 install -Dm755 "$REPO_FILES/dot-claude/hooks/session-end.sh" "$CLAUDE_DIR/hooks/session-end.sh"
-chmod +x "$CLAUDE_DIR/hooks/session-end.sh"
 ok "hook: session-end.sh"
 
 install -Dm755 "$REPO_FILES/dot-claude/hooks/session-start.sh" "$CLAUDE_DIR/hooks/session-start.sh"
-chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
 ok "hook: session-start.sh"
 
 # UserPromptSubmit: inject memory only when recall-intent keywords detected (zero tokens otherwise)
 install -Dm755 "$REPO_FILES/dot-claude/hooks/prompt-memory-inject.sh" "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
-chmod +x "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
 ok "hook: prompt-memory-inject.sh"
 
 # ─── Status Line Script ───
 install -Dm755 "$REPO_FILES/dot-claude/statusline-command.sh" "$CLAUDE_DIR/statusline-command.sh"
-chmod +x "$CLAUDE_DIR/statusline-command.sh"
 ok "statusline-command.sh"
 
 # ─── .claudeignore Template ───
@@ -1360,7 +1356,6 @@ ok "agt: config"
 
 # ─── agt CLI ───
 install -Dm755 "$REPO_FILES/bin/agt" "$HOME/.local/bin/agt"
-chmod +x "$HOME/.local/bin/agt"
 ok "agt: CLI installed"
 
 # ─── Agent stash: clone or update from GitHub ───
