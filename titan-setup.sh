@@ -1348,10 +1348,10 @@ export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/
 eval "$(zoxide init bash)"
 eval "$(starship init bash)"
 eval "$(direnv hook bash)"
-[[ -f ~/.bash-preexec.sh ]] && source ~/.bash-preexec.sh
-eval "$(atuin init bash)"
 eval "$(mise activate bash)"
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
+[[ -f ~/.bash-preexec.sh ]] && source ~/.bash-preexec.sh
+eval "$(atuin init bash)"
 export GIT_PAGER="delta"
 command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
