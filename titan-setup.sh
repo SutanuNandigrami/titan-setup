@@ -458,7 +458,9 @@ PYEOF
     ok "better-ccflare (exists)"
   fi
 
-  # Phase B: Systemd user service (uses CCFLARE_PORT, CCFLARE_HOST, CCFLARE_LOGLEVEL)
+  # Phase B: Systemd user service
+  # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
+  _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/better-ccflare.service" << SERVICEEOF
 [Unit]
@@ -467,13 +469,15 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=%h/.bun/bin/better-ccflare --serve --port ${CCFLARE_PORT}
+ExecStart=${_BCF_BIN} --serve --port ${CCFLARE_PORT}
 Restart=on-failure
 RestartSec=5
 Environment="PORT=${CCFLARE_PORT}"
 Environment="BETTER_CCFLARE_HOST=${CCFLARE_HOST}"
 Environment="LB_STRATEGY=session"
-Environment="LOG_LEVEL=${CCFLARE_LOGLEVEL}"
+Environment="LOG_LEVEL=INFO"
+Environment="PATH=${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="GOOGLE_APPLICATION_CREDENTIALS=${HOME}/.config/gcloud/application_default_credentials.json"
 
 [Install]
 WantedBy=default.target
