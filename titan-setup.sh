@@ -9,7 +9,7 @@ if [[ ! -f "$0" ]]; then
   _SELF=$(mktemp /tmp/titan-setup-XXXXXX.sh)
   curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh \
     -o "$_SELF"
-  chmod +x "$_SELF"
+  chmod a+rx "$_SELF"
   exec bash "$_SELF" "$@"
 fi
 # ────────────────────────────────────────────────────────────────────────────
