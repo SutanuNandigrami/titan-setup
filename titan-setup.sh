@@ -1429,14 +1429,16 @@ else ok "CLIProxyAPI (exists)"; fi
 section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
 
+# Prompt for login interactively if running in a TTY and not yet authenticated
+if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
+  warn "Claude not authenticated — launching login now..."
+  claude auth login || true
+fi
+
 if ! command -v claude &>/dev/null; then
   warn "Claude CLI not found — skipping plugins"
 elif ! claude auth status &>/dev/null 2>&1; then
-  warn "Claude not authenticated — skipping plugins (run 'claude auth login' first)"
-  echo "    After auth, run:"
-  echo "    claude plugin marketplace add anthropic/claude-plugins-official"
-  echo "    claude plugin install hookify"
-  echo "    claude plugin install code-review"
+  warn "Claude not authenticated — skipping plugins (run 'claude auth login' then re-run)"
 else
   # Register official marketplace if not already registered
   claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null \
