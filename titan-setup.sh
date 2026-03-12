@@ -1067,7 +1067,8 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   ok "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules,logs,templates}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
+mkdir -p "$HOME/.config/agt"
 
 # ─── CLAUDE.md ───
 cat > "$CLAUDE_DIR/CLAUDE.md" << 'CLAUDEMD'
@@ -1372,7 +1373,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
         "hooks": [
           {
             "type": "command",
-            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"subagent_stop\", agent: (.agent_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "command": "mkdir -p ~/.claude/logs && { input=$(cat); echo \"$input\" | jq -c '{ts: (now | todate), event: \"subagent_stop\", agent: (.agent_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true; name=$(echo \"$input\" | jq -r '.agent_name // empty' 2>/dev/null); if [[ \"$name\" == slot-* ]] && grep -qs 'AUTO_UNLOAD=true' \"${XDG_CONFIG_HOME:-$HOME/.config}/agt/config\" 2>/dev/null; then \"$HOME/.local/bin/agt\" unload \"$name\" 2>/dev/null || true; fi; }",
             "timeout": 5,
             "async": true
           }
@@ -2813,6 +2814,15 @@ if [[ -f "$AUDIT_LOG" ]]; then
   fi
 fi
 
+# ─── Agent slots: show loaded agents (stderr = zero token cost) ───
+MANIFEST="$HOME/.claude/agent-stash/_loaded/.manifest"
+if [[ -f "$MANIFEST" ]] && [[ -s "$MANIFEST" ]]; then
+  echo "[Agents] Loaded slots:" >&2
+  while IFS=$'\t' read -r slot agent _ts; do
+    echo "  $slot: $agent" >&2
+  done < "$MANIFEST"
+fi
+
 exit 0
 HOOK
 chmod +x "$CLAUDE_DIR/hooks/session-start.sh"
@@ -3370,6 +3380,389 @@ For each issue found:
 End with an overall assessment: APPROVE, REQUEST CHANGES, or NEEDS DISCUSSION.
 AGENT
 ok "agent: reviewer"
+
+# ─── On-Demand Agent Slots (slot-1..5) ───
+for _slot_i in 1 2 3 4 5; do
+  case $_slot_i in 1|2|3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
+  cat > "$CLAUDE_DIR/agents/slot-${_slot_i}.md" << SLOT
+---
+name: slot-${_slot_i}
+description: "On-demand agent slot ${_slot_i} [${_slot_model}]. Run \`agt status\` to see what is loaded."
+model: ${_slot_model}
+tools:
+  - Read
+  - Glob
+  - Grep
+  - Bash
+---
+You are a dynamically-loaded specialist agent.
+
+## Boot Sequence
+1. Read the file ~/.claude/agent-stash/_loaded/slot-${_slot_i}.md using the Read tool.
+2. If the file exists and has content, adopt ALL instructions in that file as your complete identity, role, expertise, and behavior. The loaded file defines who you are.
+3. If the file does not exist or is empty, respond exactly: "Slot ${_slot_i} is empty. Ask the user to run: agt load <agent-name>" — then stop.
+
+## Rules
+- Execute the Boot Sequence before doing anything else.
+- Do not invent capabilities beyond what the loaded instructions specify.
+- Use Read, Glob, Grep, and Bash tools as the loaded instructions direct.
+SLOT
+  ok "agent: slot-${_slot_i} [${_slot_model}]"
+done
+unset _slot_i _slot_model
+
+# ─── agt config ───
+cat > "$HOME/.config/agt/config" << 'AGTCFG'
+# agt configuration
+# shellcheck shell=bash
+STASH_DIR="$HOME/.claude/agent-stash"
+export AUTO_UNLOAD=false
+SLOT_COUNT=5
+AGTCFG
+ok "agt: config"
+
+# ─── agt CLI ───
+cat > "$HOME/.local/bin/agt" << 'AGTCLI'
+#!/usr/bin/env bash
+# agt — on-demand agent slot manager for Claude Code
+# Loads/unloads specialist agents from a stash into CC placeholder slots
+set -euo pipefail
+
+# ─── Config ────────────────────────────────────────────────────────────────────
+AGT_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/agt/config"
+# defaults (overridden by config file)
+STASH_DIR="$HOME/.claude/agent-stash"
+export AUTO_UNLOAD=false
+SLOT_COUNT=5
+
+# shellcheck source=/dev/null
+[[ -f "$AGT_CONFIG" ]] && source "$AGT_CONFIG"
+
+STASH_AGENTS="$STASH_DIR/agents"
+LOADED_DIR="$STASH_DIR/_loaded"
+MANIFEST="$LOADED_DIR/.manifest"
+LOCK="$LOADED_DIR/.lock"
+INDEX="$STASH_DIR/index.tsv"
+
+# ─── Colors ────────────────────────────────────────────────────────────────────
+if [[ -t 1 ]]; then
+  GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
+  RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
+else
+  GREEN=''; YELLOW=''; CYAN=''; RED=''; BOLD=''; NC=''
+fi
+
+# ─── Helpers ───────────────────────────────────────────────────────────────────
+die()  { echo -e "${RED}error:${NC} $*" >&2; exit 1; }
+info() { echo -e "${CYAN}info:${NC}  $*"; }
+ok()   { echo -e "${GREEN}ok:${NC}    $*"; }
+warn() { echo -e "${YELLOW}warn:${NC}  $*"; }
+
+require_stash() {
+  [[ -d "$STASH_AGENTS" ]] || die "Stash not found: $STASH_AGENTS — run: agt refresh"
+  [[ -f "$INDEX" ]]        || die "Index missing — run: agt build-index"
+}
+
+ensure_loaded_dir() {
+  mkdir -p "$LOADED_DIR"
+  [[ -f "$MANIFEST" ]] || touch "$MANIFEST"
+  [[ -f "$LOCK" ]]     || touch "$LOCK"
+}
+
+slot_model() {
+  case "$1" in
+    slot-1|slot-2|slot-3) echo "haiku" ;;
+    slot-4)                echo "sonnet" ;;
+    slot-5)                echo "opus" ;;
+    *)                     echo "unknown" ;;
+  esac
+}
+
+fm_field() {
+  local file="$1" field="$2"
+  grep "^${field}:" "$file" | head -1 | sd "^${field}:\\s*" '' | tr -d '"' | xargs
+}
+
+# ─── Commands ──────────────────────────────────────────────────────────────────
+
+cmd_search() {
+  [[ $# -gt 0 ]] || die "Usage: agt search <query> [more terms...]"
+  require_stash
+  local result
+  result=$(tail -n +2 "$INDEX")
+  for word in "$@"; do
+    result=$(printf '%s' "$result" | rg -i "$word" || true)
+  done
+  if [[ -z "$result" ]]; then
+    echo "No agents found matching: $*"
+    echo "Try: agt list"
+    return 0
+  fi
+  printf "${BOLD}%-30s %-35s %-40s %s${NC}\n" "name" "tags" "description" "model"
+  printf '%s\n' "$result" | while IFS=$'\t' read -r name tags desc model; do
+    printf "%-30s %-35s %-40s %s\n" "$name" "$tags" "$desc" "$model"
+  done
+}
+
+cmd_list() {
+  require_stash
+  local count
+  count=$(tail -n +2 "$INDEX" | wc -l)
+  echo -e "${BOLD}Agent stash — $count agents:${NC}"
+  echo ""
+  printf "${BOLD}%-30s %-35s %-40s %s${NC}\n" "name" "tags" "description" "model-hint"
+  tail -n +2 "$INDEX" | while IFS=$'\t' read -r name tags desc model; do
+    printf "%-30s %-35s %-40s %s\n" "$name" "$tags" "$desc" "$model"
+  done
+  echo ""
+  echo "Use: agt search <query>  |  agt load <name>  |  agt info <name>"
+}
+
+cmd_load() {
+  local agent_name='' slot_override=''
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --slot)   shift; [[ $# -gt 0 ]] || die "--slot requires a number"; slot_override="slot-$1" ;;
+      --slot=*) slot_override="slot-${1#--slot=}" ;;
+      -*)       die "Unknown option: $1" ;;
+      *)        agent_name="$1" ;;
+    esac
+    shift
+  done
+  [[ -n "$agent_name" ]] || die "Usage: agt load <agent-name> [--slot N]"
+  require_stash
+  ensure_loaded_dir
+
+  local agent_file="$STASH_AGENTS/${agent_name}.md"
+  if [[ ! -f "$agent_file" ]]; then
+    local matches
+    matches=$(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -exec basename {} .md \; | rg -i "$agent_name" || true)
+    if [[ -z "$matches" ]]; then
+      die "Agent not found: $agent_name — try: agt search $agent_name"
+    fi
+    echo "Agent '$agent_name' not found. Did you mean:"
+    while IFS= read -r m; do echo "  $m"; done <<< "$matches"
+    exit 1
+  fi
+
+  if [[ -s "$MANIFEST" ]] && grep -qP "\t${agent_name}\t" "$MANIFEST" 2>/dev/null; then
+    local existing
+    existing=$(grep -P "\t${agent_name}\t" "$MANIFEST" | cut -f1)
+    warn "Already loaded in $existing — use: agt unload $existing"
+    return 0
+  fi
+
+  (
+    flock -w 5 200 || die "Could not acquire lock (another agt running?)"
+
+    local slot=''
+    if [[ -n "$slot_override" ]]; then
+      local num="${slot_override#slot-}"
+      if [[ "$num" =~ ^[0-9]+$ ]] && (( num >= 1 && num <= SLOT_COUNT )); then
+        if [[ -f "$LOADED_DIR/${slot_override}.md" ]]; then
+          local occ
+          occ=$(grep "^${slot_override}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "unknown")
+          die "$slot_override occupied by '$occ' — run: agt unload $slot_override"
+        fi
+        slot="$slot_override"
+      else
+        die "Invalid slot: $slot_override (must be 1–${SLOT_COUNT})"
+      fi
+    else
+      local i
+      for i in $(seq 1 "$SLOT_COUNT"); do
+        if [[ ! -f "$LOADED_DIR/slot-${i}.md" ]]; then
+          slot="slot-$i"
+          break
+        fi
+      done
+    fi
+    [[ -n "$slot" ]] || die "All $SLOT_COUNT slots occupied — run: agt status && agt unload <slot>"
+
+    local model_hint slot_m
+    model_hint=$(fm_field "$agent_file" "model-hint")
+    slot_m=$(slot_model "$slot")
+    if [[ -n "$model_hint" && "$model_hint" != "$slot_m" ]]; then
+      warn "Agent prefers '$model_hint' but $slot uses '$slot_m'"
+      case "$model_hint" in
+        sonnet) warn "Consider: agt load $agent_name --slot 4" ;;
+        opus)   warn "Consider: agt load $agent_name --slot 5" ;;
+      esac
+    fi
+
+    cp "$agent_file" "$LOADED_DIR/${slot}.md"
+
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    if [[ -s "$MANIFEST" ]]; then
+      grep -v "^${slot}	" "$MANIFEST" > "${MANIFEST}.tmp" || true
+      mv "${MANIFEST}.tmp" "$MANIFEST"
+    fi
+    printf '%s\t%s\t%s\n' "$slot" "$agent_name" "$ts" >> "$MANIFEST"
+
+    ok "Loaded '$agent_name' → $slot [${slot_m}]"
+    echo "  Invoke in Claude Code with subagent_type: $slot"
+  ) 200>"$LOCK"
+}
+
+cmd_unload() {
+  [[ $# -gt 0 ]] || die "Usage: agt unload <slot-N|agent-name|all>"
+  ensure_loaded_dir
+  local target="$1"
+
+  (
+    flock -w 5 200 || die "Could not acquire lock"
+
+    if [[ "$target" == "all" ]]; then
+      local count=0
+      local i
+      for i in $(seq 1 "$SLOT_COUNT"); do
+        if [[ -f "$LOADED_DIR/slot-${i}.md" ]]; then
+          rm -f "$LOADED_DIR/slot-${i}.md"
+          (( count++ )) || true
+        fi
+      done
+      truncate -s 0 "$MANIFEST"
+      ok "Unloaded $count slot(s)"
+      return 0
+    fi
+
+    local slot=''
+    if [[ "$target" =~ ^slot-[0-9]+$ ]]; then
+      slot="$target"
+    elif [[ -s "$MANIFEST" ]]; then
+      slot=$(grep -P "\t${target}\t" "$MANIFEST" | cut -f1 || true)
+    fi
+    [[ -n "$slot" ]] || die "Not loaded: '$target' — run: agt status"
+
+    if [[ -f "$LOADED_DIR/${slot}.md" ]]; then
+      rm -f "$LOADED_DIR/${slot}.md"
+      ok "Unloaded $slot"
+    else
+      warn "$slot was already empty"
+    fi
+    if [[ -s "$MANIFEST" ]]; then
+      grep -v "^${slot}	" "$MANIFEST" > "${MANIFEST}.tmp" || true
+      mv "${MANIFEST}.tmp" "$MANIFEST"
+    fi
+  ) 200>"$LOCK"
+}
+
+cmd_status() {
+  ensure_loaded_dir
+  echo -e "${BOLD}Agent slots:${NC}"
+  echo ""
+  local i
+  for i in $(seq 1 "$SLOT_COUNT"); do
+    local slot="slot-$i"
+    local slot_m
+    slot_m=$(slot_model "$slot")
+    if [[ -f "$LOADED_DIR/${slot}.md" ]]; then
+      local agent_name ts
+      agent_name=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "unknown")
+      ts=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f3 || echo "?")
+      printf "  ${GREEN}%s${NC} [%-6s] ${BOLD}%s${NC}  (since %s)\n" "$slot" "$slot_m" "$agent_name" "$ts"
+    else
+      printf "  ${CYAN}%s${NC} [%-6s] (empty)\n" "$slot" "$slot_m"
+    fi
+  done
+  echo ""
+
+  if [[ -f "$INDEX" ]]; then
+    local total
+    total=$(tail -n +2 "$INDEX" | wc -l)
+    echo "Stash: $total agents available — run: agt search <query>"
+  fi
+}
+
+cmd_info() {
+  [[ $# -gt 0 ]] || die "Usage: agt info <agent-name>"
+  require_stash
+  local agent_file="$STASH_AGENTS/${1}.md"
+  [[ -f "$agent_file" ]] || die "Agent not found: $1 — try: agt search $1"
+  echo -e "${BOLD}=== $1 ===${NC}"
+  bat --style=plain "$agent_file" 2>/dev/null || cat "$agent_file"
+}
+
+cmd_build_index() {
+  [[ -d "$STASH_AGENTS" ]] || die "Stash agents dir not found: $STASH_AGENTS"
+  local tmp="${INDEX}.tmp"
+  printf 'name\ttags\tdescription\tmodel-hint\n' > "$tmp"
+  local count=0
+
+  while IFS= read -r -d '' md_file; do
+    local name tags description model_hint
+    name=$(fm_field "$md_file" "name")
+    [[ -n "$name" ]] || continue
+    tags=$(fm_field "$md_file" "tags")
+    description=$(fm_field "$md_file" "description")
+    model_hint=$(fm_field "$md_file" "model-hint")
+    printf '%s\t%s\t%s\t%s\n' "$name" "${tags:-}" "${description:-}" "${model_hint:-haiku}" >> "$tmp"
+    (( count++ )) || true
+  done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0 | sort -z)
+
+  mv "$tmp" "$INDEX"
+  ok "Index built: $count agents → $INDEX"
+}
+
+cmd_refresh() {
+  [[ -d "$STASH_DIR/.git" ]] || die "Stash is not a git repo: $STASH_DIR — clone first"
+  info "Pulling latest from remote..."
+  git -C "$STASH_DIR" pull --ff-only
+  info "Rebuilding index..."
+  cmd_build_index
+}
+
+# ─── Main ──────────────────────────────────────────────────────────────────────
+[[ $# -gt 0 ]] || {
+  echo -e "${BOLD}agt${NC} — on-demand agent slot manager for Claude Code"
+  echo ""
+  echo "Usage: agt <command> [args]"
+  echo ""
+  echo "  search <query>           Fuzzy search agents by name/tags/description"
+  echo "  list                     List all agents in stash"
+  echo "  load <name> [--slot N]   Load agent into a slot (auto-picks free slot)"
+  echo "  unload <slot|name|all>   Remove agent from slot"
+  echo "  status                   Show slot occupancy"
+  echo "  info <name>              Preview agent definition"
+  echo "  refresh                  Pull latest from GitHub + rebuild index"
+  echo "  build-index              Rebuild index.tsv from stash"
+  exit 0
+}
+
+cmd="$1"; shift
+case "$cmd" in
+  search)      cmd_search "$@" ;;
+  list)        cmd_list ;;
+  load)        cmd_load "$@" ;;
+  unload)      cmd_unload "$@" ;;
+  status)      cmd_status ;;
+  info)        cmd_info "$@" ;;
+  refresh)     cmd_refresh ;;
+  build-index) cmd_build_index ;;
+  *) die "Unknown command: $cmd — run 'agt' for help" ;;
+esac
+AGTCLI
+chmod +x "$HOME/.local/bin/agt"
+ok "agt: CLI installed"
+
+# ─── Agent stash: clone or update from GitHub ───
+AGT_STASH_REPO="https://github.com/SutanuNandigrami/agent-stash.git"
+AGT_STASH_DIR="$HOME/.claude/agent-stash"
+if [[ -d "$AGT_STASH_DIR/.git" ]]; then
+  git -C "$AGT_STASH_DIR" pull --ff-only 2>/dev/null && ok "agent-stash: updated from GitHub" || warn "agent-stash: pull failed (using existing)"
+else
+  rm -rf "$AGT_STASH_DIR"
+  git clone --depth 1 "$AGT_STASH_REPO" "$AGT_STASH_DIR" 2>/dev/null && ok "agent-stash: cloned from GitHub" || warn "agent-stash: clone failed"
+fi
+mkdir -p "$AGT_STASH_DIR/_loaded"
+touch "$AGT_STASH_DIR/_loaded/.lock" "$AGT_STASH_DIR/_loaded/.manifest"
+"$HOME/.local/bin/agt" build-index 2>/dev/null && ok "agent-stash: index built" || warn "agent-stash: index build failed"
+
+# ─── Cron: weekly agent stash refresh ───
+(crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh'; \
+  echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1") | crontab -
+ok "cron: weekly agent-stash refresh (Sun 03:00)"
 
 # CLIProxyAPI — proxy server for AI coding tools (clone, not a CLI install)
 if [ ! -d ~/tools/CLIProxyAPI ]; then
