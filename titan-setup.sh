@@ -17,8 +17,8 @@ set -euo pipefail
 # ║                                                                  ║
 # ║  Security note: This script uses curl|bash for several official  ║
 # ║  installers (rustup, uv, bun, mise, docker, helm, etc). Review  ║
-# ║  URLs before running. Two community packages (Claude Desktop,    ║
-# ║  Claude Cowork) install from patrickjaja.github.io via sudo.     ║
+# ║  URLs before running. Claude Desktop (desktop mode only) installs ║
+# ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 CYAN='\033[0;36m'
@@ -36,6 +36,8 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 ENGINEER_NAME=""
 INSTALL_MODE=""
 TAILSCALE_KEY=""
+CLAUDE_USER=""
+TS_HOSTNAME=""
 DRY_RUN=false
 VERBOSE=false
 CCFLARE_SKIP=false
@@ -49,7 +51,8 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --name NAME              Your name for Claude config (default: \$(whoami))
   --mode desktop|vps       Installation profile (prompted interactively if omitted)
-  --tailscale-key KEY      Tailscale auth key for VPS mode (prompted if omitted; empty skips Tailscale)
+  --tailscale-key KEY      Tailscale auth key (required for VPS mode, prompted if omitted)
+  --claude-user USER       Non-root user for Claude Code in VPS mode (created if absent, prompted if omitted)
   --dry-run                Print what would be done without making changes
   -v, --verbose            Show all subprocess output (default: quiet, logs to file)
 
@@ -76,6 +79,7 @@ while [[ $# -gt 0 ]]; do
                        [[ "$2" == "desktop" || "$2" == "vps" ]] || { fail "--mode must be 'desktop' or 'vps'"; usage; }
                        INSTALL_MODE="$2"; shift 2 ;;
     --tailscale-key)   [[ $# -ge 2 ]] || { fail "--tailscale-key requires a value"; usage; }; TAILSCALE_KEY="$2"; shift 2 ;;
+    --claude-user)     [[ $# -ge 2 ]] || { fail "--claude-user requires a value"; usage; }; CLAUDE_USER="$2"; shift 2 ;;
     --dry-run)         DRY_RUN=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
@@ -142,31 +146,36 @@ run_q sudo apt install -y \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
   redis-tools aria2 btop miller \
   inotify-tools expect asciinema at \
-  lnav imagemagick maim xdotool \
+  lnav imagemagick \
   universal-ctags chafa \
   libclang-dev cmake libxml2-dev libcurl4-openssl-dev
 
 run_q sudo apt autoremove -y
 
-# ─── JetBrains Mono Nerd Font (required for Powerline statusline) ───
-if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
-  ok "JetBrainsMono Nerd Font already installed"
-else
-  echo -n "  Installing JetBrainsMono Nerd Font..."
-  FONT_DIR="$HOME/.local/share/fonts"
-  mkdir -p "$FONT_DIR"
-  TMPFONT=$(mktemp -d)
-  curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
-    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
-  tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
-  cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
-  fc-cache -f "$FONT_DIR" 2>/dev/null
-  rm -rf "$TMPFONT"
-  ok "JetBrainsMono Nerd Font installed"
+# Desktop-only packages (screenshot/X11 tools not needed on VPS)
+if [[ "$INSTALL_MODE" == "desktop" ]]; then
+  run_q sudo apt install -y maim xdotool
 fi
 
-# Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
-# JetBrainsMono Nerd Font is installed above and available to select.
+# ─── JetBrains Mono Nerd Font (desktop only — Powerline statusline) ───
+if [[ "$INSTALL_MODE" == "desktop" ]]; then
+  if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
+    ok "JetBrainsMono Nerd Font already installed"
+  else
+    echo -n "  Installing JetBrainsMono Nerd Font..."
+    FONT_DIR="$HOME/.local/share/fonts"
+    mkdir -p "$FONT_DIR"
+    TMPFONT=$(mktemp -d)
+    curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
+      "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+    tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
+    cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
+    fc-cache -f "$FONT_DIR" 2>/dev/null
+    rm -rf "$TMPFONT"
+    ok "JetBrainsMono Nerd Font installed"
+  fi
+  # Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
+fi
 
 # ─── Linux tuning ───
 section "Linux Tuning"
@@ -398,7 +407,7 @@ After=default.target
 [Service]
 Type=simple
 ExecStartPre=-${DOCKER_BIN} rm -f n8n
-ExecStart=${DOCKER_BIN} run --rm --name n8n -p 5678:5678 -v %h/.n8n:/home/node/.n8n n8nio/n8n
+ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n n8nio/n8n
 ExecStop=${DOCKER_BIN} stop n8n
 Restart=on-failure
 RestartSec=10
@@ -525,8 +534,12 @@ command -v vercel &>/dev/null && ok "vercel (exists)" || { run_q bun install -g 
 echo -e "\n  ${CYAN}Rust tools (cargo):${NC}"
 echo "  This takes a while on first install (compiling from source)..."
 
-# Dependencies needed for spotify_player and other audio/TLS crates
-run_q sudo apt install -y libpulse-dev libasound2-dev libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed — spotify_player may not compile"
+# TLS/dbus build deps (needed by several crates on both modes)
+run_q sudo apt install -y libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed"
+# Audio build deps (only needed for spotify_player on desktop)
+if [[ "$INSTALL_MODE" == "desktop" ]]; then
+  run_q sudo apt install -y libpulse-dev libasound2-dev || warn "audio build deps failed — spotify_player may not compile"
+fi
 
 # Update Rust first
 run_q rustup update stable
@@ -575,17 +588,19 @@ if ! command -v parry &>/dev/null; then
   run_q cargo install --git https://github.com/vaporif/parry && ok "parry" || warn "parry"
 else ok "parry (exists)"; fi
 
-# spotify_player — actively maintained Spotify TUI (replaces abandoned spotify-tui)
-if ! command -v spotify_player &>/dev/null; then
-  echo -n "  spotify_player..."
-  if run_q cargo install spotify_player; then
-    echo -e " ${GREEN}✓${NC}"
-  elif run_q cargo install spotify_player --locked; then
-    echo -e " ${GREEN}✓${NC} (locked)"
-  else
-    echo -e " ${YELLOW}⚠ build failed — try: cargo install spotify_player manually${NC}"
-  fi
-else ok "spotify_player (exists)"; fi
+# spotify_player — desktop only (Spotify TUI requires audio hardware)
+if [[ "$INSTALL_MODE" == "desktop" ]]; then
+  if ! command -v spotify_player &>/dev/null; then
+    echo -n "  spotify_player..."
+    if run_q cargo install spotify_player; then
+      echo -e " ${GREEN}✓${NC}"
+    elif run_q cargo install spotify_player --locked; then
+      echo -e " ${GREEN}✓${NC} (locked)"
+    else
+      echo -e " ${YELLOW}⚠ build failed — try: cargo install spotify_player manually${NC}"
+    fi
+  else ok "spotify_player (exists)"; fi
+fi
 
 # nushell — structured data shell (large compile, separate from batch)
 if ! command -v nu &>/dev/null; then
@@ -943,24 +958,16 @@ else
   echo "    3. Run: claude doctor   (to verify)"
 fi
 
-# ─── Claude Desktop ───
-if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
-  echo "  Installing Claude Desktop..."
-  curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
-  sudo apt install -y claude-desktop-bin
-  ok "Claude Desktop"
-else
-  ok "Claude Desktop (exists)"
-fi
-
-# ─── Claude Cowork Service ───
-if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
-  echo "  Installing Claude Cowork Service..."
-  curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
-  sudo apt install -y claude-cowork-service
-  ok "Claude Cowork Service"
-else
-  ok "Claude Cowork Service (exists)"
+# ─── Claude Desktop (desktop only — Electron GUI app) ───
+if [[ "$INSTALL_MODE" == "desktop" ]]; then
+  if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
+    echo "  Installing Claude Desktop..."
+    curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
+    sudo apt install -y claude-desktop-bin
+    ok "Claude Desktop"
+  else
+    ok "Claude Desktop (exists)"
+  fi
 fi
 
 
@@ -1449,33 +1456,38 @@ echo -e "
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   section "VPS — Server Hardening"
 
-  # Prompt for Tailscale auth key if not provided via flag
+  # ── Require Tailscale auth key ─────────────────────────────────────────
   if [[ -z "$TAILSCALE_KEY" ]]; then
-    echo -e "  ${CYAN}Tailscale auth key${NC} (leave blank to skip Tailscale):"
+    echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
     read -rsp "  Key: " TAILSCALE_KEY
     echo ""
+    [[ -z "$TAILSCALE_KEY" ]] && { fail "Tailscale key required for VPS mode"; exit 1; }
+  fi
+
+  # ── Require non-root Claude user ───────────────────────────────────────
+  if [[ -z "$CLAUDE_USER" ]]; then
+    read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
+    [[ -z "$CLAUDE_USER" ]] && { fail "--claude-user required for VPS mode"; exit 1; }
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
   run_q sudo apt install -y ufw fail2ban unattended-upgrades
-  ok "Security packages installed (ufw, fail2ban, unattended-upgrades)"
+  ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
   sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardened (password auth disabled, root key-only)"
+  ok "SSH hardened (password auth off, root login disabled)"
 
   # ── UFW firewall ───────────────────────────────────────────────────────
   sudo ufw --force default deny incoming
   sudo ufw --force default allow outgoing
-  sudo ufw --force allow 22/tcp
+  sudo ufw --force allow 22/tcp          # temporary — removed once Tailscale locks in
   sudo ufw --force allow OpenSSH || true
-  if [[ -n "$TAILSCALE_KEY" ]]; then
-    sudo ufw --force allow 41641/udp   # Tailscale WireGuard port
-  fi
+  sudo ufw --force allow 41641/udp       # Tailscale WireGuard (direct peer connections)
   sudo ufw --force enable
-  ok "UFW enabled (deny incoming, allow outgoing, SSH open)"
+  ok "UFW enabled (deny incoming; SSH+Tailscale open)"
 
   # ── fail2ban + unattended-upgrades ────────────────────────────────────
   sudo systemctl enable fail2ban --now
@@ -1486,7 +1498,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
 #!/bin/bash
 set -euo pipefail
-ALLOWLIST='^(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|packages\.cloud\.google\.com|download\.docker\.com|apt\.kubernetes\.io|pkgs\.tailscale\.com)$'
+# Allowlist includes Ubuntu/Debian base repos plus all repos titan-setup.sh adds
+ALLOWLIST='^(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|packages\.cloud\.google\.com|dl\.google\.com|download\.docker\.com|apt\.kubernetes\.io|pkgs\.tailscale\.com|aquasecurity\.github\.io|apt\.releases\.hashicorp\.com|cli\.github\.com|packages\.github\.com|artifacts-cli\.infisical\.com|ppa\.launchpadcontent\.net)$'
 VIOLATIONS="/var/log/repo_allowlist_violations.log"
 : > "$VIOLATIONS"
 
@@ -1536,6 +1549,12 @@ else
   fail "ssh password auth disabled"
 fi
 
+if grep -Eiq '^\s*PermitRootLogin\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
+  pass "ssh root login disabled"
+else
+  fail "ssh root login disabled"
+fi
+
 if ufw status | grep -q 'Status: active'; then
   pass "ufw active"
 else
@@ -1566,36 +1585,44 @@ else
   pass "repo allowlist violations not detected"
 fi
 
-if command -v tailscale >/dev/null 2>&1; then
-  if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
-    pass "tailscale running"
-  else
-    fail "tailscale running"
-  fi
-
-  TS_IP=$(tailscale ip -4 2>/dev/null || true)
-  if [ -n "$TS_IP" ]; then
-    pass "tailscale has IPv4 address ($TS_IP)"
-  else
-    fail "tailscale has IPv4 address"
-  fi
-
-  if grep -Eq "^ListenAddress\s+$TS_IP" /etc/ssh/sshd_config 2>/dev/null; then
-    pass "sshd restricted to tailscale IP"
-  else
-    fail "sshd restricted to tailscale IP"
-  fi
-
-  if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
-    pass "ufw ssh restricted to tailscale0"
-  else
-    fail "ufw ssh restricted to tailscale0"
-  fi
+if passwd -S root 2>/dev/null | grep -qE ' L '; then
+  pass "root account locked"
 else
+  fail "root account locked"
+fi
+
+# Tailscale checks (mandatory on VPS)
+if ! command -v tailscale >/dev/null 2>&1; then
   fail "tailscale installed"
   fail "tailscale running"
   fail "tailscale has IPv4 address"
   fail "sshd restricted to tailscale IP"
+  fail "ufw ssh restricted to tailscale0"
+  exit "$FAIL"
+fi
+
+if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
+  pass "tailscale running"
+else
+  fail "tailscale running"
+fi
+
+TS_IP=$(tailscale ip -4 2>/dev/null || true)
+if [ -n "$TS_IP" ]; then
+  pass "tailscale has IPv4 address ($TS_IP)"
+else
+  fail "tailscale has IPv4 address"
+fi
+
+if grep -Eq "^ListenAddress[[:space:]]+$TS_IP" /etc/ssh/sshd_config 2>/dev/null; then
+  pass "sshd restricted to tailscale IP"
+else
+  fail "sshd restricted to tailscale IP"
+fi
+
+if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
+  pass "ufw ssh restricted to tailscale0"
+else
   fail "ufw ssh restricted to tailscale0"
 fi
 
@@ -1634,38 +1661,62 @@ TIMER_EOF
   sudo systemctl enable --now compliance-check.timer
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
-  # ── Tailscale ─────────────────────────────────────────────────────────
-  if [[ -n "$TAILSCALE_KEY" ]]; then
-    if ! command -v tailscale &>/dev/null; then
-      run_q curl -fsSL https://tailscale.com/install.sh | sh
-    fi
-    tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns
-    ok "Tailscale connected"
-
-    # Wait for Tailscale IP
-    TS_IP=""
-    for _i in $(seq 1 30); do
-      TS_IP=$(tailscale ip -4 2>/dev/null || true)
-      [[ -n "$TS_IP" ]] && break
-      sleep 2
-    done
-
-    if [[ -n "$TS_IP" ]]; then
-      # Lock SSH to Tailscale interface only
-      sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-      echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-      sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-      # UFW: remove public SSH, allow only on tailscale0
-      sudo ufw --force delete allow 22/tcp || true
-      sudo ufw --force delete allow OpenSSH || true
-      sudo ufw --force allow in on tailscale0 to any port 22 proto tcp
-      ok "SSH locked to Tailscale interface ($TS_IP) — public SSH port closed"
-    else
-      warn "Tailscale connected but no IPv4 address received — SSH not locked to Tailscale"
-    fi
-  else
-    warn "Tailscale skipped — SSH remains open on all interfaces"
+  # ── Tailscale — install, connect, lock SSH ─────────────────────────────
+  if ! command -v tailscale &>/dev/null; then
+    run_q curl -fsSL https://tailscale.com/install.sh | sh
   fi
+  tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns
+  ok "Tailscale connected"
+
+  # Wait for Tailscale IP (up to 60s)
+  TS_IP=""
+  for _i in $(seq 1 30); do
+    TS_IP=$(tailscale ip -4 2>/dev/null || true)
+    [[ -n "$TS_IP" ]] && break
+    sleep 2
+  done
+  [[ -z "$TS_IP" ]] && { fail "Tailscale connected but no IPv4 assigned — aborting"; exit 1; }
+
+  # Lock SSH to Tailscale interface only, close public port 22
+  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+  sudo ufw --force delete allow 22/tcp || true
+  sudo ufw --force delete allow OpenSSH || true
+  sudo ufw --force allow in on tailscale0 to any port 22 proto tcp
+  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed"
+
+  # Get MagicDNS hostname for service URLs
+  TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
+
+  # ── tailscale serve — expose local services on Tailscale network ───────
+  if command -v docker &>/dev/null; then
+    tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
+      && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
+      || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
+  fi
+  if ! $CCFLARE_SKIP; then
+    tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
+      && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
+      || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
+  fi
+
+  # ── Non-root Claude user with passwordless sudo ────────────────────────
+  if ! id "$CLAUDE_USER" &>/dev/null; then
+    sudo useradd -m -s /bin/bash "$CLAUDE_USER"
+    ok "Created user: $CLAUDE_USER"
+  else
+    ok "User $CLAUDE_USER already exists"
+  fi
+  sudo usermod -aG sudo "$CLAUDE_USER"
+  command -v docker &>/dev/null && sudo usermod -aG docker "$CLAUDE_USER" || true
+  echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$CLAUDE_USER" > /dev/null
+  sudo chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
+  ok "$CLAUDE_USER: passwordless sudo configured"
+
+  # ── Lock root account ──────────────────────────────────────────────────
+  sudo passwd -l root
+  ok "Root account locked"
 
   # ── Final compliance run ───────────────────────────────────────────────
   echo ""
@@ -1674,8 +1725,20 @@ TIMER_EOF
 
 fi
 
-# Open dashboards in browser on GUI systems; print URLs on headless VPS
-if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+# Open dashboards in browser on desktop; print Tailscale URLs on VPS
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  section "Service URLs (via Tailscale)"
+  if command -v docker &>/dev/null; then
+    echo "  n8n:              https://${TS_HOSTNAME}:5678"
+  fi
+  if ! $CCFLARE_SKIP; then
+    echo "  better-ccflare:   https://${TS_HOSTNAME}:${CCFLARE_PORT}"
+    echo "  Set:  export ANTHROPIC_BASE_URL=https://${TS_HOSTNAME}:${CCFLARE_PORT}"
+  fi
+  echo ""
+  echo "  Claude user: ${CLAUDE_USER}  (su - ${CLAUDE_USER})"
+  echo "  Tailscale SSH: ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
+elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   if command -v xdg-open &>/dev/null; then
     section "Opening dashboards"
     xdg-open "http://localhost:5678" 2>/dev/null & disown
