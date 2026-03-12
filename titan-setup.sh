@@ -1371,7 +1371,7 @@ touch "$AGT_STASH_DIR/_loaded/.lock" "$AGT_STASH_DIR/_loaded/.manifest"
 "$HOME/.local/bin/agt" build-index 2>/dev/null && ok "agent-stash: index built" || warn "agent-stash: index build failed"
 
 # ─── Cron: weekly agent stash refresh ───
-(crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh'; \
+(crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh' || true; \
   echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1") | crontab -
 ok "cron: weekly agent-stash refresh (Sun 03:00)"
 
