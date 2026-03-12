@@ -35,6 +35,7 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 # ─── CLI Options ───
 ENGINEER_NAME=""
 INSTALL_MODE=""
+TAILSCALE_KEY=""
 DRY_RUN=false
 VERBOSE=false
 CCFLARE_SKIP=false
@@ -48,6 +49,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --name NAME              Your name for Claude config (default: \$(whoami))
   --mode desktop|vps       Installation profile (prompted interactively if omitted)
+  --tailscale-key KEY      Tailscale auth key for VPS mode (prompted if omitted; empty skips Tailscale)
   --dry-run                Print what would be done without making changes
   -v, --verbose            Show all subprocess output (default: quiet, logs to file)
 
@@ -73,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --mode)            [[ $# -ge 2 ]] || { fail "--mode requires a value (desktop|vps)"; usage; }
                        [[ "$2" == "desktop" || "$2" == "vps" ]] || { fail "--mode must be 'desktop' or 'vps'"; usage; }
                        INSTALL_MODE="$2"; shift 2 ;;
+    --tailscale-key)   [[ $# -ge 2 ]] || { fail "--tailscale-key requires a value"; usage; }; TAILSCALE_KEY="$2"; shift 2 ;;
     --dry-run)         DRY_RUN=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
@@ -1444,9 +1447,231 @@ echo -e "
 
 # ─── VPS-specific installs ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
-  section "VPS extras"
-  # TODO: add VPS-specific installs here
-  ok "VPS extras: nothing configured yet — add installs above this line"
+  section "VPS — Server Hardening"
+
+  # Prompt for Tailscale auth key if not provided via flag
+  if [[ -z "$TAILSCALE_KEY" ]]; then
+    echo -e "  ${CYAN}Tailscale auth key${NC} (leave blank to skip Tailscale):"
+    read -rsp "  Key: " TAILSCALE_KEY
+    echo ""
+  fi
+
+  # ── Security packages ──────────────────────────────────────────────────
+  run_q sudo apt install -y ufw fail2ban unattended-upgrades
+  ok "Security packages installed (ufw, fail2ban, unattended-upgrades)"
+
+  # ── SSH hardening ──────────────────────────────────────────────────────
+  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+  ok "SSH hardened (password auth disabled, root key-only)"
+
+  # ── UFW firewall ───────────────────────────────────────────────────────
+  sudo ufw --force default deny incoming
+  sudo ufw --force default allow outgoing
+  sudo ufw --force allow 22/tcp
+  sudo ufw --force allow OpenSSH || true
+  if [[ -n "$TAILSCALE_KEY" ]]; then
+    sudo ufw --force allow 41641/udp   # Tailscale WireGuard port
+  fi
+  sudo ufw --force enable
+  ok "UFW enabled (deny incoming, allow outgoing, SSH open)"
+
+  # ── fail2ban + unattended-upgrades ────────────────────────────────────
+  sudo systemctl enable fail2ban --now
+  sudo systemctl enable unattended-upgrades --now
+  ok "fail2ban and unattended-upgrades active"
+
+  # ── Repo supply chain guard ───────────────────────────────────────────
+  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
+#!/bin/bash
+set -euo pipefail
+ALLOWLIST='^(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|packages\.cloud\.google\.com|download\.docker\.com|apt\.kubernetes\.io|pkgs\.tailscale\.com)$'
+VIOLATIONS="/var/log/repo_allowlist_violations.log"
+: > "$VIOLATIONS"
+
+check_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+http:// ]]; then
+      sed -i "s|^\([[:space:]]*deb[[:space:]]\+http://.*\)$|# disabled-insecure-http \1|g" "$file"
+    fi
+    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+https?://([^/[:space:]]+) ]]; then
+      host="${BASH_REMATCH[1]}"
+      if ! [[ "$host" =~ $ALLOWLIST ]]; then
+        echo "non-allowlisted repo host in $file: $host" >> "$VIOLATIONS"
+      fi
+    fi
+  done < "$file"
+}
+
+check_file /etc/apt/sources.list
+shopt -s nullglob
+for f in /etc/apt/sources.list.d/*.list; do
+  check_file "$f"
+done
+shopt -u nullglob
+
+apt-get update
+GUARD_EOF
+  sudo chmod 755 /usr/local/sbin/repo_supply_chain_guard.sh
+  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh
+  ok "Repo supply chain guard installed and run"
+
+  # ── Compliance check script ───────────────────────────────────────────
+  sudo tee /usr/local/bin/compliance_check.sh > /dev/null << 'COMPLIANCE_EOF'
+#!/bin/bash
+set -euo pipefail
+
+FAIL=0
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1"; FAIL=1; }
+
+if grep -Eiq '^\s*PasswordAuthentication\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
+  pass "ssh password auth disabled"
+else
+  fail "ssh password auth disabled"
+fi
+
+if ufw status | grep -q 'Status: active'; then
+  pass "ufw active"
+else
+  fail "ufw active"
+fi
+
+if systemctl is-active --quiet fail2ban; then
+  pass "fail2ban active"
+else
+  fail "fail2ban active"
+fi
+
+if systemctl is-enabled --quiet unattended-upgrades; then
+  pass "unattended upgrades enabled"
+else
+  fail "unattended upgrades enabled"
+fi
+
+if ! grep -R --line-number -E '^[[:space:]]*deb[[:space:]]+http://' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
+  pass "no insecure apt repos"
+else
+  fail "no insecure apt repos"
+fi
+
+if [[ -f /var/log/repo_allowlist_violations.log ]] && [[ -s /var/log/repo_allowlist_violations.log ]]; then
+  fail "allowlist violations detected in /var/log/repo_allowlist_violations.log"
+else
+  pass "repo allowlist violations not detected"
+fi
+
+if command -v tailscale >/dev/null 2>&1; then
+  if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
+    pass "tailscale running"
+  else
+    fail "tailscale running"
+  fi
+
+  TS_IP=$(tailscale ip -4 2>/dev/null || true)
+  if [ -n "$TS_IP" ]; then
+    pass "tailscale has IPv4 address ($TS_IP)"
+  else
+    fail "tailscale has IPv4 address"
+  fi
+
+  if grep -Eq "^ListenAddress\s+$TS_IP" /etc/ssh/sshd_config 2>/dev/null; then
+    pass "sshd restricted to tailscale IP"
+  else
+    fail "sshd restricted to tailscale IP"
+  fi
+
+  if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
+    pass "ufw ssh restricted to tailscale0"
+  else
+    fail "ufw ssh restricted to tailscale0"
+  fi
+else
+  fail "tailscale installed"
+  fail "tailscale running"
+  fail "tailscale has IPv4 address"
+  fail "sshd restricted to tailscale IP"
+  fail "ufw ssh restricted to tailscale0"
+fi
+
+exit "$FAIL"
+COMPLIANCE_EOF
+  sudo chmod 755 /usr/local/bin/compliance_check.sh
+  ok "Compliance check script installed"
+
+  # ── Compliance systemd timer (every 6h) ───────────────────────────────
+  sudo tee /etc/systemd/system/compliance-check.service > /dev/null << 'SVC_EOF'
+[Unit]
+Description=Run server compliance checks
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/bin/compliance_check.sh
+SVC_EOF
+
+  sudo tee /etc/systemd/system/compliance-check.timer > /dev/null << 'TIMER_EOF'
+[Unit]
+Description=Periodic compliance checks
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=6h
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMER_EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now compliance-check.timer
+  ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
+
+  # ── Tailscale ─────────────────────────────────────────────────────────
+  if [[ -n "$TAILSCALE_KEY" ]]; then
+    if ! command -v tailscale &>/dev/null; then
+      run_q curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+    tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns
+    ok "Tailscale connected"
+
+    # Wait for Tailscale IP
+    TS_IP=""
+    for _i in $(seq 1 30); do
+      TS_IP=$(tailscale ip -4 2>/dev/null || true)
+      [[ -n "$TS_IP" ]] && break
+      sleep 2
+    done
+
+    if [[ -n "$TS_IP" ]]; then
+      # Lock SSH to Tailscale interface only
+      sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+      echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+      sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+      # UFW: remove public SSH, allow only on tailscale0
+      sudo ufw --force delete allow 22/tcp || true
+      sudo ufw --force delete allow OpenSSH || true
+      sudo ufw --force allow in on tailscale0 to any port 22 proto tcp
+      ok "SSH locked to Tailscale interface ($TS_IP) — public SSH port closed"
+    else
+      warn "Tailscale connected but no IPv4 address received — SSH not locked to Tailscale"
+    fi
+  else
+    warn "Tailscale skipped — SSH remains open on all interfaces"
+  fi
+
+  # ── Final compliance run ───────────────────────────────────────────────
+  echo ""
+  echo -e "  ${CYAN}Compliance check results:${NC}"
+  sudo /usr/local/bin/compliance_check.sh || true
+
 fi
 
 # Open dashboards in browser on GUI systems; print URLs on headless VPS
