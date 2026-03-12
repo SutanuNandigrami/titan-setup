@@ -1450,7 +1450,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "skill-creator@claude-plugins-official": true,
     "episodic-memory@superpowers-marketplace": true
   },
-  "model": "claude-sonnet-4-6",
+  "model": "opusplan",
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
@@ -1687,6 +1687,7 @@ cat > "$CLAUDE_DIR/skills/security-scan/SKILL.md" << 'SKILL'
 ---
 name: security-scan
 description: Security scanning and vulnerability assessment workflows. Use when performing security audits, scanning for vulnerabilities, checking dependencies, or hardening systems.
+paths: ["**/*.py", "**/*.js", "**/*.go", "**/*.sh", "**/*.ts", "**/*.rs", "**/Dockerfile*", "**/requirements*.txt", "**/package.json", "**/*.tf"]
 ---
 
 # Security Scanning Workflows
@@ -1747,6 +1748,7 @@ cat > "$CLAUDE_DIR/skills/git-workflow/SKILL.md" << 'SKILL'
 ---
 name: git-workflow
 description: Git branching, commit, and PR conventions. Use when creating branches, making commits, or opening PRs.
+paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/*.md", "**/*.tf", "**/Dockerfile*"]
 ---
 # Git Workflow
 Branches: `feat/<desc>`, `fix/<desc>`, `chore/<desc>`, `docs/<desc>`
@@ -1765,6 +1767,7 @@ cat > "$CLAUDE_DIR/skills/infra-deploy/SKILL.md" << 'SKILL'
 ---
 name: infra-deploy
 description: Infrastructure as Code workflows with Terraform, Ansible, Docker, and Kubernetes. Use when provisioning, configuring, deploying, or managing infrastructure.
+paths: ["**/*.tf", "**/*.tfvars", "**/*.hcl", "**/ansible*", "**/playbooks/**", "**/*.yaml", "**/*.yml", "**/k8s/**", "**/helm/**"]
 ---
 
 # Infrastructure Workflows
@@ -1813,6 +1816,7 @@ cat > "$CLAUDE_DIR/skills/add-cli-tool/SKILL.md" << 'SKILL'
 ---
 name: add-cli-tool
 description: Add a new CLI tool to the titan setup and make it usable immediately. Use when installing a new CLI tool, registering a tool in the setup script, updating the tool inventory, or when the user says "add tool", "new CLI tool", "register tool", "install X to titan". Also triggers on "I installed X", "add X to the setup", or any request to add a CLI tool to the workstation.
+paths: ["**/titan-setup.sh", "**/.claude/**", "**/CLAUDE.md"]
 ---
 
 # Add CLI Tool
@@ -1999,6 +2003,7 @@ triggers:
   - monitor process
   - split pane
   - send keys
+paths: ["**/.tmux*", "**/tmux.conf", "**/*.tmux", "**/tmuxinator*"]
 ---
 
 # tmux Control
@@ -2074,6 +2079,7 @@ triggers:
   - how to deploy
   - envrc
   - project config
+paths: ["**/_workspace.json", "**/.envrc", "**/justfile", "**/Makefile", "**/package.json", "**/pyproject.toml"]
 ---
 
 # Workspace Configuration
@@ -2156,6 +2162,7 @@ triggers:
   - run in parallel
   - background tasks
   - orchestrate
+paths: ["**/pueue*", "**/.pueue*", "**/*.task", "**/tasks/**"]
 ---
 
 # Pueue Task Orchestrator
@@ -2250,6 +2257,7 @@ triggers:
   - visualize
   - erd
   - class diagram
+paths: ["**/*.md", "**/docs/**", "**/*.mermaid", "**/*.diagram", "**/*.drawio"]
 ---
 
 # Diagram Generation
@@ -2366,6 +2374,7 @@ triggers:
   - deploy to docker
   - terraform apply
   - helm upgrade
+paths: ["**/Dockerfile*", "**/docker-compose*", "**/compose.y*ml", "**/*deploy*", "**/*.helm", "**/Chart.yaml", "**/fly.toml", "**/vercel.json"]
 ---
 
 # Deploy Skill
@@ -2455,6 +2464,7 @@ triggers:
   - background service
   - auto restart
   - user unit
+paths: ["**/*.service", "**/*.timer", "**/systemd/**", "**/supervisord*"]
 ---
 
 # Process Supervisor (systemd user units)
@@ -3071,6 +3081,15 @@ if [ ! -d ~/.claude/skills/tdd ]; then
     if [ -f ~/.claude/skills/systematic-debugging/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/systematic-debugging/SKILL.md 2>/dev/null; then
       sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' ~/.claude/skills/systematic-debugging/SKILL.md
     fi
+    if [ -f ~/.claude/skills/brainstorming/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/brainstorming/SKILL.md 2>/dev/null; then
+      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/*.spec.md", "**/brainstorm*"]' ~/.claude/skills/brainstorming/SKILL.md
+    fi
+    if [ -f ~/.claude/skills/verification-before-completion/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/verification-before-completion/SKILL.md 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/test*", "**/spec*", "**/Makefile"]' ~/.claude/skills/verification-before-completion/SKILL.md
+    fi
+    if [ -f ~/.claude/skills/writing-plans/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/writing-plans/SKILL.md 2>/dev/null; then
+      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/plan*", "**/*.spec.md"]' ~/.claude/skills/writing-plans/SKILL.md
+    fi
     ok "superpowers skills"
   else
     warn "superpowers clone failed"
@@ -3113,6 +3132,8 @@ elif [ -f ~/.claude/skills/trailofbits-modern-python/SKILL.md ] && ! grep -q '^p
   sed -i '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
     ~/.claude/skills/trailofbits-modern-python/SKILL.md
 fi
+# Remove duplicate nested SKILL.md — root copy has correct paths: scoping; nested is always-on (bug)
+rm -f ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md 2>/dev/null || true
 
 # Cleanup: remove full trailofbits/hashicorp clones from previous installs (token bloat)
 # These dumped 60+14 SKILL.md files into context at startup (~81K lines)
@@ -3383,6 +3404,30 @@ else
   claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \
     && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
+
+  # Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
+  # This prevents skill-creator/hookify/episodic-memory from loading on every turn (93% token reduction)
+  _patch_plugin_skill() {
+    local plugin_key="$1" subpath="$2" paths_value="$3"
+    local install_path
+    install_path=$(jq -r --arg k "$plugin_key" '.plugins[$k][0].installPath // empty' \
+      "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+    [[ -z "$install_path" ]] && return 0
+    local skill_md="$install_path/$subpath"
+    [[ -f "$skill_md" ]] || return 0
+    if ! grep -q '^paths:' "$skill_md" 2>/dev/null; then
+      sed -i "2a paths: ${paths_value}" "$skill_md" 2>/dev/null && ok "patched: $plugin_key SKILL.md" || true
+    fi
+  }
+  _patch_plugin_skill "skill-creator@claude-plugins-official" \
+    "skills/skill-creator/SKILL.md" \
+    '["**/.claude/**", "**/skills/**", "**/SKILL.md", "**/CLAUDE.md"]'
+  _patch_plugin_skill "hookify@claude-plugins-official" \
+    "skills/writing-rules/SKILL.md" \
+    '["**/.claude/**", "**/hooks/**", "**/rules/**", "**/hookify*"]'
+  _patch_plugin_skill "episodic-memory@superpowers-marketplace" \
+    "skills/remembering-conversations/SKILL.md" \
+    '["**/memory/**", "**/.claude/memory/**", "**/handoff*", "**/_scratchpad*"]'
 
   # Cleanup: remove non-installed plugin dirs from marketplace cache to prevent SKILL.md bloat
   # Each marketplace add can bring many plugin dirs; only keep what's actually installed
