@@ -63,7 +63,9 @@ That's 25-67% of a 200K context window gone. You get fewer turns, worse recall, 
 
 ### CLI-over-MCP: The Core Idea
 
-Every MCP server has a CLI equivalent that's already installed on your system or can be. `gh` replaces GitHub MCP. `pgcli` replaces Postgres MCP. `docker` replaces Docker MCP. The difference: CLI tools cost **zero context tokens** because Claude Code already knows how to run shell commands via its built-in Bash tool.
+Every common MCP server has a CLI equivalent that's already installed on your system or can be. `gh` replaces GitHub MCP. `pgcli` replaces Postgres MCP. `docker` replaces Docker MCP. The difference: CLI tools cost **zero context tokens** because Claude Code already knows how to run shell commands via its built-in Bash tool.
+
+The one exception is **episodic memory** — the `episodic-memory` plugin exposes MCP tools for semantic search across past Claude conversations. There is no CLI equivalent for this. Everything else is a CLI.
 
 Instead of injecting 8,000 tokens of GitHub MCP schemas, Titan installs `gh` and teaches Claude to run `gh --help` when it needs to discover capabilities. The tool knowledge is lazy-loaded at runtime, not front-loaded at startup.
 
