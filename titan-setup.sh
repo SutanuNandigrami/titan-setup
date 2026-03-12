@@ -136,6 +136,36 @@ fi
 [[ "$CC_NO_AUTOUPDATE" == "true" ]] && echo -e "  Auto-updates:  ${YELLOW}disabled${NC}" || echo -e "  Auto-updates:  ${GREEN}enabled${NC}"
 echo ""
 
+# ─── VPS: create Claude user and re-exec as them ───
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  if [[ -z "$CLAUDE_USER" ]]; then
+    read -rp "  Username for Claude Code (created if absent): " CLAUDE_USER
+    [[ -z "$CLAUDE_USER" ]] && { fail "Username required for VPS mode"; exit 1; }
+  fi
+
+  if [[ "$(whoami)" != "$CLAUDE_USER" ]]; then
+    if ! id "$CLAUDE_USER" &>/dev/null; then
+      useradd -m -s /bin/bash "$CLAUDE_USER"
+      echo -e "  ${GREEN}✓${NC} Created user: $CLAUDE_USER"
+    fi
+    echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/"$CLAUDE_USER"
+    chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
+    echo -e "  ${GREEN}✓${NC} Passwordless sudo granted to $CLAUDE_USER"
+    echo -e "  Switching to $CLAUDE_USER and re-running...\n"
+    exec sudo -u "$CLAUDE_USER" bash "$0" \
+      --mode vps \
+      --claude-user "$CLAUDE_USER" \
+      --tailscale-key "$TAILSCALE_KEY" \
+      --name "$ENGINEER_NAME" \
+      ${CC_VERSION:+--cc-version "$CC_VERSION"} \
+      ${CC_NO_AUTOUPDATE:+--no-autoupdate} \
+      ${VERBOSE:+--verbose} \
+      ${CCFLARE_SKIP:+--ccflare-skip} \
+      --ccflare-port "$CCFLARE_PORT" \
+      --ccflare-host "$CCFLARE_HOST"
+  fi
+fi
+
 # ─── Log file for quiet mode ───
 LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
 # run_q: run a command, routing output to log file unless --verbose
@@ -1732,18 +1762,9 @@ TIMER_EOF
       || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
   fi
 
-  # ── Non-root Claude user with passwordless sudo ────────────────────────
-  if ! id "$CLAUDE_USER" &>/dev/null; then
-    sudo useradd -m -s /bin/bash "$CLAUDE_USER"
-    ok "Created user: $CLAUDE_USER"
-  else
-    ok "User $CLAUDE_USER already exists"
-  fi
-  sudo usermod -aG sudo "$CLAUDE_USER"
+  # ── Add Claude user to docker group (user was created + sudo'd before Phase 1) ──
   command -v docker &>/dev/null && sudo usermod -aG docker "$CLAUDE_USER" || true
-  echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$CLAUDE_USER" > /dev/null
-  sudo chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
-  ok "$CLAUDE_USER: passwordless sudo configured"
+  ok "$CLAUDE_USER: docker group membership ensured"
 
   # ── Lock root account ──────────────────────────────────────────────────
   sudo passwd -l root
