@@ -38,6 +38,8 @@ INSTALL_MODE=""
 TAILSCALE_KEY=""
 CLAUDE_USER=""
 TS_HOSTNAME=""
+CC_VERSION=""
+CC_NO_AUTOUPDATE=""
 DRY_RUN=false
 VERBOSE=false
 CCFLARE_SKIP=false
@@ -53,6 +55,8 @@ Options:
   --mode desktop|vps       Installation profile (prompted interactively if omitted)
   --tailscale-key KEY      Tailscale auth key (required for VPS mode, prompted if omitted)
   --claude-user USER       Non-root user for Claude Code in VPS mode (created if absent, prompted if omitted)
+  --cc-version VERSION     Install specific Claude Code version (e.g. 2.1.58; default: latest)
+  --no-autoupdate          Disable Claude Code auto-updater (adds DISABLE_AUTOUPDATER=1 to settings.json)
   --dry-run                Print what would be done without making changes
   -v, --verbose            Show all subprocess output (default: quiet, logs to file)
 
@@ -80,6 +84,8 @@ while [[ $# -gt 0 ]]; do
                        INSTALL_MODE="$2"; shift 2 ;;
     --tailscale-key)   [[ $# -ge 2 ]] || { fail "--tailscale-key requires a value"; usage; }; TAILSCALE_KEY="$2"; shift 2 ;;
     --claude-user)     [[ $# -ge 2 ]] || { fail "--claude-user requires a value"; usage; }; CLAUDE_USER="$2"; shift 2 ;;
+    --cc-version)      [[ $# -ge 2 ]] || { fail "--cc-version requires a value"; usage; }; CC_VERSION="$2"; shift 2 ;;
+    --no-autoupdate)   CC_NO_AUTOUPDATE="true"; shift ;;
     --dry-run)         DRY_RUN=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
@@ -114,6 +120,21 @@ if [[ -z "$INSTALL_MODE" ]]; then
   esac
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
+
+# ─── Claude Code version + autoupdate ───
+if [[ -z "$CC_VERSION" ]]; then
+  read -rp "  Claude Code version to install (blank = latest): " CC_VERSION
+fi
+if [[ -z "$CC_NO_AUTOUPDATE" ]]; then
+  read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
+  case "${_au_ans,,}" in
+    y|yes) CC_NO_AUTOUPDATE="true" ;;
+    *)     CC_NO_AUTOUPDATE="false" ;;
+  esac
+fi
+[[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
+[[ "$CC_NO_AUTOUPDATE" == "true" ]] && echo -e "  Auto-updates:  ${YELLOW}disabled${NC}" || echo -e "  Auto-updates:  ${GREEN}enabled${NC}"
+echo ""
 
 # ─── Log file for quiet mode ───
 LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
@@ -944,13 +965,17 @@ else ok "runme (exists)"; fi
 
 section "Phase 4/6 — Claude Code CLI"
 
-if command -v claude &>/dev/null; then
+if command -v claude &>/dev/null && [[ -z "$CC_VERSION" ]]; then
   ok "Claude Code already installed: $(claude --version 2>/dev/null || echo 'installed')"
   echo "  Run 'claude doctor' to verify health"
 else
-  echo "  Installing Claude Code native binary..."
-  curl -fsSL https://claude.ai/install.sh | bash
-  ok "Claude Code installed"
+  echo "  Installing Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
+  if [[ -n "$CC_VERSION" ]]; then
+    curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
+  else
+    curl -fsSL https://claude.ai/install.sh | bash
+  fi
+  ok "Claude Code installed${CC_VERSION:+ v${CC_VERSION}}"
   echo ""
   echo "  After this script finishes:"
   echo "    1. Run: claude"
@@ -1013,7 +1038,13 @@ install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
 TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-ok "settings.json"
+if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
+  jq '.env.DISABLE_AUTOUPDATER = "1"' "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+  ok "settings.json (DISABLE_AUTOUPDATER=1)"
+else
+  ok "settings.json"
+fi
 
 # ccstatusline config is user-managed via `ccstatusline` TUI editor
 # The script installs the binary (bun install -g ccstatusline) but does NOT
