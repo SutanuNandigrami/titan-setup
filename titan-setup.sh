@@ -625,7 +625,7 @@ SERVICEEOF
   echo "  Then set: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
 fi  # end $CCFLARE_SKIP
 
-command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { run_q bun install -g notebooklm-cli && ok "notebooklm-cli" || warn "notebooklm-cli"; }
+command -v nlm-cli &>/dev/null && ok "notebooklm-cli (exists)" || { run_q bun install -g notebooklm-cli && ok "notebooklm-cli" || warn "notebooklm-cli"; }
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
 command -v vercel &>/dev/null && ok "vercel (exists)" || { run_q bun install -g vercel && ok "vercel" || warn "vercel"; }
 
