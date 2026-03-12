@@ -1200,20 +1200,20 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
     "ENABLE_TOOL_SEARCH": "auto:5",
     "CLAUDE_CODE_STATUSLINE": "ccstatusline",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "90",
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "600000",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-haiku-4-5-20251001",
     "CLAUDE_CODE_ENABLE_TASKS": "1",
-    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "16000",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "8192",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "PATH": "TITAN_PATH_PLACEHOLDER"
   },
   "preferences": {
-    "cleanupPeriodDays": 365
+    "cleanupPeriodDays": 30
   },
   "showTurnDuration": true,
   "includeCoAuthoredBy": true,
@@ -1322,24 +1322,7 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
         ]
       }
     ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/session-end.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "curl -sf -d \"Claude Code session ended: $(git branch --show-current 2>/dev/null || echo unknown)\" \"${NTFY_URL:-http://localhost:9999/null}\" 2>/dev/null || true",
-            "timeout": 5,
-            "async": true
-          }
-        ]
-      }
-    ],
+    "Stop": [],
     "SessionStart": [
       {
         "matcher": "startup|compact",
@@ -1360,6 +1343,12 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
             "type": "command",
             "command": "bash ~/.claude/hooks/session-end.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "curl -sf -d \"Claude Code session ended: $(git branch --show-current 2>/dev/null || echo unknown)\" \"${NTFY_URL:-http://localhost:9999/null}\" 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -1457,9 +1446,11 @@ cat > "$CLAUDE_DIR/settings.json" << 'SETTINGS'
   },
   "enabledPlugins": {
     "hookify@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true
+    "code-review@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "episodic-memory@superpowers-marketplace": true
   },
-  "model": "opusplan",
+  "model": "claude-sonnet-4-6",
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
@@ -2574,7 +2565,7 @@ ok "skill: process-supervisor"
 
 cat > "$CLAUDE_DIR/hooks/pre-compact.sh" << 'HOOK'
 #!/usr/bin/env bash
-# PreCompact hook — auto-save session state before compaction
+# PreCompact hook — save session state before compaction + maintenance cleanup
 set -euo pipefail
 
 MEMORY_DIR="$HOME/.claude/memory"
@@ -2593,12 +2584,18 @@ STATUS=$(git status --porcelain 2>/dev/null | head -20 || true)
 DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
 RECENT_COMMITS=$(git log --oneline -10 2>/dev/null || true)
 
-# Extract last assistant messages from transcript (if available)
-LAST_CONTEXT=""
+# Extract last 5 user+assistant exchanges (not just assistant) for richer context preservation
+RECENT_EXCHANGES=""
 if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
-  LAST_CONTEXT=$(tail -100 "$TRANSCRIPT" 2>/dev/null \
-    | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null \
-    | tail -c 3000 || true)
+  RECENT_EXCHANGES=$(tail -300 "$TRANSCRIPT" 2>/dev/null \
+    | jq -r 'select(.type == "user" or .type == "assistant")
+      | .type + ": " + (
+          (.message.content // [])[]?
+          | select(.type == "text")
+          | .text // empty
+          | .[0:600]
+        )' 2>/dev/null \
+    | tail -c 5000 || true)
 fi
 
 # Write handoff file
@@ -2635,17 +2632,64 @@ ${STATUS:-Clean working tree}
 ${DIFF_STAT:-No changes}
 \`\`\`
 
-## Last Context
-${LAST_CONTEXT:-No transcript context available}
+## Recent Conversation (last ~5 exchanges before compact)
+${RECENT_EXCHANGES:-No transcript context available}
 EOF
 
-# Prune JSONL session files: keep newest 30, delete anything older than 180 days
-find "$HOME/.claude/projects" -name "*.jsonl" -mtime +180 -delete 2>/dev/null || true
-# Also cap total at 30 across all project dirs
-mapfile -t ALL_JSONL < <(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
-if [[ ${#ALL_JSONL[@]} -gt 30 ]]; then
-  printf '%s\n' "${ALL_JSONL[@]:30}" | xargs -r rm -f 2>/dev/null || true
-fi
+# ─── Maintenance: JSONL prune (runs on every compact) ───
+# Cap main sessions at 15; delete old sessions AND their subagent dirs together
+_prune_jsonl() {
+  local projects="$HOME/.claude/projects"
+  # Delete sessions older than 30 days (including subagent dirs)
+  while IFS= read -r f; do
+    local sid sdir
+    sid=$(basename "$f" .jsonl)
+    sdir="$(dirname "$f")/$sid"
+    rm -f "$f" 2>/dev/null || true
+    rm -rf "$sdir" 2>/dev/null || true
+  done < <(find "$projects" -maxdepth 2 -name "*.jsonl" -mtime +30 2>/dev/null)
+  # Cap at 15 newest main sessions
+  mapfile -t ALL_MAIN < <(find "$projects" -maxdepth 2 -name "*.jsonl" -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
+  if [[ ${#ALL_MAIN[@]} -gt 15 ]]; then
+    local f sid sdir
+    for f in "${ALL_MAIN[@]:15}"; do
+      sid=$(basename "$f" .jsonl)
+      sdir="$(dirname "$f")/$sid"
+      rm -f "$f" 2>/dev/null || true
+      rm -rf "$sdir" 2>/dev/null || true
+    done
+  fi
+}
+_prune_jsonl
+
+# ─── Maintenance: clean stale plugin cache versions ───
+_prune_plugin_cache() {
+  local installed_json="$HOME/.claude/plugins/installed_plugins.json"
+  [[ -f "$installed_json" ]] || return 0
+  local cache_root="$HOME/.claude/plugins/cache"
+  [[ -d "$cache_root" ]] || return 0
+
+  mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$installed_json" 2>/dev/null)
+
+  local marketplace plugin version vpath is_active ap
+  for marketplace in "$cache_root"/*/; do
+    for plugin in "$marketplace"*/; do
+      [[ -d "$plugin" ]] || continue
+      for version in "$plugin"*/; do
+        [[ -d "$version" ]] || continue
+        vpath="${version%/}"
+        is_active=false
+        for ap in "${ACTIVE_PATHS[@]}"; do
+          [[ "$ap" == "$vpath" ]] && { is_active=true; break; }
+        done
+        if ! $is_active; then
+          rm -rf "$vpath" 2>/dev/null || true
+        fi
+      done
+    done
+  done
+}
+_prune_plugin_cache
 
 exit 0
 HOOK
@@ -2718,12 +2762,12 @@ ok "hook: session-end.sh"
 
 cat > "$CLAUDE_DIR/hooks/session-start.sh" << 'HOOK'
 #!/usr/bin/env bash
-# SessionStart hook — load previous session state and memory reminders
+# SessionStart hook — load previous session state and run maintenance
 set -euo pipefail
 
 HANDOFF="$HOME/.claude/memory/handoff.md"
 
-# Show handoff from previous session (if recent)
+# Show handoff from previous session (if recent — within 24h)
 if [[ -f "$HANDOFF" ]]; then
   FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0) ))
   if (( FILE_AGE < 86400 )); then
@@ -2741,7 +2785,15 @@ else
   echo "[Memory] No project memories yet. Use /remember or write to auto memory directory." >&2
 fi
 
-# Rotate audit log if over 10MB
+# ─── Maintenance: JSONL prune (cap at 30, delete >30 days old) ───
+# Run on every session start (not just pre-compact) to prevent accumulation
+find "$HOME/.claude/projects" -name "*.jsonl" -mtime +30 -delete 2>/dev/null || true
+mapfile -t ALL_JSONL < <(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
+if [[ ${#ALL_JSONL[@]} -gt 30 ]]; then
+  printf '%s\n' "${ALL_JSONL[@]:30}" | xargs -r rm -f 2>/dev/null || true
+fi
+
+# ─── Maintenance: Rotate audit log if over 10MB ───
 AUDIT_LOG="$HOME/.claude/logs/audit.jsonl"
 if [[ -f "$AUDIT_LOG" ]]; then
   AUDIT_SIZE=$(stat -c %s "$AUDIT_LOG" 2>/dev/null || echo 0)
@@ -3324,14 +3376,34 @@ else
   # Install plugins from official marketplace
   claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
-  # skill-creator removed — adds 6+ skills to context, only needed when authoring skills
-  # Install on-demand if needed: claude plugin install skill-creator
+  claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
 
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
   claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \
     && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
+
+  # Cleanup: remove non-installed plugin dirs from marketplace cache to prevent SKILL.md bloat
+  # Each marketplace add can bring many plugin dirs; only keep what's actually installed
+  INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
+  if [[ -f "$INSTALLED_JSON" ]]; then
+    CACHE_ROOT="$HOME/.claude/plugins/cache"
+    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$INSTALLED_JSON" 2>/dev/null)
+    if [[ -d "$CACHE_ROOT" ]]; then
+      while IFS= read -r -d '' vpath; do
+        vpath="${vpath%/}"
+        is_active=false
+        for ap in "${ACTIVE_PATHS[@]}"; do
+          [[ "$ap" == "$vpath" ]] && { is_active=true; break; }
+        done
+        if ! $is_active; then
+          rm -rf "$vpath" 2>/dev/null || true
+        fi
+      done < <(find "$CACHE_ROOT" -mindepth 3 -maxdepth 3 -type d -print0 2>/dev/null)
+      ok "plugin cache: removed stale versions"
+    fi
+  fi
 fi
 
 
