@@ -1,0 +1,1 @@
+Create/update `_handoff.md` with: current task + branch, what's completed, what's in progress, blockers, next steps, test status, key decisions. Write it so a fresh session can continue with zero context. Then commit it.

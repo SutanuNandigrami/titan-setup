@@ -1,0 +1,265 @@
+{
+  "env": {
+    "ENGINEER_NAME": "TITAN_ENGINEER_NAME",
+    "DEFAULT_BRANCH": "main",
+    "ENABLE_TOOL_SEARCH": "auto:5",
+    "CLAUDE_CODE_STATUSLINE": "ccstatusline",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "90",
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "BASH_MAX_TIMEOUT_MS": "600000",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-haiku-4-5-20251001",
+    "CLAUDE_CODE_ENABLE_TASKS": "1",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "8192",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "PATH": "TITAN_PATH_PLACEHOLDER"
+  },
+  "preferences": {
+    "cleanupPeriodDays": 30
+  },
+  "showTurnDuration": true,
+  "includeCoAuthoredBy": true,
+  "respectGitignore": true,
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)", "Edit(*)", "MultiEdit(*)", "Write(*)",
+      "Glob(*)", "Grep(*)", "Skill(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)", "Bash(rm -r /*)", "Bash(rm -r *)", "Bash(rm --recursive *)",
+      "Bash(git reset --hard *)", "Bash(git clean -f*)", "Bash(git clean -d*)",
+      "Bash(chmod 777 *)", "Bash(chmod -R 777 *)",
+      "Bash(curl * | bash)", "Bash(curl * | sh)", "Bash(curl *|bash)", "Bash(curl *|sh)",
+      "Bash(wget * | bash)", "Bash(wget * | sh)", "Bash(wget *|bash)", "Bash(wget *|sh)",
+      "Bash(git push * --force)", "Bash(git push -f *)", "Bash(git push --force*)",
+      "Bash(git push * main)", "Bash(git push origin main)", "Bash(git push origin master)",
+      "Bash(git checkout -- .)", "Bash(git checkout .)",
+      "Bash(git restore .)", "Bash(git restore --staged .)",
+      "Bash(terraform destroy *)", "Bash(terraform apply -auto-approve *)",
+      "Bash(kubectl delete namespace *)", "Bash(kubectl delete -f *)",
+      "Bash(docker system prune *)", "Bash(docker rm -f *)", "Bash(docker rmi -f *)",
+      "Bash(pip install *)", "Bash(sudo pip *)", "Bash(npm install -g *)",
+      "Bash(sudo rm *)", "Bash(sudo chmod *)", "Bash(sudo chown *)",
+      "Bash(mkfs *)", "Bash(dd if=*)", "Bash(shred *)",
+      "Bash(kill -9 *)", "Bash(killall *)", "Bash(pkill *)",
+      "Bash(reboot*)", "Bash(shutdown*)", "Bash(systemctl reboot*)", "Bash(systemctl poweroff*)",
+      "Bash(iptables *)", "Bash(ufw *)",
+      "Read(~/.ssh/*)", "Read(~/.aws/credentials)", "Read(.env*)",
+      "Read(*secret*)", "Read(*credential*)", "Read(*.pem)", "Read(*.key)",
+      "Edit(~/.bashrc)", "Edit(~/.profile)", "Edit(~/.zshrc)",
+      "Edit(~/.ssh/*)", "Edit(.env*)", "Edit(*secret*)", "Edit(*credential*)",
+      "Write(~/.bashrc)", "Write(~/.profile)", "Write(~/.zshrc)",
+      "Write(~/.ssh/*)", "Write(.env*)", "Write(*secret*)", "Write(*credential*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // empty' | { read -r -d '' cmd || true; case \"$cmd\" in *'rm -rf'*|*'rm -r '*|*'rm --recursive'*) echo 'BLOCKED: Use trash-put instead of rm -r' >&2; exit 2;; *'rm -f '*) echo 'BLOCKED: Use trash-put for safe deletion' >&2; exit 2;; *'git push'*'--force'*|*'git push -f'*|*'git push --force'*) echo 'BLOCKED: Force push not allowed. Use a feature branch.' >&2; exit 2;; *'git push'*' main'*|*'git push'*' master'*) echo 'BLOCKED: Direct push to main/master. Push a feature branch and open a PR.' >&2; exit 2;; *'pip install'*|*'sudo pip'*|*'npm install -g'*) echo 'BLOCKED: Use uv tool install (Python) or bun install -g (JS) instead.' >&2; exit 2;; *'git commit'*) branch=$(git branch --show-current 2>/dev/null); if [ \"$branch\" = main ] || [ \"$branch\" = master ]; then echo \"BLOCKED: Cannot commit on $branch. Create a feature branch first.\" >&2; exit 2; fi;; *'git reset --hard'*) echo 'BLOCKED: git reset --hard destroys uncommitted work. Use git stash instead.' >&2; exit 2;; *'git clean -f'*|*'git clean -d'*) echo 'BLOCKED: git clean removes untracked files permanently.' >&2; exit 2;; *'chmod 777'*|*'chmod -R 777'*) echo 'BLOCKED: chmod 777 is a security risk.' >&2; exit 2;; *'sudo rm'*|*'sudo chmod'*|*'sudo chown'*) echo 'BLOCKED: sudo file operations need explicit user approval.' >&2; exit 2;; *'| bash'*|*'| sh'*|*'|bash'*|*'|sh'*) echo 'BLOCKED: Piping to shell is unsafe. Download and inspect first.' >&2; exit 2;; *'kill -9'*|*'killall '*|*'pkill '*) echo 'BLOCKED: Process killing needs explicit user approval.' >&2; exit 2;; *'docker system prune'*|*'docker rm -f'*) echo 'BLOCKED: Docker cleanup needs explicit user approval.' >&2; exit 2;; *'terraform destroy'*|*'terraform apply -auto-approve'*) echo 'BLOCKED: Destructive infra operations need explicit user approval.' >&2; exit 2;; *'kubectl delete'*) echo 'BLOCKED: Kubernetes deletion needs explicit user approval.' >&2; exit 2;; esac; exit 0; }",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r -d '' fp || true; case \"$fp\" in *.env*|*credentials*|*secret*|*.pem|*.key) echo 'Cannot edit secrets/credentials. Edit manually.' >&2; exit 2;; *) exit 0;; esac; }",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r -d '' fp || true; case \"$fp\" in *.sh|*.bash) if command -v shellcheck &>/dev/null; then shellcheck \"$fp\" 2>&1 | head -20 || true; else echo 'warning: shellcheck not found, skipping lint' >&2; fi;; *.py) if command -v ruff &>/dev/null; then ruff check \"$fp\" 2>&1 | head -20 || true; else echo 'warning: ruff not found, skipping lint' >&2; fi;; Dockerfile*) if command -v hadolint &>/dev/null; then hadolint \"$fp\" 2>&1 | head -10 || true; else echo 'warning: hadolint not found, skipping lint' >&2; fi;; esac; }",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), tool: .tool_name, input: (.tool_input | tostring | .[0:200])}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "msg=$(jq -r '.message // \"Claude needs attention\"'); notify-send 'Claude Code' \"$msg\" 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-compact.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [],
+    "SessionStart": [
+      {
+        "matcher": "startup|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-end.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "curl -sf -d \"Claude Code session ended: $(git branch --show-current 2>/dev/null || echo unknown)\" \"${NTFY_URL:-http://localhost:9999/null}\" 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), tool: .tool_name, error: (.error // .tool_input | tostring | .[0:300])}' >> ~/.claude/logs/failures.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && { input=$(cat); echo \"$input\" | jq -c '{ts: (now | todate), event: \"subagent_stop\", agent: (.agent_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true; name=$(echo \"$input\" | jq -r '.agent_name // empty' 2>/dev/null); if [[ \"$name\" == slot-* ]] && grep -qs 'AUTO_UNLOAD=true' \"${XDG_CONFIG_HOME:-$HOME/.config}/agt/config\" 2>/dev/null; then \"$HOME/.local/bin/agt\" unload \"$name\" 2>/dev/null || true; fi; }",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/prompt-memory-inject.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"task_completed\", task: (.task_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"instructions_loaded\", file: (.file_path // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"config_change\", file: (.file_path // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ~/.claude/logs && jq -c '{ts: (now | todate), event: \"teammate_idle\", teammate: (.teammate_name // \"unknown\")}' >> ~/.claude/logs/audit.jsonl 2>/dev/null || true",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "hookify@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "episodic-memory@superpowers-marketplace": true
+  },
+  "model": "opusplan",
+  "skipDangerousModePermissionPrompt": true,
+  "statusLine": {
+    "type": "command",
+    "command": "ccstatusline",
+    "padding": 0
+  }
+}

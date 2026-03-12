@@ -1,0 +1,5 @@
+# agt configuration
+# shellcheck shell=bash
+STASH_DIR="$HOME/.claude/agent-stash"
+export AUTO_UNLOAD=false
+SLOT_COUNT=5

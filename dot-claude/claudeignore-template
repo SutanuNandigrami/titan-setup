@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pnp.*
+
+# Build output
+dist/
+build/
+out/
+.next/
+.nuxt/
+target/
+coverage/
+*.egg-info/
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terragrunt-cache/
+
+# Version control internals
+.git/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Large / binary files
+*.wasm
+*.sqlite
+*.db
+*.zip
+*.tar.gz
+*.tgz
+
+# Secrets (defense in depth)
+.env
+.env.*
+*.pem
+*.key
