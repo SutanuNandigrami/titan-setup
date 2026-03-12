@@ -35,18 +35,37 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 # ─── CLI Options ───
 ENGINEER_NAME=""
 DRY_RUN=false
+CCFLARE_SKIP=false
+CCFLARE_PORT=8080
+CCFLARE_HOST="127.0.0.1"
+CCFLARE_PROXY=false
+CCFLARE_LOGLEVEL="INFO"
+CCFLARE_OAUTH_ACCOUNT=""
+CCFLARE_VERTEX_ACCOUNT=false
 
 usage() {
   cat <<USAGE
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  --name NAME   Your name for Claude config (default: \$(whoami))
-  --dry-run     Print what would be done without making changes
-  -h, --help    Show this help message
+  --name NAME              Your name for Claude config (default: \$(whoami))
+  --dry-run                Print what would be done without making changes
+
+  better-ccflare proxy options:
+  --ccflare-skip           Skip better-ccflare install entirely
+  --ccflare-port PORT      Proxy port (default: 8080)
+  --ccflare-host HOST      Bind address (default: 127.0.0.1)
+  --ccflare-proxy          Auto-enable ANTHROPIC_BASE_URL without prompting
+  --ccflare-loglevel LVL   Log level: DEBUG|INFO|WARN|ERROR (default: INFO)
+  --ccflare-oauth NAME     Pre-add a Claude OAuth account with given name
+  --ccflare-vertex         Pre-add a Vertex AI account (uses GCP env vars)
+
+  -h, --help               Show this help message
 
 Examples:
   $(basename "$0") --name "Alice"
+  $(basename "$0") --name "Alice" --ccflare-proxy --ccflare-oauth primary
+  $(basename "$0") --name "Alice" --ccflare-skip
   $(basename "$0") --dry-run
 USAGE
   exit 0
@@ -54,9 +73,16 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --name)    [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
-    --dry-run) DRY_RUN=true; shift ;;
-    -h|--help) usage ;;
+    --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
+    --dry-run)         DRY_RUN=true; shift ;;
+    --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
+    --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
+    --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
+    --ccflare-proxy)   CCFLARE_PROXY=true; shift ;;
+    --ccflare-loglevel) [[ $# -ge 2 ]] || { fail "--ccflare-loglevel requires a value"; usage; }; CCFLARE_LOGLEVEL="$2"; shift 2 ;;
+    --ccflare-oauth)   [[ $# -ge 2 ]] || { fail "--ccflare-oauth requires a value"; usage; }; CCFLARE_OAUTH_ACCOUNT="$2"; shift 2 ;;
+    --ccflare-vertex)  CCFLARE_VERTEX_ACCOUNT=true; shift ;;
+    -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
   esac
 done
@@ -364,64 +390,202 @@ SERVICEEOF
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
-# better-ccflare — Claude Code load balancer proxy (multi-account, rate-limit avoidance)
+# ─── better-ccflare — Claude Code load balancer proxy ───
 # Distributes requests across Claude OAuth, Vertex AI, Z.ai, OpenRouter, local models
-# Dashboard: http://localhost:8080 | Docs: https://github.com/tombii/better-ccflare
-if ! command -v better-ccflare &>/dev/null; then
-  bun install -g better-ccflare 2>/dev/null && ok "better-ccflare" || warn "better-ccflare"
-else
-  ok "better-ccflare (exists)"
-fi
+# Dashboard: http://${CCFLARE_HOST}:${CCFLARE_PORT} | Docs: https://github.com/tombii/better-ccflare
 
-# Systemd user service for better-ccflare (runs on port 8080)
-mkdir -p "$HOME/.config/systemd/user"
-cat > "$HOME/.config/systemd/user/better-ccflare.service" << 'SERVICEEOF'
+# Helper: write ANTHROPIC_BASE_URL to ~/.bashrc
+_ccflare_set_proxy() {
+  local url="http://${CCFLARE_HOST}:${CCFLARE_PORT}"
+  if ! grep -q "ANTHROPIC_BASE_URL" "$HOME/.bashrc" 2>/dev/null; then
+    printf '\n# better-ccflare proxy for Claude Code (multi-account load balancer)\nexport ANTHROPIC_BASE_URL=%s\n' "$url" >> "$HOME/.bashrc"
+    ok "ANTHROPIC_BASE_URL=$url added to ~/.bashrc"
+  else
+    ok "ANTHROPIC_BASE_URL already in ~/.bashrc"
+  fi
+  export ANTHROPIC_BASE_URL="$url"
+}
+
+if $CCFLARE_SKIP; then
+  ok "better-ccflare (skipped — use --ccflare-* flags to configure)"
+else
+  # Phase A: Install
+  if ! command -v better-ccflare &>/dev/null; then
+    bun install -g better-ccflare 2>/dev/null && ok "better-ccflare" || warn "better-ccflare"
+  else
+    ok "better-ccflare (exists)"
+  fi
+
+  # Phase B: Systemd user service (uses CCFLARE_PORT, CCFLARE_HOST, CCFLARE_LOGLEVEL)
+  mkdir -p "$HOME/.config/systemd/user"
+  cat > "$HOME/.config/systemd/user/better-ccflare.service" << SERVICEEOF
 [Unit]
 Description=better-ccflare Claude load balancer proxy
 After=default.target
 
 [Service]
 Type=simple
-ExecStart=%h/.bun/bin/better-ccflare --serve --port 8080
+ExecStart=%h/.bun/bin/better-ccflare --serve --port ${CCFLARE_PORT}
 Restart=on-failure
 RestartSec=5
-Environment="PORT=8080"
+Environment="PORT=${CCFLARE_PORT}"
+Environment="BETTER_CCFLARE_HOST=${CCFLARE_HOST}"
 Environment="LB_STRATEGY=session"
-Environment="LOG_LEVEL=INFO"
+Environment="LOG_LEVEL=${CCFLARE_LOGLEVEL}"
 
 [Install]
 WantedBy=default.target
 SERVICEEOF
 
-systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user enable better-ccflare 2>/dev/null || true
-systemctl --user start better-ccflare 2>/dev/null || true
-ok "better-ccflare service (http://localhost:8080)"
+  systemctl --user daemon-reload 2>/dev/null || true
+  systemctl --user enable better-ccflare 2>/dev/null || true
+  systemctl --user start better-ccflare 2>/dev/null || true
+  ok "better-ccflare service (http://${CCFLARE_HOST}:${CCFLARE_PORT})"
 
-# Interactive: configure Claude Code to route through the proxy
-echo ""
-echo -e "  ${CYAN}── better-ccflare: Claude Code integration ──${NC}"
-echo "     Route Claude Code through the load balancer proxy for multi-account support."
-echo "     This adds: export ANTHROPIC_BASE_URL=http://localhost:8080 to ~/.bashrc"
-echo ""
-read -r -p "  Configure Claude Code to use better-ccflare proxy? [y/N] " CCFLARE_SETUP
-if [[ "${CCFLARE_SETUP:-}" =~ ^[Yy] ]]; then
-  if ! grep -q 'ANTHROPIC_BASE_URL.*8080' "$HOME/.bashrc" 2>/dev/null; then
-    cat >> "$HOME/.bashrc" << 'ENVEOF'
-
-# better-ccflare proxy for Claude Code (multi-account load balancer)
-export ANTHROPIC_BASE_URL=http://localhost:8080
-ENVEOF
-    ok "ANTHROPIC_BASE_URL=http://localhost:8080 added to ~/.bashrc"
+  # Phase C: ANTHROPIC_BASE_URL — flag-driven or interactive
+  if $CCFLARE_PROXY; then
+    _ccflare_set_proxy
   else
-    ok "ANTHROPIC_BASE_URL already configured in ~/.bashrc"
+    echo ""
+    echo -e "  ${CYAN}── better-ccflare: Claude Code integration ──${NC}"
+    echo "     Route Claude Code through the load balancer for multi-account support."
+    echo "     Sets: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
+    echo "     (skip this if you want to enable it manually later)"
+    echo ""
+    read -r -p "  Enable proxy integration? [y/N] " _CCFLARE_SETUP
+    if [[ "${_CCFLARE_SETUP:-}" =~ ^[Yy] ]]; then
+      _ccflare_set_proxy
+    fi
   fi
-  export ANTHROPIC_BASE_URL=http://localhost:8080
+
+  # Phase D: Provider account setup — flag-driven first, then interactive menu
+  if [[ -n "$CCFLARE_OAUTH_ACCOUNT" ]]; then
+    better-ccflare --add-account "$CCFLARE_OAUTH_ACCOUNT" --mode claude-oauth --priority 0 2>/dev/null \
+      && ok "account: $CCFLARE_OAUTH_ACCOUNT (claude-oauth, priority 0)" \
+      || warn "account: $CCFLARE_OAUTH_ACCOUNT (may need: better-ccflare --add-account)"
+  fi
+
+  if $CCFLARE_VERTEX_ACCOUNT; then
+    _vname="vertex-${CCFLARE_OAUTH_ACCOUNT:-claude}"
+    ANTHROPIC_VERTEX_PROJECT_ID="${ANTHROPIC_VERTEX_PROJECT_ID:-}" \
+    CLOUD_ML_REGION="${CLOUD_ML_REGION:-global}" \
+      better-ccflare --add-account "$_vname" --mode vertex-ai --priority 10 2>/dev/null \
+      && ok "account: $_vname (vertex-ai)" \
+      || warn "account: $_vname (needs ANTHROPIC_VERTEX_PROJECT_ID env var)"
+  fi
+
+  # Interactive provider menu — shown when no flag-based accounts were added
+  if [[ -z "$CCFLARE_OAUTH_ACCOUNT" ]] && ! $CCFLARE_VERTEX_ACCOUNT; then
+    echo ""
+    echo -e "  ${CYAN}── better-ccflare: Add provider accounts ──${NC}"
+    echo "  Accounts define which Claude providers to load balance across."
+    echo "  You can add them now or later with: better-ccflare --add-account"
+    echo ""
+    echo "    1) Claude OAuth (Pro/Team/Max — recommended)"
+    echo "    2) Vertex AI    (Google Cloud)"
+    echo "    3) Z.ai         (higher rate limits, ~3x quota)"
+    echo "    4) OpenAI-compatible  (OpenRouter, Together AI, Ollama, local)"
+    echo "    5) Anthropic-compatible  (custom self-hosted endpoint)"
+    echo "    s) Skip — configure later"
+    echo ""
+
+    _CCFLARE_CONTINUE=true
+    while $_CCFLARE_CONTINUE; do
+      read -r -p "  Add provider [1-5/s]: " _PROV
+      _ACCT_NAME="" _ACCT_PRI="" _KEY="" _ENDPOINT=""
+      case "${_PROV:-s}" in
+        1)
+          read -r -p "    Account name [claude-primary]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-claude-primary}"
+          read -r -p "    Priority 0-100 [0]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-0}"
+          better-ccflare --add-account "$_ACCT_NAME" --mode claude-oauth --priority "$_ACCT_PRI" 2>/dev/null \
+            && ok "account: $_ACCT_NAME (claude-oauth, priority $_ACCT_PRI)" \
+            || warn "account: $_ACCT_NAME"
+          ;;
+        2)
+          read -r -p "    Account name [vertex-claude]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-vertex-claude}"
+          read -r -p "    GCP Project ID [${ANTHROPIC_VERTEX_PROJECT_ID:-}]: " _VTX_PROJ
+          _VTX_PROJ="${_VTX_PROJ:-${ANTHROPIC_VERTEX_PROJECT_ID:-}}"
+          read -r -p "    Region [global]: " _VTX_REGION
+          _VTX_REGION="${_VTX_REGION:-global}"
+          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-10}"
+          ANTHROPIC_VERTEX_PROJECT_ID="$_VTX_PROJ" CLOUD_ML_REGION="$_VTX_REGION" \
+            better-ccflare --add-account "$_ACCT_NAME" --mode vertex-ai --priority "$_ACCT_PRI" 2>/dev/null \
+            && ok "account: $_ACCT_NAME (vertex-ai, project=$_VTX_PROJ)" \
+            || warn "account: $_ACCT_NAME"
+          ;;
+        3)
+          read -r -p "    Account name [zai-account]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-zai-account}"
+          read -r -p "    Z.ai API key: " _KEY
+          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-10}"
+          if [[ -n "$_KEY" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --provider z-ai --api-key "$_KEY" --priority "$_ACCT_PRI" 2>/dev/null \
+              && ok "account: $_ACCT_NAME (z.ai, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+          else
+            warn "skipped — no API key provided"
+          fi
+          ;;
+        4)
+          read -r -p "    Account name [openrouter]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-openrouter}"
+          echo "    Common endpoints:"
+          echo "      https://openrouter.ai/api/v1       (OpenRouter)"
+          echo "      https://api.together.xyz/v1        (Together AI)"
+          echo "      http://localhost:11434/v1           (Ollama — use dummy-key)"
+          read -r -p "    Endpoint URL: " _ENDPOINT
+          read -r -p "    API key (or 'dummy-key' for local): " _KEY
+          read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-50}"
+          if [[ -n "$_ENDPOINT" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --provider openai-compatible \
+              --api-key "${_KEY:-dummy-key}" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>/dev/null \
+              && ok "account: $_ACCT_NAME (openai-compatible, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+          else
+            warn "skipped — no endpoint provided"
+          fi
+          ;;
+        5)
+          read -r -p "    Account name [custom-api]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-custom-api}"
+          read -r -p "    Endpoint URL: " _ENDPOINT
+          read -r -p "    API key: " _KEY
+          read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-50}"
+          if [[ -n "$_ENDPOINT" && -n "$_KEY" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --provider anthropic-compatible \
+              --api-key "$_KEY" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>/dev/null \
+              && ok "account: $_ACCT_NAME (anthropic-compatible, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+          else
+            warn "skipped — need both endpoint and API key"
+          fi
+          ;;
+        s|S|"")
+          _CCFLARE_CONTINUE=false
+          ;;
+        *)
+          echo "    Invalid choice — enter 1-5 or s"
+          ;;
+      esac
+      if $_CCFLARE_CONTINUE; then
+        echo ""
+        read -r -p "  Add another provider? [1-5/s]: " _PROV_NEXT
+        case "${_PROV_NEXT:-s}" in
+          s|S|"") _CCFLARE_CONTINUE=false ;;
+          *) _PROV="$_PROV_NEXT" ;;
+        esac
+      fi
+    done
+  fi
+
+  # Show final account list
   echo ""
-  echo -e "  ${CYAN}Next: add accounts to the proxy:${NC}"
-  echo "    better-ccflare --add-account myaccount --mode claude-oauth --priority 0"
-  echo "    better-ccflare --list"
-fi
+  better-ccflare --list 2>/dev/null || true
+fi  # end $CCFLARE_SKIP
 
 command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { bun install -g notebooklm-cli 2>/dev/null && ok "notebooklm-cli" || warn "notebooklm-cli"; }
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { bun install -g @kilocode/cli 2>/dev/null && ok "kilocode" || warn "kilocode"; }
@@ -3218,14 +3382,18 @@ if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
     section "Opening dashboards"
     xdg-open "http://localhost:5678" 2>/dev/null & disown
     ok "n8n:            http://localhost:5678"
-    xdg-open "http://localhost:8080" 2>/dev/null & disown
-    ok "better-ccflare: http://localhost:8080"
+    if ! $CCFLARE_SKIP; then
+      xdg-open "http://localhost:${CCFLARE_PORT}" 2>/dev/null & disown
+      ok "better-ccflare: http://localhost:${CCFLARE_PORT}"
+    fi
   fi
 else
   section "Dashboards (headless)"
   echo "  n8n:              http://localhost:5678"
-  echo "  better-ccflare:   http://localhost:8080"
+  if ! $CCFLARE_SKIP; then
+    echo "  better-ccflare:   http://localhost:${CCFLARE_PORT}"
+  fi
   echo ""
   echo "  SSH tunnel access:"
-  echo "    ssh -L 8080:localhost:8080 -L 5678:localhost:5678 user@your-vps"
+  echo "    ssh -L ${CCFLARE_PORT}:localhost:${CCFLARE_PORT} -L 5678:localhost:5678 user@your-vps"
 fi

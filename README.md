@@ -420,13 +420,20 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.10 (current) — better-ccflare: multi-account Claude load balancer
+### v3.11 (current) — better-ccflare: full setup wizard with CLI flags
 
-- **Added:** `better-ccflare` — Claude Code load balancer proxy; distributes requests across multiple accounts (Claude OAuth, Vertex AI, Z.ai, OpenRouter, local) to avoid rate limiting
-- **Added:** Systemd user service `better-ccflare.service` auto-starts on login (port 8080)
-- **Added:** Interactive prompt during install: opts in to `ANTHROPIC_BASE_URL=http://localhost:8080` in `~/.bashrc` to route Claude Code through the proxy
-- **Added:** Post-install dashboard launcher: GUI systems auto-open `http://localhost:8080` (better-ccflare) and `http://localhost:5678` (n8n) in browser; headless VPS prints URLs + SSH tunnel command
-- **Note:** Account setup is post-install: `better-ccflare --add-account name --mode claude-oauth --priority 0`
+- **Added:** Full provider account wizard during install — add Claude OAuth, Vertex AI, Z.ai, OpenAI-compatible (OpenRouter/Together/Ollama), or Anthropic-compatible accounts interactively with name/priority prompts
+- **Added:** 7 new CLI flags for unattended installs: `--ccflare-skip`, `--ccflare-port`, `--ccflare-host`, `--ccflare-proxy`, `--ccflare-loglevel`, `--ccflare-oauth`, `--ccflare-vertex`
+- **Added:** `--ccflare-skip` exits the entire better-ccflare section; all dashboard references suppressed
+- **Added:** Port/host/loglevel flags flow through to systemd service file — no hardcoded 8080
+- **Added:** Provider menu loops — add multiple providers in one run, or skip entirely to configure later
+- **Changed:** Dashboard browser-open and SSH tunnel hint use `$CCFLARE_PORT` variable
+
+### v3.10 — better-ccflare: multi-account Claude load balancer
+
+- **Added:** `better-ccflare` install via `bun install -g` + systemd user service
+- **Added:** Interactive y/N prompt for `ANTHROPIC_BASE_URL` in `~/.bashrc`
+- **Added:** Dashboard launcher: GUI opens browser; headless VPS prints URLs + SSH tunnel command
 
 ### v3.9 — Context audit: skill scoping + JSONL pruning
 
