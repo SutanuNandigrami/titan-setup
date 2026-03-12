@@ -420,7 +420,18 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.11 (current) — better-ccflare: full setup wizard with CLI flags
+### v3.12 (current) — 8 bug fixes: verbose flag, install failures, ccflare overhaul
+
+- **Added:** `--verbose`/`-v` flag — subprocess output silenced by default, routed to `/tmp/titan-setup-TIMESTAMP.log`
+- **Fixed:** `claude-agent-sdk` on Ubuntu 24.04 — added `--break-system-packages` to pip3 install
+- **Fixed:** `n8n` not starting — `loginctl enable-linger` + `usermod -aG docker` for systemd user service
+- **Fixed:** `step-cli` — switched to `github.com/smallstep/cli/releases` (old `dl.smallstep.com` URL broken)
+- **Fixed:** `runme` — use direct `latest/download` URL (GitHub API was returning null version)
+- **Fixed:** `episodic-memory` — removed incorrect `bun install -g` (it's a plugin, installed via `claude plugin install`)
+- **Fixed:** `better-ccflare` provider menu — removed non-existent `vertex-ai` mode; added all 9 real modes (console, bedrock, kilo, minimax, nanogpt, etc.); fixed double-prompt loop bug; dotenv noise suppressed
+- **Fixed:** Backup config message — `warn` → `ok` (informational, not a warning)
+
+### v3.11 — better-ccflare: full setup wizard with CLI flags
 
 - **Added:** Full provider account wizard during install — add Claude OAuth, Vertex AI, Z.ai, OpenAI-compatible (OpenRouter/Together/Ollama), or Anthropic-compatible accounts interactively with name/priority prompts
 - **Added:** 7 new CLI flags for unattended installs: `--ccflare-skip`, `--ccflare-port`, `--ccflare-host`, `--ccflare-proxy`, `--ccflare-loglevel`, `--ccflare-oauth`, `--ccflare-vertex`
