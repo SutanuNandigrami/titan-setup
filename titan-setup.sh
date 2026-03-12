@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ─── Self-materialize when invoked via process substitution ─────────────────
+# bash <(curl ...) gives $0=/dev/fd/63 (a pipe). exec sudo -u USER bash "$0"
+# fails because the new process has no access to that fd. Re-download to a
+# real temp file and re-exec with all original args preserved.
+if [[ ! -f "$0" ]]; then
+  _SELF=$(mktemp /tmp/titan-setup-XXXXXX.sh)
+  curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh \
+    -o "$_SELF"
+  chmod +x "$_SELF"
+  exec bash "$_SELF" "$@"
+fi
+# ────────────────────────────────────────────────────────────────────────────
+
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  TITAN SETUP — Single Source of Truth                           ║
 # ║  Fresh Ubuntu → fully armed Claude Code workstation             ║
@@ -129,7 +142,7 @@ if [[ -z "$CC_NO_AUTOUPDATE" ]]; then
   read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
   case "${_au_ans,,}" in
     y|yes) CC_NO_AUTOUPDATE="true" ;;
-    *)     CC_NO_AUTOUPDATE="false" ;;
+    *)     CC_NO_AUTOUPDATE="" ;;
   esac
 fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
@@ -418,9 +431,10 @@ command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install 
 # playwright — browser automation and E2E testing
 if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   run_q bun install -g playwright && ok "playwright" || warn "playwright"
-  # Install chromium browser (skip if no display or CI)
-  if command -v playwright &>/dev/null && [[ "$INSTALL_MODE" == "desktop" ]]; then
-    playwright install chromium 2>/dev/null && ok "playwright chromium" || warn "playwright chromium (install manually: playwright install chromium)"
+  # Install chromium + system deps (works headlessly on VPS; use --headless flag at runtime)
+  if command -v playwright &>/dev/null; then
+    run_q playwright install chromium --with-deps 2>/dev/null && ok "playwright chromium" \
+      || warn "playwright chromium (install manually: playwright install chromium --with-deps)"
   fi
 else
   ok "playwright (exists)"
@@ -428,14 +442,14 @@ fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
 if command -v docker &>/dev/null; then
-  # Add user to docker group (takes effect after re-login)
+  # Add user to docker group — sg activates it immediately without re-login
   sudo usermod -aG docker "$USER" 2>/dev/null || true
 
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
-  # Pull image (docker group may not apply yet in this session — use sudo if needed)
-  if docker pull n8nio/n8n:latest 2>/dev/null || sudo docker pull n8nio/n8n:latest 2>/dev/null; then
+  # Pull image using sg to apply docker group in current session without re-login
+  if sg docker -c "docker pull n8nio/n8n:latest" 2>/dev/null; then
     ok "n8n docker image"
   else
     warn "n8n docker pull failed (check: sudo docker pull n8nio/n8n:latest)"
@@ -471,9 +485,7 @@ SERVICEEOF
   systemctl --user enable n8n 2>/dev/null || true
   systemctl --user start n8n 2>/dev/null || true
   ok "n8n service (systemctl --user status n8n | http://localhost:5678)"
-  if ! groups | grep -qw docker; then
-    warn "n8n: re-login required for docker group — run: newgrp docker"
-  fi
+  # docker group is applied via sg above — no re-login required
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
@@ -528,6 +540,7 @@ PYEOF
       if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC" run build:cli; then
         _BCF_DIST="$_BCF_SRC/apps/cli/dist/better-ccflare"
         if [[ -f "$_BCF_DIST" ]]; then
+          mkdir -p "$HOME/.bun/bin" "$HOME/.local/bin"
           install -m 0755 "$_BCF_DIST" "$HOME/.bun/bin/better-ccflare"
           install -m 0755 "$_BCF_DIST" "$HOME/.local/bin/better-ccflare"
           ok "better-ccflare (built from source + NULL constraint patches applied)"
