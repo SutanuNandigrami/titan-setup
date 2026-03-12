@@ -149,7 +149,7 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 ### Phase 4 — Claude Code
 - Native binary installer (auto-updates by default; `--no-autoupdate` flag disables via `DISABLE_AUTOUPDATER=1`)
 - Claude Desktop (Linux, via community package) * — desktop mode only
-- ~~Claude Cowork Service~~ — removed in v3.14
+- Claude Cowork Service (community package) * — desktop mode only
 
 > \* Community packages from [patrickjaja.github.io](https://github.com/patrickjaja) — not official Anthropic releases. Review before installing.
 
@@ -448,7 +448,7 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
   - n8n/better-ccflare bound to 127.0.0.1 only — never exposed to network
   - Compliance audit: verifies root lock, PermitRootLogin setting, Tailscale, UFW rules
 - **Desktop-only skipped on VPS** — maim, xdotool (X11), JetBrainsMono font, audio build deps, spotify_player, Claude Desktop GUI
-- **Removed entirely** — Claude Cowork Service (not needed on modern VPS)
+- **VPS-skipped** — Claude Desktop and Claude Cowork Service are desktop-only; skipped in VPS mode
 - **Supply chain allowlist extended** — Includes all repos added by titan-setup (Google Cloud, Aqua, HashiCorp, GitHub, Infisical, LaunchPad)
 
 **Claude Code Flags:**

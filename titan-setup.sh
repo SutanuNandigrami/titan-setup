@@ -1071,6 +1071,16 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else
     ok "Claude Desktop (exists)"
   fi
+
+  # ─── Claude Cowork Service (desktop only — community package) ───
+  if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
+    echo "  Installing Claude Cowork Service..."
+    curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
+    sudo apt install -y claude-cowork-service
+    ok "Claude Cowork Service"
+  else
+    ok "Claude Cowork Service (exists)"
+  fi
 fi
 
 
