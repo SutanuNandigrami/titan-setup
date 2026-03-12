@@ -364,6 +364,65 @@ SERVICEEOF
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
+# better-ccflare — Claude Code load balancer proxy (multi-account, rate-limit avoidance)
+# Distributes requests across Claude OAuth, Vertex AI, Z.ai, OpenRouter, local models
+# Dashboard: http://localhost:8080 | Docs: https://github.com/tombii/better-ccflare
+if ! command -v better-ccflare &>/dev/null; then
+  bun install -g better-ccflare 2>/dev/null && ok "better-ccflare" || warn "better-ccflare"
+else
+  ok "better-ccflare (exists)"
+fi
+
+# Systemd user service for better-ccflare (runs on port 8080)
+mkdir -p "$HOME/.config/systemd/user"
+cat > "$HOME/.config/systemd/user/better-ccflare.service" << 'SERVICEEOF'
+[Unit]
+Description=better-ccflare Claude load balancer proxy
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.bun/bin/better-ccflare --serve --port 8080
+Restart=on-failure
+RestartSec=5
+Environment="PORT=8080"
+Environment="LB_STRATEGY=session"
+Environment="LOG_LEVEL=INFO"
+
+[Install]
+WantedBy=default.target
+SERVICEEOF
+
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable better-ccflare 2>/dev/null || true
+systemctl --user start better-ccflare 2>/dev/null || true
+ok "better-ccflare service (http://localhost:8080)"
+
+# Interactive: configure Claude Code to route through the proxy
+echo ""
+echo -e "  ${CYAN}── better-ccflare: Claude Code integration ──${NC}"
+echo "     Route Claude Code through the load balancer proxy for multi-account support."
+echo "     This adds: export ANTHROPIC_BASE_URL=http://localhost:8080 to ~/.bashrc"
+echo ""
+read -r -p "  Configure Claude Code to use better-ccflare proxy? [y/N] " CCFLARE_SETUP
+if [[ "${CCFLARE_SETUP:-}" =~ ^[Yy] ]]; then
+  if ! grep -q 'ANTHROPIC_BASE_URL.*8080' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" << 'ENVEOF'
+
+# better-ccflare proxy for Claude Code (multi-account load balancer)
+export ANTHROPIC_BASE_URL=http://localhost:8080
+ENVEOF
+    ok "ANTHROPIC_BASE_URL=http://localhost:8080 added to ~/.bashrc"
+  else
+    ok "ANTHROPIC_BASE_URL already configured in ~/.bashrc"
+  fi
+  export ANTHROPIC_BASE_URL=http://localhost:8080
+  echo ""
+  echo -e "  ${CYAN}Next: add accounts to the proxy:${NC}"
+  echo "    better-ccflare --add-account myaccount --mode claude-oauth --priority 0"
+  echo "    better-ccflare --list"
+fi
+
 command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { bun install -g notebooklm-cli 2>/dev/null && ok "notebooklm-cli" || warn "notebooklm-cli"; }
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { bun install -g @kilocode/cli 2>/dev/null && ok "kilocode" || warn "kilocode"; }
 command -v vercel &>/dev/null && ok "vercel (exists)" || { bun install -g vercel 2>/dev/null && ok "vercel" || warn "vercel"; }
@@ -3152,3 +3211,21 @@ echo -e "
     Go CLIs     → go install <path>@latest
     ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
 "
+
+# Open dashboards in browser on GUI systems; print URLs on headless VPS
+if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+  if command -v xdg-open &>/dev/null; then
+    section "Opening dashboards"
+    xdg-open "http://localhost:5678" 2>/dev/null & disown
+    ok "n8n:            http://localhost:5678"
+    xdg-open "http://localhost:8080" 2>/dev/null & disown
+    ok "better-ccflare: http://localhost:8080"
+  fi
+else
+  section "Dashboards (headless)"
+  echo "  n8n:              http://localhost:5678"
+  echo "  better-ccflare:   http://localhost:8080"
+  echo ""
+  echo "  SSH tunnel access:"
+  echo "    ssh -L 8080:localhost:8080 -L 5678:localhost:5678 user@your-vps"
+fi

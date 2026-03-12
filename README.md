@@ -420,7 +420,15 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - Added: `claude-agent-sdk` via uv — programmatic agent building
 - Total: 155+ CLI tools, 11 skills, 6 rules, 11 commands, 13 hook events, 1 template, 3 agents, 3 plugins, 18 env vars
 
-### v3.9 (current) — Context audit: skill scoping + JSONL pruning
+### v3.10 (current) — better-ccflare: multi-account Claude load balancer
+
+- **Added:** `better-ccflare` — Claude Code load balancer proxy; distributes requests across multiple accounts (Claude OAuth, Vertex AI, Z.ai, OpenRouter, local) to avoid rate limiting
+- **Added:** Systemd user service `better-ccflare.service` auto-starts on login (port 8080)
+- **Added:** Interactive prompt during install: opts in to `ANTHROPIC_BASE_URL=http://localhost:8080` in `~/.bashrc` to route Claude Code through the proxy
+- **Added:** Post-install dashboard launcher: GUI systems auto-open `http://localhost:8080` (better-ccflare) and `http://localhost:5678` (n8n) in browser; headless VPS prints URLs + SSH tunnel command
+- **Note:** Account setup is post-install: `better-ccflare --add-account name --mode claude-oauth --priority 0`
+
+### v3.9 — Context audit: skill scoping + JSONL pruning
 
 - **Fixed:** 4 large skills (vibesec 758L, tdd 371L, nlm-cli 350L, systematic-debugging 296L) had no `paths:` frontmatter — per bug #14882, all skill content loads at startup; added `paths:` scoping so each skill only loads when relevant file types are open
 - **Fixed:** `trailofbits-modern-python` had SKILL.md buried at `skills/modern-python/SKILL.md` — Claude Code couldn't load it; created root `SKILL.md` with proper `paths:` scoping for Python files
