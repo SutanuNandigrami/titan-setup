@@ -643,6 +643,18 @@ fi
 # Update Rust first
 run_q rustup update stable
 
+# cargo-binstall — download pre-built binaries instead of compiling from source
+# Reduces cargo phase from hours to minutes on VPS
+if ! command -v cargo-binstall &>/dev/null; then
+  echo -n "  cargo-binstall..."
+  curl -L --proto '=https' --tlsv1.2 -sSf \
+    https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-releases.sh \
+    | bash -s -- -y >> "$LOG_FILE" 2>&1 \
+    && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠ (will compile from source)${NC}"
+else
+  ok "cargo-binstall (exists)"
+fi
+
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat broot zoxide xsv htmlq
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
@@ -659,12 +671,12 @@ for crate in "${CARGO_CRATES[@]}"; do
     continue
   fi
   echo -n "  $crate..."
-  if run_q cargo install "$crate"; then
+  if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet "$crate"; then
     echo -e " ${GREEN}✓${NC}"
   elif run_q cargo install "$crate" --locked; then
-    echo -e " ${GREEN}✓ (locked)${NC}"
+    echo -e " ${GREEN}✓ (compiled)${NC}"
   else
-    echo -e " ${YELLOW}⚠ failed (try: cargo install $crate)${NC}"
+    echo -e " ${YELLOW}⚠ failed (try: cargo binstall $crate)${NC}"
     ((CARGO_FAIL++)) || true
   fi
 done
@@ -691,25 +703,25 @@ else ok "parry (exists)"; fi
 if [[ "$INSTALL_MODE" == "desktop" ]]; then
   if ! command -v spotify_player &>/dev/null; then
     echo -n "  spotify_player..."
-    if run_q cargo install spotify_player; then
+    if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet spotify_player; then
       echo -e " ${GREEN}✓${NC}"
     elif run_q cargo install spotify_player --locked; then
-      echo -e " ${GREEN}✓${NC} (locked)"
+      echo -e " ${GREEN}✓${NC} (compiled)"
     else
-      echo -e " ${YELLOW}⚠ build failed — try: cargo install spotify_player manually${NC}"
+      echo -e " ${YELLOW}⚠ build failed — try: cargo binstall spotify_player${NC}"
     fi
   else ok "spotify_player (exists)"; fi
 fi
 
-# nushell — structured data shell (large compile, separate from batch)
+# nushell — structured data shell (large compile; binstall saves ~10 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  if run_q cargo install nu; then
+  if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet nu; then
     echo -e " ${GREEN}✓${NC}"
   elif run_q cargo install nu --locked; then
-    echo -e " ${GREEN}✓ (locked)${NC}"
+    echo -e " ${GREEN}✓ (compiled)${NC}"
   else
-    echo -e " ${YELLOW}⚠ build failed — try: cargo install nu manually${NC}"
+    echo -e " ${YELLOW}⚠ build failed — try: cargo binstall nu${NC}"
   fi
 else ok "nu (exists)"; fi
 
