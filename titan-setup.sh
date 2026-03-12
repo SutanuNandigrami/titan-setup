@@ -909,6 +909,16 @@ if ! command -v helm &>/dev/null; then
     && ok "helm" || warn "helm install failed"
 else ok "helm (exists)"; fi
 
+# gcloud CLI
+if ! command -v gcloud &>/dev/null; then
+  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+  sudo apt update -qq && sudo apt install -y -qq google-cloud-cli
+  ok "gcloud"
+else ok "gcloud (exists)"; fi
+
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
