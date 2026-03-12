@@ -35,13 +35,13 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 # ─── CLI Options ───
 ENGINEER_NAME=""
 DRY_RUN=false
+VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
 CCFLARE_PROXY=false
 CCFLARE_LOGLEVEL="INFO"
 CCFLARE_OAUTH_ACCOUNT=""
-CCFLARE_VERTEX_ACCOUNT=false
 
 usage() {
   cat <<USAGE
@@ -50,6 +50,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --name NAME              Your name for Claude config (default: \$(whoami))
   --dry-run                Print what would be done without making changes
+  -v, --verbose            Show all subprocess output (default: quiet, logs to file)
 
   better-ccflare proxy options:
   --ccflare-skip           Skip better-ccflare install entirely
@@ -58,7 +59,6 @@ Options:
   --ccflare-proxy          Auto-enable ANTHROPIC_BASE_URL without prompting
   --ccflare-loglevel LVL   Log level: DEBUG|INFO|WARN|ERROR (default: INFO)
   --ccflare-oauth NAME     Pre-add a Claude OAuth account with given name
-  --ccflare-vertex         Pre-add a Vertex AI account (uses GCP env vars)
 
   -h, --help               Show this help message
 
@@ -75,13 +75,13 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
     --dry-run)         DRY_RUN=true; shift ;;
+    -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
     --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
     --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
     --ccflare-proxy)   CCFLARE_PROXY=true; shift ;;
     --ccflare-loglevel) [[ $# -ge 2 ]] || { fail "--ccflare-loglevel requires a value"; usage; }; CCFLARE_LOGLEVEL="$2"; shift 2 ;;
     --ccflare-oauth)   [[ $# -ge 2 ]] || { fail "--ccflare-oauth requires a value"; usage; }; CCFLARE_OAUTH_ACCOUNT="$2"; shift 2 ;;
-    --ccflare-vertex)  CCFLARE_VERTEX_ACCOUNT=true; shift ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
   esac
@@ -98,6 +98,12 @@ if $DRY_RUN; then
   exit 0
 fi
 
+# ─── Log file for quiet mode ───
+LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+# run_q: run a command, routing output to log file unless --verbose
+run_q() { if $VERBOSE; then "$@"; else "$@" >> "$LOG_FILE" 2>&1; fi; }
+echo "# titan-setup log — $(date)" > "$LOG_FILE"
+
 # ─── Temp directory for downloads ───
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -112,9 +118,10 @@ esac
 
 section "Phase 1/6 — System Prerequisites"
 
-sudo apt update && sudo apt upgrade -y
+run_q sudo apt update
+run_q sudo apt upgrade -y
 
-sudo apt install -y \
+run_q sudo apt install -y \
   curl wget git build-essential unzip software-properties-common \
   lsb-release apt-transport-https gnupg ca-certificates \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
@@ -124,7 +131,7 @@ sudo apt install -y \
   universal-ctags chafa \
   libclang-dev cmake libxml2-dev libcurl4-openssl-dev
 
-sudo apt autoremove -y
+run_q sudo apt autoremove -y
 
 # ─── JetBrains Mono Nerd Font (required for Powerline statusline) ───
 if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
@@ -316,8 +323,10 @@ done
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
-# claude-agent-sdk is a library (not a CLI tool) — install to user site-packages (uv pip --system blocked on Ubuntu 24.04 externally-managed Python)
-python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || { pip3 install --user --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: pip3 install --user claude-agent-sdk)"; }
+# claude-agent-sdk is a library (not a CLI tool) — needs --break-system-packages on Ubuntu 24.04 externally-managed Python
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || \
+  { pip3 install --user --break-system-packages --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || \
+    warn "claude-agent-sdk (install manually: pip3 install --user --break-system-packages claude-agent-sdk)"; }
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
 
@@ -330,16 +339,16 @@ for tool in "${BUN_TOOLS[@]}"; do
     ok "$tool (exists)"
   else
     echo -n "  Installing $tool..."
-    bun install -g "$tool" &>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+    run_q bun install -g "$tool" && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
   fi
 done
 
-command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { bun install -g @google/gemini-cli 2>/dev/null && ok "gemini-cli" || warn "gemini-cli"; }
-command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { bun install -g @mermaid-js/mermaid-cli 2>/dev/null && ok "mermaid-cli" || warn "mermaid-cli"; }
+command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install -g @google/gemini-cli && ok "gemini-cli" || warn "gemini-cli"; }
+command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }
 
 # playwright — browser automation and E2E testing
 if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
-  bun install -g playwright 2>/dev/null && ok "playwright" || warn "playwright"
+  run_q bun install -g playwright && ok "playwright" || warn "playwright"
   # Install chromium browser (skip if no display or CI)
   if command -v playwright &>/dev/null; then
     playwright install chromium 2>/dev/null && ok "playwright chromium" || warn "playwright chromium (install manually: playwright install chromium)"
@@ -350,7 +359,13 @@ fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
 if command -v docker &>/dev/null; then
-  # Try without sudo first, fall back to sudo (user may not be in docker group yet)
+  # Add user to docker group (takes effect after re-login)
+  sudo usermod -aG docker "$USER" 2>/dev/null || true
+
+  # Enable systemd linger so user services start at boot without login
+  loginctl enable-linger "$USER" 2>/dev/null || true
+
+  # Pull image (docker group may not apply yet in this session — use sudo if needed)
   if docker pull n8nio/n8n:latest 2>/dev/null || sudo docker pull n8nio/n8n:latest 2>/dev/null; then
     ok "n8n docker image"
   else
@@ -387,6 +402,9 @@ SERVICEEOF
   systemctl --user enable n8n 2>/dev/null || true
   systemctl --user start n8n 2>/dev/null || true
   ok "n8n service (systemctl --user status n8n | http://localhost:5678)"
+  if ! groups | grep -qw docker; then
+    warn "n8n: re-login required for docker group — run: newgrp docker"
+  fi
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
@@ -411,7 +429,7 @@ if $CCFLARE_SKIP; then
 else
   # Phase A: Install
   if ! command -v better-ccflare &>/dev/null; then
-    bun install -g better-ccflare 2>/dev/null && ok "better-ccflare" || warn "better-ccflare"
+    run_q bun install -g better-ccflare && ok "better-ccflare" || warn "better-ccflare"
   else
     ok "better-ccflare (exists)"
   fi
@@ -460,62 +478,48 @@ SERVICEEOF
 
   # Phase D: Provider account setup — flag-driven first, then interactive menu
   if [[ -n "$CCFLARE_OAUTH_ACCOUNT" ]]; then
-    better-ccflare --add-account "$CCFLARE_OAUTH_ACCOUNT" --mode claude-oauth --priority 0 2>/dev/null \
-      && ok "account: $CCFLARE_OAUTH_ACCOUNT (claude-oauth, priority 0)" \
-      || warn "account: $CCFLARE_OAUTH_ACCOUNT (may need: better-ccflare --add-account)"
-  fi
-
-  if $CCFLARE_VERTEX_ACCOUNT; then
-    _vname="vertex-${CCFLARE_OAUTH_ACCOUNT:-claude}"
-    ANTHROPIC_VERTEX_PROJECT_ID="${ANTHROPIC_VERTEX_PROJECT_ID:-}" \
-    CLOUD_ML_REGION="${CLOUD_ML_REGION:-global}" \
-      better-ccflare --add-account "$_vname" --mode vertex-ai --priority 10 2>/dev/null \
-      && ok "account: $_vname (vertex-ai)" \
-      || warn "account: $_vname (needs ANTHROPIC_VERTEX_PROJECT_ID env var)"
+    better-ccflare --add-account "$CCFLARE_OAUTH_ACCOUNT" --mode claude-oauth --priority 0 2>&1 | grep -v '^\[dotenv' || true
+    ok "account: $CCFLARE_OAUTH_ACCOUNT (claude-oauth, priority 0)"
   fi
 
   # Interactive provider menu — shown when no flag-based accounts were added
-  if [[ -z "$CCFLARE_OAUTH_ACCOUNT" ]] && ! $CCFLARE_VERTEX_ACCOUNT; then
+  if [[ -z "$CCFLARE_OAUTH_ACCOUNT" ]]; then
     echo ""
     echo -e "  ${CYAN}── better-ccflare: Add provider accounts ──${NC}"
     echo "  Accounts define which Claude providers to load balance across."
-    echo "  You can add them now or later with: better-ccflare --add-account"
+    echo "  You can add them now or later: better-ccflare --add-account NAME --mode MODE"
     echo ""
-    echo "    1) Claude OAuth (Pro/Team/Max — recommended)"
-    echo "    2) Vertex AI    (Google Cloud)"
-    echo "    3) Z.ai         (higher rate limits, ~3x quota)"
-    echo "    4) OpenAI-compatible  (OpenRouter, Together AI, Ollama, local)"
-    echo "    5) Anthropic-compatible  (custom self-hosted endpoint)"
+    echo "    1) Claude OAuth        (Pro/Team/Max — recommended)"
+    echo "    2) Console             (Claude API key OAuth)"
+    echo "    3) Z.ai                (higher rate limits, API key)"
+    echo "    4) AWS Bedrock         (AWS profile from ~/.aws/credentials)"
+    echo "    5) Kilo                (Kilo Gateway, API key)"
+    echo "    6) Minimax             (API key)"
+    echo "    7) NanoGPT             (API key)"
+    echo "    8) OpenAI-compatible   (OpenRouter, Together AI, Ollama, local)"
+    echo "    9) Anthropic-compatible (custom self-hosted endpoint)"
     echo "    s) Skip — configure later"
     echo ""
 
-    _CCFLARE_CONTINUE=true
-    while $_CCFLARE_CONTINUE; do
-      read -r -p "  Add provider [1-5/s]: " _PROV
-      _ACCT_NAME="" _ACCT_PRI="" _KEY="" _ENDPOINT=""
+    while true; do
+      read -r -p "  Add provider [1-9/s]: " _PROV
+      _ACCT_NAME="" _ACCT_PRI="" _KEY="" _ENDPOINT="" _PROFILE=""
       case "${_PROV:-s}" in
         1)
           read -r -p "    Account name [claude-primary]: " _ACCT_NAME
           _ACCT_NAME="${_ACCT_NAME:-claude-primary}"
           read -r -p "    Priority 0-100 [0]: " _ACCT_PRI
           _ACCT_PRI="${_ACCT_PRI:-0}"
-          better-ccflare --add-account "$_ACCT_NAME" --mode claude-oauth --priority "$_ACCT_PRI" 2>/dev/null \
-            && ok "account: $_ACCT_NAME (claude-oauth, priority $_ACCT_PRI)" \
-            || warn "account: $_ACCT_NAME"
+          better-ccflare --add-account "$_ACCT_NAME" --mode claude-oauth --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+          ok "account: $_ACCT_NAME (claude-oauth, priority $_ACCT_PRI)"
           ;;
         2)
-          read -r -p "    Account name [vertex-claude]: " _ACCT_NAME
-          _ACCT_NAME="${_ACCT_NAME:-vertex-claude}"
-          read -r -p "    GCP Project ID [${ANTHROPIC_VERTEX_PROJECT_ID:-}]: " _VTX_PROJ
-          _VTX_PROJ="${_VTX_PROJ:-${ANTHROPIC_VERTEX_PROJECT_ID:-}}"
-          read -r -p "    Region [global]: " _VTX_REGION
-          _VTX_REGION="${_VTX_REGION:-global}"
-          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
-          _ACCT_PRI="${_ACCT_PRI:-10}"
-          ANTHROPIC_VERTEX_PROJECT_ID="$_VTX_PROJ" CLOUD_ML_REGION="$_VTX_REGION" \
-            better-ccflare --add-account "$_ACCT_NAME" --mode vertex-ai --priority "$_ACCT_PRI" 2>/dev/null \
-            && ok "account: $_ACCT_NAME (vertex-ai, project=$_VTX_PROJ)" \
-            || warn "account: $_ACCT_NAME"
+          read -r -p "    Account name [claude-console]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-claude-console}"
+          read -r -p "    Priority 0-100 [5]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-5}"
+          better-ccflare --add-account "$_ACCT_NAME" --mode console --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+          ok "account: $_ACCT_NAME (console, priority $_ACCT_PRI)"
           ;;
         3)
           read -r -p "    Account name [zai-account]: " _ACCT_NAME
@@ -524,13 +528,62 @@ SERVICEEOF
           read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
           _ACCT_PRI="${_ACCT_PRI:-10}"
           if [[ -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --provider z-ai --api-key "$_KEY" --priority "$_ACCT_PRI" 2>/dev/null \
-              && ok "account: $_ACCT_NAME (z.ai, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+            better-ccflare --add-account "$_ACCT_NAME" --mode zai --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (z.ai, priority $_ACCT_PRI)"
           else
             warn "skipped — no API key provided"
           fi
           ;;
         4)
+          read -r -p "    Account name [bedrock]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-bedrock}"
+          read -r -p "    AWS profile name [default]: " _PROFILE
+          _PROFILE="${_PROFILE:-default}"
+          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-10}"
+          better-ccflare --add-account "$_ACCT_NAME" --mode bedrock --profile "$_PROFILE" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+          ok "account: $_ACCT_NAME (bedrock, profile=$_PROFILE)"
+          ;;
+        5)
+          read -r -p "    Account name [kilo]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-kilo}"
+          read -r -p "    Kilo API key: " _KEY
+          read -r -p "    Priority 0-100 [10]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-10}"
+          if [[ -n "$_KEY" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --mode kilo --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (kilo, priority $_ACCT_PRI)"
+          else
+            warn "skipped — no API key provided"
+          fi
+          ;;
+        6)
+          read -r -p "    Account name [minimax]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-minimax}"
+          read -r -p "    Minimax API key: " _KEY
+          read -r -p "    Priority 0-100 [20]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-20}"
+          if [[ -n "$_KEY" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --mode minimax --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (minimax, priority $_ACCT_PRI)"
+          else
+            warn "skipped — no API key provided"
+          fi
+          ;;
+        7)
+          read -r -p "    Account name [nanogpt]: " _ACCT_NAME
+          _ACCT_NAME="${_ACCT_NAME:-nanogpt}"
+          read -r -p "    NanoGPT API key: " _KEY
+          read -r -p "    Priority 0-100 [20]: " _ACCT_PRI
+          _ACCT_PRI="${_ACCT_PRI:-20}"
+          if [[ -n "$_KEY" ]]; then
+            better-ccflare --add-account "$_ACCT_NAME" --mode nanogpt --api-key "$_KEY" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (nanogpt, priority $_ACCT_PRI)"
+          else
+            warn "skipped — no API key provided"
+          fi
+          ;;
+        8)
           read -r -p "    Account name [openrouter]: " _ACCT_NAME
           _ACCT_NAME="${_ACCT_NAME:-openrouter}"
           echo "    Common endpoints:"
@@ -542,14 +595,14 @@ SERVICEEOF
           read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
           _ACCT_PRI="${_ACCT_PRI:-50}"
           if [[ -n "$_ENDPOINT" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --provider openai-compatible \
-              --api-key "${_KEY:-dummy-key}" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>/dev/null \
-              && ok "account: $_ACCT_NAME (openai-compatible, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+            better-ccflare --add-account "$_ACCT_NAME" --mode openai-compatible \
+              --api-key "${_KEY:-dummy-key}" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (openai-compatible, priority $_ACCT_PRI)"
           else
             warn "skipped — no endpoint provided"
           fi
           ;;
-        5)
+        9)
           read -r -p "    Account name [custom-api]: " _ACCT_NAME
           _ACCT_NAME="${_ACCT_NAME:-custom-api}"
           read -r -p "    Endpoint URL: " _ENDPOINT
@@ -557,28 +610,21 @@ SERVICEEOF
           read -r -p "    Priority 0-100 [50]: " _ACCT_PRI
           _ACCT_PRI="${_ACCT_PRI:-50}"
           if [[ -n "$_ENDPOINT" && -n "$_KEY" ]]; then
-            better-ccflare --add-account "$_ACCT_NAME" --provider anthropic-compatible \
-              --api-key "$_KEY" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>/dev/null \
-              && ok "account: $_ACCT_NAME (anthropic-compatible, priority $_ACCT_PRI)" || warn "account: $_ACCT_NAME"
+            better-ccflare --add-account "$_ACCT_NAME" --mode anthropic-compatible \
+              --api-key "$_KEY" --endpoint "$_ENDPOINT" --priority "$_ACCT_PRI" 2>&1 | grep -v '^\[dotenv' || true
+            ok "account: $_ACCT_NAME (anthropic-compatible, priority $_ACCT_PRI)"
           else
             warn "skipped — need both endpoint and API key"
           fi
           ;;
         s|S|"")
-          _CCFLARE_CONTINUE=false
+          break
           ;;
         *)
-          echo "    Invalid choice — enter 1-5 or s"
+          echo "    Invalid choice — enter 1-9 or s"
           ;;
       esac
-      if $_CCFLARE_CONTINUE; then
-        echo ""
-        read -r -p "  Add another provider? [1-5/s]: " _PROV_NEXT
-        case "${_PROV_NEXT:-s}" in
-          s|S|"") _CCFLARE_CONTINUE=false ;;
-          *) _PROV="$_PROV_NEXT" ;;
-        esac
-      fi
+      echo ""
     done
   fi
 
@@ -587,19 +633,19 @@ SERVICEEOF
   better-ccflare --list 2>/dev/null || true
 fi  # end $CCFLARE_SKIP
 
-command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { bun install -g notebooklm-cli 2>/dev/null && ok "notebooklm-cli" || warn "notebooklm-cli"; }
-command -v kilocode &>/dev/null && ok "kilocode (exists)" || { bun install -g @kilocode/cli 2>/dev/null && ok "kilocode" || warn "kilocode"; }
-command -v vercel &>/dev/null && ok "vercel (exists)" || { bun install -g vercel 2>/dev/null && ok "vercel" || warn "vercel"; }
+command -v nlm &>/dev/null && ok "notebooklm-cli (exists)" || { run_q bun install -g notebooklm-cli && ok "notebooklm-cli" || warn "notebooklm-cli"; }
+command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
+command -v vercel &>/dev/null && ok "vercel (exists)" || { run_q bun install -g vercel && ok "vercel" || warn "vercel"; }
 
 # ─── Rust tools via cargo ───
 echo -e "\n  ${CYAN}Rust tools (cargo):${NC}"
 echo "  This takes a while on first install (compiling from source)..."
 
 # Dependencies needed for spotify_player and other audio/TLS crates
-sudo apt install -y libpulse-dev libasound2-dev libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed — spotify_player may not compile"
+run_q sudo apt install -y libpulse-dev libasound2-dev libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed — spotify_player may not compile"
 
 # Update Rust first
-rustup update stable
+run_q rustup update stable
 
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat broot zoxide xsv htmlq
@@ -612,9 +658,9 @@ CARGO_CRATES=(
 CARGO_FAIL=0
 for crate in "${CARGO_CRATES[@]}"; do
   echo -n "  $crate..."
-  if cargo install "$crate" &>/dev/null; then
+  if run_q cargo install "$crate"; then
     echo -e " ${GREEN}✓${NC}"
-  elif cargo install "$crate" --locked &>/dev/null; then
+  elif run_q cargo install "$crate" --locked; then
     echo -e " ${GREEN}✓ (locked)${NC}"
   else
     echo -e " ${YELLOW}⚠ failed (try: cargo install $crate)${NC}"
@@ -632,20 +678,20 @@ ok "Cargo tools installed/updated"
 
 # recall — spaced repetition flashcard CLI (zippoxer/recall)
 if ! command -v recall &>/dev/null; then
-  cargo install --git https://github.com/zippoxer/recall 2>/dev/null && ok "recall" || warn "recall"
+  run_q cargo install --git https://github.com/zippoxer/recall && ok "recall" || warn "recall"
 else ok "recall (exists)"; fi
 
 # parry — prompt injection scanner
 if ! command -v parry &>/dev/null; then
-  cargo install --git https://github.com/vaporif/parry 2>/dev/null && ok "parry" || warn "parry"
+  run_q cargo install --git https://github.com/vaporif/parry && ok "parry" || warn "parry"
 else ok "parry (exists)"; fi
 
 # spotify_player — actively maintained Spotify TUI (replaces abandoned spotify-tui)
 if ! command -v spotify_player &>/dev/null; then
   echo -n "  spotify_player..."
-  if cargo install spotify_player 2>/dev/null; then
+  if run_q cargo install spotify_player; then
     echo -e " ${GREEN}✓${NC}"
-  elif cargo install spotify_player --locked 2>/dev/null; then
+  elif run_q cargo install spotify_player --locked; then
     echo -e " ${GREEN}✓${NC} (locked)"
   else
     echo -e " ${YELLOW}⚠ build failed — try: cargo install spotify_player manually${NC}"
@@ -655,9 +701,9 @@ else ok "spotify_player (exists)"; fi
 # nushell — structured data shell (large compile, separate from batch)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  if cargo install nu 2>/dev/null; then
+  if run_q cargo install nu; then
     echo -e " ${GREEN}✓${NC}"
-  elif cargo install nu --locked 2>/dev/null; then
+  elif run_q cargo install nu --locked; then
     echo -e " ${GREEN}✓ (locked)${NC}"
   else
     echo -e " ${YELLOW}⚠ build failed — try: cargo install nu manually${NC}"
@@ -710,12 +756,12 @@ for name in "${!GO_MAP[@]}"; do
     ok "$name (exists)"
   else
     echo -n "  Installing $name..."
-    if go install "${GO_MAP[$name]}" &>/dev/null; then
+    if run_q go install "${GO_MAP[$name]}"; then
       echo -e " ${GREEN}✓${NC}"
     else
       # Retry once — go proxy connections can be flaky
       sleep 2
-      if go install "${GO_MAP[$name]}" &>/dev/null; then
+      if run_q go install "${GO_MAP[$name]}"; then
         echo -e " ${GREEN}✓ (retry)${NC}"
       else
         GO_FAILED+=("$name")
@@ -735,7 +781,7 @@ if command -v age &>/dev/null || [ -f "$HOME/go/bin/age" ]; then
   ok "age (exists)"
 else
   echo -n "  Installing age..."
-  go install filippo.io/age/cmd/...@latest &>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  run_q go install filippo.io/age/cmd/...@latest && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
 # lazydocker — go install broken (Docker API conflict), use binary release
@@ -780,7 +826,7 @@ if ! command -v claude-esp &>/dev/null; then
 else ok "claude-esp (exists)"; fi
 # ccstatusline — Claude Code status line (npm/bun package, NOT cargo)
 if ! command -v ccstatusline &>/dev/null; then
-  bun install -g ccstatusline 2>/dev/null && ok "ccstatusline" || warn "ccstatusline"
+  run_q bun install -g ccstatusline && ok "ccstatusline" || warn "ccstatusline"
 else ok "ccstatusline (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
 # Note: go install fails due to go.mod module path mismatch — use binary release instead
@@ -793,11 +839,6 @@ if ! command -v claude-squad &>/dev/null; then
     && rm -f /tmp/cs.tar.gz \
     && ok "claude-squad" || warn "claude-squad"
 else ok "claude-squad (exists)"; fi
-# episodic-memory — semantic search over past Claude Code sessions (obra/episodic-memory)
-# Installs CLI only; plugin integration requires two interactive commands inside Claude Code (see post-install note)
-if ! command -v episodic-memory &>/dev/null; then
-  bun install -g episodic-memory 2>/dev/null && ok "episodic-memory" || warn "episodic-memory"
-else ok "episodic-memory (exists)"; fi
 
 
 # ─── Binary installs (no package manager available) ───
@@ -955,8 +996,9 @@ else ok "grype (exists)"; fi
 # step-cli — certificate inspection, generation, and TLS debugging
 if ! command -v step &>/dev/null; then
   STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-  curl -sL -o "$WORKDIR/step-cli.deb" "https://dl.smallstep.com/gh-release/cli/gh-release-header/v${STEP_VERSION}/step-cli_${STEP_VERSION}_${ARCH_AMD}.deb" \
-    && sudo dpkg -i "$WORKDIR/step-cli.deb" &>/dev/null \
+  curl -sL -o "$WORKDIR/step-cli.deb" \
+    "https://github.com/smallstep/cli/releases/download/v${STEP_VERSION}/step-cli_${STEP_VERSION}_${ARCH_AMD}.deb" \
+    && sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null \
     && ok "step-cli ${STEP_VERSION}" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
@@ -969,11 +1011,11 @@ else ok "comby (exists)"; fi
 
 # runme — execute code blocks from Markdown runbooks
 if ! command -v runme &>/dev/null; then
-  RUNME_VERSION=$(curl -s https://api.github.com/repos/stateful/runme/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-  curl -sL -o "$WORKDIR/runme.tar.gz" "https://dl.runme.dev/runme/v${RUNME_VERSION}/runme_linux_${ARCH_AMD}.tar.gz" \
-    && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" \
+  curl -sL -o "$WORKDIR/runme.tar.gz" \
+    "https://github.com/stateful/runme/releases/latest/download/runme_linux_${ARCH_AMD}.tar.gz" \
+    && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" runme 2>/dev/null \
     && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
-    && ok "runme ${RUNME_VERSION}" || warn "runme install failed"
+    && ok "runme" || warn "runme install failed"
 else ok "runme (exists)"; fi
 
 
@@ -1028,7 +1070,7 @@ CLAUDE_DIR="$HOME/.claude"
 if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE_DIR/agents" ]; then
   BACKUP="$CLAUDE_DIR.backup.$(date +%s)"
   cp -r "$CLAUDE_DIR" "$BACKUP" 2>/dev/null || true
-  warn "Backed up existing config to $BACKUP"
+  ok "Backed up existing config to $BACKUP"
 fi
 
 mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,commands,agents,hooks,memory,rules,logs,templates}
@@ -3396,4 +3438,8 @@ else
   echo ""
   echo "  SSH tunnel access:"
   echo "    ssh -L ${CCFLARE_PORT}:localhost:${CCFLARE_PORT} -L 5678:localhost:5678 user@your-vps"
+fi
+
+if ! $VERBOSE; then
+  ok "Full install log: $LOG_FILE"
 fi
