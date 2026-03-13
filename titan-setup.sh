@@ -884,6 +884,18 @@ CARGO_CRATES=(
   xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
 )
 
+# rtk (Rust Token Killer) — must install from git, not crates.io (name collision)
+if ! command -v rtk &>/dev/null || ! rtk gain &>/dev/null 2>&1; then
+  echo -n "  rtk (Token Killer)..."
+  if run_q cargo install --git https://github.com/rtk-ai/rtk; then
+    echo -e " ${GREEN}✓${NC}"
+  else
+    echo -e " ${YELLOW}⚠ rtk install failed${NC}"
+  fi
+else
+  ok "rtk (exists)"
+fi
+
 CARGO_FAIL=0
 _CARGO_LIST=$(cargo install --list 2>/dev/null)
 for crate in "${CARGO_CRATES[@]}"; do
@@ -1365,6 +1377,12 @@ if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
 else
   ok "settings.json"
 fi
+# RTK global hook — runs after settings.json is written so it appends, not overwrites
+if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
+  run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" \
+    || warn "rtk init -g failed — run manually: rtk init -g"
+fi
+
 # Inject ANTHROPIC_BASE_URL if better-ccflare is installed (desktop and VPS)
 if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
   jq --arg url "http://127.0.0.1:${CCFLARE_PORT}" '.env.ANTHROPIC_BASE_URL = $url' \
