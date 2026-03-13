@@ -190,7 +190,7 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
   - `TS_AUTHKEY`: Tailscale authentication key (required for VPS mode)
   - `TAILSCALE_PORT`: custom Tailscale port (optional, default 41641)
 
-*Lifecycle hooks (16 events wired, all zero context cost):*
+*Lifecycle hooks (14 events wired, all zero context cost):*
 - `PreToolUse`: block destructive commands (rm -rf, force push, pip, npm, commits on main, chmod 777, kill -9, unsafe piping, infra/k8s/docker destruction)
 - `PreToolUse` (file guard): block edits to .env, credentials, secrets, .pem, .key
 - `PreToolUse` (RTK rewrite): compress verbose command output before it reaches context (60-90% token reduction)
@@ -492,7 +492,7 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - **Fixed:** `tailscale up --reset --operator=$USER` — idempotent on re-runs, non-root user gets management rights
 - **Fixed:** SSH port 22 closure moved to absolute last step — all output (compliance, Setup Complete) prints before session may drop
 
-**Total: 156+ CLI tools, 16 hook events, 73 deny rules**
+**Total: 156+ CLI tools, 14 hook events, 73 deny rules**
 
 ---
 
@@ -531,7 +531,7 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - **Temp script perms** — Fixed `chmod a+rx` on temp script so `sudo -u titan` can read it
 - **Process substitution crash** — `bash <(curl ...)` sets `$0=/dev/fd/63` (a pipe). When script did `exec sudo -u titan bash "$0"`, the new process couldn't access that fd. Script now self-materializes to `/tmp/titan-XXXXXX.sh` (`chmod a+rx`) and re-execs from the real file.
 
-**Total: 155+ CLI tools, 11 inline skills + 3 community, 6 rules, 11 commands, 16 hook events, 5 agents (3 built-in + 5 slots), 3 plugins, 18+ env vars**
+**Total: 155+ CLI tools, 11 inline skills + 3 community, 6 rules, 11 commands, 14 hook events, 5 agents (3 built-in + 5 slots), 3 plugins, 18+ env vars**
 
 ### v3.13 — Token optimization (model routing, JSONL prune, hook fixes)
 
