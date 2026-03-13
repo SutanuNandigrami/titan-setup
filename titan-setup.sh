@@ -1811,59 +1811,24 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
 fi
 
-# Open dashboards in browser on desktop; print Tailscale URLs on VPS
+# ── VPS: lock SSH to Tailscale (silently — summary follows) ────────────────
 if [[ "$INSTALL_MODE" == "vps" ]]; then
-  section "Service URLs (via Tailscale)"
-  if command -v docker &>/dev/null; then
-    echo "  n8n:              https://${TS_HOSTNAME}:5678"
-  fi
-  if ! $CCFLARE_SKIP; then
-    echo "  better-ccflare:   https://${TS_HOSTNAME}:${CCFLARE_PORT}"
-    echo "  Set:  export ANTHROPIC_BASE_URL=https://${TS_HOSTNAME}:${CCFLARE_PORT}"
-  fi
-  echo ""
-  echo "  Claude user: ${CLAUDE_USER}  (su - ${CLAUDE_USER})"
-  echo "  Tailscale SSH: ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
-  echo ""
-  echo -e "  ${YELLOW}⚠ Locking SSH to Tailscale — public port 22 closing.${NC}"
-  echo -e "  ${YELLOW}  This session stays alive. Next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
-  echo ""
-  # ── Lock SSH to Tailscale interface — reload preserves current session ──
   sudo ufw allow in on tailscale0 to any port 22 proto tcp
   sudo ufw delete allow 22/tcp || true
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed"
-
-  # ── Final compliance run (after SSH lock so all checks pass) ───────────
-  echo ""
-  echo -e "  ${CYAN}Compliance check results:${NC}"
-  sudo /usr/local/bin/compliance_check.sh || true
-elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-  if command -v xdg-open &>/dev/null; then
-    section "Opening dashboards"
-    xdg-open "http://localhost:5678" 2>/dev/null & disown
-    ok "n8n:            http://localhost:5678"
-    if ! $CCFLARE_SKIP; then
-      xdg-open "http://localhost:${CCFLARE_PORT}" 2>/dev/null & disown
-      ok "better-ccflare: http://localhost:${CCFLARE_PORT}"
-    fi
-  fi
-else
-  section "Dashboards (headless)"
-  echo "  n8n:              http://localhost:5678"
-  if ! $CCFLARE_SKIP; then
-    echo "  better-ccflare:   http://localhost:${CCFLARE_PORT}"
-  fi
-  echo ""
-  echo "  SSH tunnel access:"
-  echo "    ssh -L ${CCFLARE_PORT}:localhost:${CCFLARE_PORT} -L 5678:localhost:5678 user@your-vps"
+  # Capture compliance output after SSH lock so all checks pass
+  COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 fi
 
-if ! $VERBOSE; then
-  ok "Full install log: $LOG_FILE"
+# ── Desktop: open dashboards silently ──────────────────────────────────────
+if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+  if command -v xdg-open &>/dev/null; then
+    xdg-open "http://localhost:5678" 2>/dev/null & disown
+    ! $CCFLARE_SKIP && { xdg-open "http://localhost:${CCFLARE_PORT}" 2>/dev/null & disown; } || true
+  fi
 fi
 
 section "Setup Complete"
@@ -1871,30 +1836,49 @@ section "Setup Complete"
 echo -e "
   ${GREEN}Everything is installed and configured.${NC}
 
-  ${CYAN}What's running:${NC}
+  ${CYAN}Installed:${NC}
     Package managers: uv, bun, cargo, go, mise
     CLI tools:        ~100 across all managers
-    Claude Code:      native binary (auto-updates)
+    Claude Code:      native binary
     Config:           ~/.claude/ (skills, hooks, commands, agents)
+    Log:              $LOG_FILE
+"
 
-  ${CYAN}Context budget (startup):${NC}
-    CLAUDE.md:    ~1200 tokens (loaded every session)
-    Skills:       ~2-5K tokens (descriptions at startup, full content on trigger)
-    Rules:        ~500 tokens  (6 conditional rules)
-    Commands:     0 tokens     (loaded on /command)
-    Agents:       ~200 tokens  (descriptions only)
-    CLI --help:   0 tokens     (lazy-loaded at runtime)
-    Total:        ~2-7K tokens of 200K context window
-
-  ${CYAN}Next steps:${NC}
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  echo -e "  ${CYAN}Hardening:${NC}"
+  echo "$COMPLIANCE_OUT" | sed 's/^/    /'
+  echo ""
+  echo -e "  ${CYAN}Services (Tailscale):${NC}"
+  command -v docker &>/dev/null && echo "    n8n:           https://${TS_HOSTNAME}:5678"
+  $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
+  echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
+  echo ""
+  echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
+  echo ""
+  echo -e "  ${CYAN}Next steps:${NC}
     source ~/.bashrc
-    claude                    # authenticate
-    claude doctor             # verify health
+    su - ${CLAUDE_USER}
+    claude auth login
+    claude doctor
     cd <your-project>
     /tools                    # see all installed tools
-    /catchup                  # orient to the project
+    /catchup                  # orient to the project"
+else
+  echo -e "  ${CYAN}Services:${NC}
+    n8n:              http://localhost:5678"
+  $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
+  echo ""
+  echo -e "  ${CYAN}Next steps:${NC}
+    source ~/.bashrc
+    claude auth login
+    claude doctor
+    cd <your-project>
+    /tools                    # see all installed tools
+    /catchup                  # orient to the project"
+fi
 
-  ${CYAN}Package manager rules:${NC}
+echo -e "
+  ${CYAN}Package managers:${NC}
     Python CLIs → uv tool install <pkg>
     JS CLIs     → bun install -g <pkg>
     Rust CLIs   → cargo install <crate>
