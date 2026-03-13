@@ -85,7 +85,7 @@ Instead of injecting 8,000 tokens of GitHub MCP schemas, Titan installs `gh` and
 Titan is a modularized bash script (~1860 lines) that transforms a fresh Ubuntu machine into a fully configured Claude Code workstation in one run. Static content (CLAUDE.md, agents, hooks, rules, skills, commands) is extracted to versioned repo files and installed via `install -Dm644/755`, keeping the script lean and updateable.
 
 1. **155+ CLI tools** across 5 package managers (cargo, uv, bun, go, apt) — replacing every common MCP server
-2. **Defense-in-depth safety** — 73 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
+2. **Defense-in-depth safety** — 66 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
 3. **Auto-linting pipeline** — every file write is async-linted (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
 4. **Session persistence** — hooks automatically save/restore session state across conversations via handoff files and persistent memory
 5. **Discovery-based skills** — 11 inline skills + 3 selective community skills, descriptions loaded at startup (~2-5K tokens)
@@ -98,7 +98,7 @@ Titan startup cost:    ~1,700 tokens (CLAUDE.md + memory)
 MCP equivalent:        55,000-134,000 tokens
 Context savings:       98.5%+
 Tools available:       155+ (vs ~20 typical MCP setup)
-Safety rules:          73 deny rules + 17 hook-enforced blocks
+Safety rules:          66 deny rules + 17 hook-enforced blocks
 ```
 
 You get **more tools with less overhead**, and the safety guardrails that MCPs don't provide.
@@ -145,7 +145,7 @@ sqlite-vec (local vector store / codebase indexing)
 trash-cli, tldr, prettier, repomix, gemini-cli, notebooklm-cli, kilocode, vercel, ccstatusline, @mermaid-js/mermaid-cli (mmdc), playwright
 
 **Rust (via `cargo install`):**
-ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, jnv, ouch, hurl, jwt-cli, oha, tree-sitter-cli, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git)
+ripgrep, fd-find, sd, eza, du-dust, bat, broot, zoxide, xsv, htmlq, git-cliff, git-absorb, git-delta, difftastic, onefetch, typos-cli, bandwhich, websocat, bore-cli, procs, bottom, hyperfine, pueue, watchexec-cli, just, starship, atuin, navi, choose, xh, mdbook, jnv, ouch, hurl, jwt-cli, oha, tree-sitter-cli, nu (nushell), recall (from git), parry (from git), spotify_player, claude-tmux (from git), rtk/Rust Token Killer (from git — NOT crates.io)
 
 **Go (via `go install`):**
 lazygit, dive, stern, glow, slides, mkcert, task, nuclei, ffuf, usql, grpcurl, actionlint, osv-scanner, hcloud, sops, doctl, doggo, age, claude-esp, gitleaks, gum, act, shfmt, gron, httpx, subfinder, dnsx, katana, cosign, crane, scc, dasel, claude-squad
@@ -190,9 +190,10 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
   - `TS_AUTHKEY`: Tailscale authentication key (required for VPS mode)
   - `TAILSCALE_PORT`: custom Tailscale port (optional, default 41641)
 
-*Lifecycle hooks (16 events wired, all zero context cost):*
+*Lifecycle hooks (12 events wired, all zero context cost):*
 - `PreToolUse`: block destructive commands (rm -rf, force push, pip, npm, commits on main, chmod 777, kill -9, unsafe piping, infra/k8s/docker destruction)
 - `PreToolUse` (file guard): block edits to .env, credentials, secrets, .pem, .key
+- `PreToolUse` (RTK rewrite): compress verbose command output before it reaches context (60-90% token reduction)
 - `PostToolUse` (lint): async auto-lint (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
 - `PostToolUse` (audit): async JSONL logging of all tool calls
 - `PostToolUseFailure`: async failure logging to `failures.jsonl`
@@ -202,21 +203,18 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 - `SessionStart`: display handoff + memory status + audit log rotation + show loaded agent slots
 - `SessionEnd`: reliable final state capture at session termination (ntfy notification if `NTFY_URL` set)
 - `UserPromptSubmit`: keyword-triggered memory injection (only on recall intent keywords)
-- `TaskCompleted`: log task completions to audit trail
-- `InstructionsLoaded`: track when CLAUDE.md/rules load
-- `ConfigChange`: audit configuration changes mid-session
-- `TeammateIdle`: track agent team coordination events
-- `WorktreeCreate`/`WorktreeRemove`: reserved for future use
 
-*Permissions:* 8 wildcard allow rules, 73 deny rules (Bash, Read, Edit, Write)
+*Permissions:* 1 allow rule (Bash), 7 wildcard allow rules (Read/Edit/Write/Glob/Grep/Skill), 66 deny rules (Bash, Read, Edit, Write)
 
 *Preferences & settings:*
 - `cleanupPeriodDays: 30`: auto-delete conversation files >30 days old
 - `model: opusplan`: Opus in plan mode (Shift+Tab), Sonnet in execution
+- `effortLevel: medium`: balanced reasoning effort per turn
 - `showTurnDuration: true`: timing visibility per response
 - `includeCoAuthoredBy: true`: auto-add Co-Authored-By to commits
 - `respectGitignore: true`: respect .gitignore in file operations
 - Tool search: `auto:5` threshold for deferred tool loading
+- `ANTHROPIC_BASE_URL`: auto-injected to `http://127.0.0.1:PORT` when better-ccflare is installed
 - Plugin/marketplace config preserved across re-runs
 
 **11 Inline Skills** (with `paths:` frontmatter for path-gated loading, ~203 lines always-on):
@@ -467,6 +465,34 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 **Claude Code Flags:**
 - **`--cc-version VERSION`** — Install specific Claude Code version (install/downgrade/reinstall). If set, always runs installer. If blank, skips install when claude already present. Prompts interactively if not supplied.
 - **`--no-autoupdate`** — Patches `settings.json` post-write to add `DISABLE_AUTOUPDATER=1` env var (prevents auto-updates)
+
+### v3.15 — RTK token compression + settings.json validation fixes
+
+**RTK (Rust Token Killer):**
+- **Added:** `rtk` installed from `github.com/rtk-ai/rtk` (NOT crates.io — name collision with Rust Type Kit)
+- **Added:** `rtk init -g --auto-patch` runs after settings.json is written, appending RTK's `PreToolUse` hook without clobbering existing hooks
+- **Impact:** 60-90% token reduction on verbose tool outputs (git, docker, test runners, ls, grep); 71%+ observed in first session
+- **Tracking:** `rtk gain --graph` shows daily savings history
+
+**settings.json fixes (CC v2.0.73+ validation):**
+- **Fixed:** Removed 4 invalid hook events (`ConfigChange`, `InstructionsLoaded`, `TaskCompleted`, `TeammateIdle`) that caused CC to skip the entire settings.json
+- **Fixed:** Permission syntax — `Bash(*)` → `Bash` in allow; all deny `*` → `:*` for prefix matching; removed unsupported middle-wildcard patterns
+- **Added:** `effortLevel: medium` and `showTurnDuration: true` to template
+- **Added:** `ANTHROPIC_BASE_URL` auto-injected into settings.json env block when better-ccflare is installed
+
+**better-ccflare:**
+- **Fixed:** Binary not found after build — changed `bun --cwd repo run build:cli` to `bun --cwd repo/apps/cli run build` (nested `--cwd` was fragile)
+- **Added:** `ANTHROPIC_BASE_URL=http://127.0.0.1:PORT` auto-written to settings.json env block post-install (desktop and VPS)
+
+**VPS hardening fixes:**
+- **Fixed:** `sshd reload` → `restart` as absolute last command — `ListenAddress` binding requires socket rebind
+- **Fixed:** `sshd_config.d/*.conf` drop-in patching — Hetzner's cloud-init override was keeping password auth enabled
+- **Fixed:** `tailscale up --reset --operator=$USER` — idempotent on re-runs, non-root user gets management rights
+- **Fixed:** SSH port 22 closure moved to absolute last step — all output (compliance, Setup Complete) prints before session may drop
+
+**Total: 156+ CLI tools, 12 hook events, 66 deny rules**
+
+---
 
 **Token Optimization (v3.14):**
 - **Skill path-gating** — Added `paths:` frontmatter to all 10 skills + 3 community plugins (brainstorming, verification, writing-plans, episodic-memory, hookify, skill-creator). Reduces always-on context from 3,009 → 203 lines (~93% reduction, ~42K tokens/turn savings)

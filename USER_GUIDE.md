@@ -1494,13 +1494,25 @@ Status bar for Claude Code with Powerline theme. Terminal integration.
 
 > **Example prompt:** "Show Claude Code status in my terminal prompt"
 
+#### rtk (Rust Token Killer)
+Command output compression proxy. Reduces tokens consumed by verbose CLI output.
+
+- Auto-rewrites commands transparently via PreToolUse hook (`git status`, `ls`, `grep`, `docker ps`, test runners, etc.)
+- 60-90% token reduction on verbose outputs
+- `rtk gain --graph` — view daily savings history
+- Installed from `github.com/rtk-ai/rtk` (NOT crates.io — name collision with Rust Type Kit)
+- Hook appended to PreToolUse after settings.json is written — does not clobber existing safety hooks
+
+> **Example prompt:** "Show token savings from rtk this week"
+
 #### better-ccflare
 Load balancer and proxy for multiple Claude accounts. Account switching.
 
 - Route between Claude accounts
 - Load balancing
 - Account management
-- Unified CLI interface
+- `ANTHROPIC_BASE_URL` auto-set in settings.json env block post-install
+- Built from source with NULL constraint patches applied
 
 > **Example prompt:** "Switch to a different Claude account"
 
