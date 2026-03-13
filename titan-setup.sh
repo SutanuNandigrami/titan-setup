@@ -786,7 +786,7 @@ c = c.replace(
 f.write_text(c)
 PYEOF
       mkdir -p "$HOME/.bun/bin"
-      if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC" run build:cli; then
+      if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC/apps/cli" run build; then
         _BCF_DIST="$_BCF_SRC/apps/cli/dist/better-ccflare"
         if [[ -f "$_BCF_DIST" ]]; then
           mkdir -p "$HOME/.bun/bin" "$HOME/.local/bin"
@@ -842,7 +842,7 @@ SERVICEEOF
   echo "    better-ccflare --add-account NAME --mode claude-oauth"
   echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
   echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"
-  echo "  Then set: export ANTHROPIC_BASE_URL=http://${CCFLARE_HOST}:${CCFLARE_PORT}"
+  echo "  ANTHROPIC_BASE_URL is auto-set in settings.json after accounts are added."
 fi  # end $CCFLARE_SKIP
 
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
@@ -1364,6 +1364,13 @@ if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
   ok "settings.json (DISABLE_AUTOUPDATER=1)"
 else
   ok "settings.json"
+fi
+# Inject ANTHROPIC_BASE_URL if better-ccflare is installed (desktop and VPS)
+if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
+  jq --arg url "http://127.0.0.1:${CCFLARE_PORT}" '.env.ANTHROPIC_BASE_URL = $url' \
+    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+  ok "settings.json (ANTHROPIC_BASE_URL → http://127.0.0.1:${CCFLARE_PORT})"
 fi
 
 # ccstatusline config is user-managed via `ccstatusline` TUI editor
