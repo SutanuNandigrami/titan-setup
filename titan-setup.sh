@@ -227,8 +227,14 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
+  # Patch main config AND drop-in dir (e.g. Hetzner's 50-cloud-init.conf overrides main)
   sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
   sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  for _dropin in /etc/ssh/sshd_config.d/*.conf; do
+    [[ -f "$_dropin" ]] || continue
+    sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
+    sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
+  done
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
   ok "SSH hardened (password auth off, root login disabled)"
 
@@ -1818,8 +1824,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  # Capture compliance output after SSH lock so all checks pass
+  # Capture compliance output BEFORE sshd restart (restart runs last, after all output)
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 fi
 
@@ -1885,3 +1890,10 @@ echo -e "
     Go CLIs     → go install <path>@latest
     ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
 "
+
+# ── VPS: restart sshd last — rebinds socket to Tailscale IP only ───────────
+# Must be after all output is printed; will drop this session if connected
+# via public IP (expected — reconnect via Tailscale)
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+fi
