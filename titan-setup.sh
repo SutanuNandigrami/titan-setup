@@ -1431,29 +1431,17 @@ else ok "CLIProxyAPI (exists)"; fi
 section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
 
-# Authenticate Claude Code if not already authenticated.
-# claude auth login (OAuth) is broken on SSH/VPS — readline doesn't register
-# Enter key over SSH PTY (known upstream bug). Use API key flow instead,
-# which works reliably via plain bash `read`.
-if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
-  echo ""
-  echo "  ┌──────────────────────────────────────────────────────────────┐"
-  echo "  │  Claude API key required (OAuth login is broken over SSH)    │"
-  echo "  │  Get your key at: console.anthropic.com → API Keys           │"
-  echo "  └──────────────────────────────────────────────────────────────┘"
-  echo ""
-  read -rs -p "  Paste API key and press Enter (hidden): " _claude_api_key
-  echo ""
-  if [[ -n "$_claude_api_key" ]]; then
-    export ANTHROPIC_API_KEY="$_claude_api_key"
-    # Persist to ~/.bashrc so Claude Code picks it up in future sessions
-    if ! grep -q 'ANTHROPIC_API_KEY' ~/.bashrc 2>/dev/null; then
-      echo "export ANTHROPIC_API_KEY='$_claude_api_key'" >> ~/.bashrc
-    fi
-    ok "ANTHROPIC_API_KEY set"
-  else
-    warn "Skipped — run 'claude auth login' manually after setup"
-  fi
+# claude auth login is broken over SSH (Enter doesn't register — upstream bug)
+# Skip inline auth; plugins are installed below only if already authenticated.
+# After setup: run 'claude auth login' from a fresh terminal prompt (not inside
+# a script), then re-run plugin installs with: claude plugin install hookify
+if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+  warn "Claude not authenticated — plugins will be skipped"
+  echo "  After setup, run 'claude auth login' then:"
+  echo "    claude plugin marketplace add anthropic/claude-plugins-official"
+  echo "    claude plugin install hookify code-review skill-creator"
+  echo "    claude plugin marketplace add obra/superpowers-marketplace"
+  echo "    claude plugin install episodic-memory"
 fi
 
 if ! command -v claude &>/dev/null; then
