@@ -1168,10 +1168,9 @@ if ! command -v gh &>/dev/null; then
   ok "gh"
 else ok "gh (exists)"; fi
 
-# fzf
+# fzf — release assets embed version in filename so latest/download won't work; use go install
 if ! command -v fzf &>/dev/null; then
-  git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf 2>/dev/null \
-    && yes | ~/.fzf/install --all --no-bash --no-zsh --no-fish 2>/dev/null \
+  run_q go install github.com/junegunn/fzf@latest \
     && ok "fzf" || warn "fzf install failed"
 else ok "fzf (exists)"; fi
 
@@ -1241,12 +1240,12 @@ if ! command -v grype &>/dev/null; then
 else ok "grype (exists)"; fi
 
 # step-cli — certificate inspection, generation, and TLS debugging
+# Uses versionless asset name (step-cli_amd64.deb) so latest/download works reliably
 if ! command -v step &>/dev/null; then
-  STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-  curl -sL -o "$WORKDIR/step-cli.deb" \
-    "https://github.com/smallstep/cli/releases/download/v${STEP_VERSION}/step-cli_${STEP_VERSION}_${ARCH_AMD}.deb" \
+  curl -fsSL -o "$WORKDIR/step-cli.deb" \
+    "https://github.com/smallstep/cli/releases/latest/download/step-cli_${ARCH_AMD}.deb" \
     && sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null \
-    && ok "step-cli ${STEP_VERSION}" || warn "step-cli install failed"
+    && ok "step-cli" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
 # comby — structural code search/replace that understands syntax
@@ -1256,10 +1255,10 @@ if ! command -v comby &>/dev/null; then
     && ok "comby" || warn "comby install failed"
 else ok "comby (exists)"; fi
 
-# runme — execute code blocks from Markdown runbooks
+# runme — execute code blocks from Markdown runbooks (repo moved to runmedev org, arch is x86_64)
 if ! command -v runme &>/dev/null; then
-  curl -sL -o "$WORKDIR/runme.tar.gz" \
-    "https://github.com/stateful/runme/releases/latest/download/runme_linux_${ARCH_AMD}.tar.gz" \
+  curl -fsSL -o "$WORKDIR/runme.tar.gz" \
+    "https://github.com/runmedev/runme/releases/latest/download/runme_linux_${ARCH_FULL}.tar.gz" \
     && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" runme 2>/dev/null \
     && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
     && ok "runme" || warn "runme install failed"
@@ -1763,42 +1762,6 @@ git config --global delta.side-by-side true 2>/dev/null || true
 ok "Git delta pager configured"
 
 
-section "Setup Complete"
-
-echo -e "
-  ${GREEN}Everything is installed and configured.${NC}
-
-  ${CYAN}What's running:${NC}
-    Package managers: uv, bun, cargo, go, mise
-    CLI tools:        ~100 across all managers
-    Claude Code:      native binary (auto-updates)
-    Config:           ~/.claude/ (skills, hooks, commands, agents)
-
-  ${CYAN}Context budget (startup):${NC}
-    CLAUDE.md:    ~1200 tokens (loaded every session)
-    Skills:       ~2-5K tokens (descriptions at startup, full content on trigger)
-    Rules:        ~500 tokens  (6 conditional rules)
-    Commands:     0 tokens     (loaded on /command)
-    Agents:       ~200 tokens  (descriptions only)
-    CLI --help:   0 tokens     (lazy-loaded at runtime)
-    Total:        ~2-7K tokens of 200K context window
-
-  ${CYAN}Next steps:${NC}
-    source ~/.bashrc
-    claude                    # authenticate
-    claude doctor             # verify health
-    cd <your-project>
-    /tools                    # see all installed tools
-    /catchup                  # orient to the project
-
-  ${CYAN}Package manager rules:${NC}
-    Python CLIs → uv tool install <pkg>
-    JS CLIs     → bun install -g <pkg>
-    Rust CLIs   → cargo install <crate>
-    Go CLIs     → go install <path>@latest
-    ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
-"
-
 # ─── VPS — Tailscale + finalize ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Tailscale — install, connect, lock SSH ─────────────────────────────
@@ -1898,3 +1861,39 @@ fi
 if ! $VERBOSE; then
   ok "Full install log: $LOG_FILE"
 fi
+
+section "Setup Complete"
+
+echo -e "
+  ${GREEN}Everything is installed and configured.${NC}
+
+  ${CYAN}What's running:${NC}
+    Package managers: uv, bun, cargo, go, mise
+    CLI tools:        ~100 across all managers
+    Claude Code:      native binary (auto-updates)
+    Config:           ~/.claude/ (skills, hooks, commands, agents)
+
+  ${CYAN}Context budget (startup):${NC}
+    CLAUDE.md:    ~1200 tokens (loaded every session)
+    Skills:       ~2-5K tokens (descriptions at startup, full content on trigger)
+    Rules:        ~500 tokens  (6 conditional rules)
+    Commands:     0 tokens     (loaded on /command)
+    Agents:       ~200 tokens  (descriptions only)
+    CLI --help:   0 tokens     (lazy-loaded at runtime)
+    Total:        ~2-7K tokens of 200K context window
+
+  ${CYAN}Next steps:${NC}
+    source ~/.bashrc
+    claude                    # authenticate
+    claude doctor             # verify health
+    cd <your-project>
+    /tools                    # see all installed tools
+    /catchup                  # orient to the project
+
+  ${CYAN}Package manager rules:${NC}
+    Python CLIs → uv tool install <pkg>
+    JS CLIs     → bun install -g <pkg>
+    Rust CLIs   → cargo install <crate>
+    Go CLIs     → go install <path>@latest
+    ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
+"
