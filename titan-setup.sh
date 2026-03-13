@@ -233,11 +233,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   ok "SSH hardened (password auth off, root login disabled)"
 
   # ── UFW firewall ───────────────────────────────────────────────────────
-  sudo ufw --force default deny incoming
-  sudo ufw --force default allow outgoing
-  sudo ufw --force allow 22/tcp          # temporary — removed once Tailscale locks in
-  sudo ufw --force allow OpenSSH || true
-  sudo ufw --force allow 41641/udp       # Tailscale WireGuard (direct peer connections)
+  # --force is only valid with enable/disable/reset, not allow/deny/delete
+  sudo ufw default deny incoming
+  sudo ufw default allow outgoing
+  sudo ufw allow 22/tcp                  # temporary — removed once Tailscale locks in
+  sudo ufw allow 41641/udp               # Tailscale WireGuard (direct peer connections)
   sudo ufw --force enable
   ok "UFW enabled (deny incoming; SSH+Tailscale open)"
 
@@ -1821,9 +1821,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  sudo ufw --force delete allow 22/tcp || true
-  sudo ufw --force delete allow OpenSSH || true
-  sudo ufw --force allow in on tailscale0 to any port 22 proto tcp
+  sudo ufw delete allow 22/tcp || true
+  sudo ufw delete allow OpenSSH 2>/dev/null || true
+  sudo ufw allow in on tailscale0 to any port 22 proto tcp
   ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed"
 
   # Get MagicDNS hostname for service URLs
