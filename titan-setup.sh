@@ -1432,18 +1432,11 @@ section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
 
 # Prompt for login interactively if running in a TTY and not yet authenticated
+# </dev/tty forces stdin to the terminal so claude auth login can accept the
+# pasted code even when the script's stdin is redirected/piped
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
-  echo ""
-  echo "  ┌──────────────────────────────────────────────────────────────┐"
-  echo "  │  Claude login required to install plugins                    │"
-  echo "  │                                                              │"
-  echo "  │  Open a NEW terminal tab and run:                           │"
-  echo "  │    claude auth login                                         │"
-  echo "  │                                                              │"
-  echo "  │  Complete the browser flow, then come back here.            │"
-  echo "  └──────────────────────────────────────────────────────────────┘"
-  echo ""
-  read -r -p "  Press Enter once authenticated (Ctrl+C to skip plugins)... "
+  warn "Claude not authenticated — launching login..."
+  claude auth login </dev/tty || true
 fi
 
 if ! command -v claude &>/dev/null; then
