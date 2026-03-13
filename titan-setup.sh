@@ -1431,20 +1431,29 @@ else ok "CLIProxyAPI (exists)"; fi
 section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
 
-# Prompt for login interactively if running in a TTY and not yet authenticated
-# claude auth login uses raw/no-echo terminal mode; wrap in `script` to give
-# it a proper PTY so paste + Enter work correctly inside the running script
+# Authenticate Claude Code if not already authenticated.
+# claude auth login (OAuth) is broken on SSH/VPS — readline doesn't register
+# Enter key over SSH PTY (known upstream bug). Use API key flow instead,
+# which works reliably via plain bash `read`.
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
   echo ""
-  echo "  Claude login required. A URL will appear below."
-  echo "  Visit it in your browser → complete auth → paste the code → Enter."
+  echo "  ┌──────────────────────────────────────────────────────────────┐"
+  echo "  │  Claude API key required (OAuth login is broken over SSH)    │"
+  echo "  │  Get your key at: console.anthropic.com → API Keys           │"
+  echo "  └──────────────────────────────────────────────────────────────┘"
   echo ""
-  if command -v script &>/dev/null; then
-    script -q -c "claude auth login" /dev/null || true
+  read -rs -p "  Paste API key and press Enter (hidden): " _claude_api_key
+  echo ""
+  if [[ -n "$_claude_api_key" ]]; then
+    export ANTHROPIC_API_KEY="$_claude_api_key"
+    # Persist to ~/.bashrc so Claude Code picks it up in future sessions
+    if ! grep -q 'ANTHROPIC_API_KEY' ~/.bashrc 2>/dev/null; then
+      echo "export ANTHROPIC_API_KEY='$_claude_api_key'" >> ~/.bashrc
+    fi
+    ok "ANTHROPIC_API_KEY set"
   else
-    claude auth login || true
+    warn "Skipped — run 'claude auth login' manually after setup"
   fi
-  stty sane 2>/dev/null || true   # restore terminal state in case auth left it broken
 fi
 
 if ! command -v claude &>/dev/null; then
