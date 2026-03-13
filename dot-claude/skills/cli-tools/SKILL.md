@@ -102,6 +102,7 @@ Never guess flags — always check help first.
 - `bore` — expose local ports publicly (tunneling).
 - `mitmproxy` — intercept/inspect/modify HTTP/HTTPS traffic.
 - `cloudflared` — Cloudflare tunnels (persistent URLs, auth, HTTPS).
+- `tailscale` — VPN mesh networking. `tailscale up`, `tailscale status`, `tailscale ssh`.
 
 **Security & Scanning:**
 - `nmap` — network and port scanning.
