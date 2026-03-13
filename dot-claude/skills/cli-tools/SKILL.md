@@ -65,6 +65,7 @@ Never guess flags — always check help first.
 - `actionlint` — lint GitHub Actions workflows.
 - `shfmt` — auto-format shell scripts (pairs with shellcheck).
 - `prettier` — format YAML, JSON, Markdown, HTML, CSS consistently.
+- `ansible-lint` — lint Ansible playbooks for best practices.
 
 **Containers & Kubernetes:**
 - `lazydocker` — Docker management UI.
@@ -122,6 +123,7 @@ Never guess flags — always check help first.
 - `subfinder` — passive subdomain enumeration from 50+ sources.
 - `dnsx` — bulk DNS resolution and wildcard detection.
 - `katana` — web crawler with JS rendering. Finds endpoints ffuf misses.
+- `shannon-audit` — autonomous AI web app pentester (wrapper for `~/tools/shannon`). Runs 4-phase multi-agent pipeline: recon → vuln analysis → exploitation → report. 1-1.5hr runtime, ~$50/audit. Usage: `shannon-audit start URL=https://target.com REPO=repo-name`. Check progress: `shannon-audit logs`. NEVER run on production or unauthorized targets.
 
 **Databases:**
 - `duckdb` — run SQL on local files (CSV, Parquet, JSON). Extremely powerful.
@@ -131,7 +133,8 @@ Never guess flags — always check help first.
 - `redis-cli` — Redis operations.
 
 **System Monitoring:**
-- `btop` — system resource monitor.
+- `btop` — system resource monitor (apt).
+- `btm` (bottom) — TUI process monitor with graphs. Use over htop for visual CPU/memory/network.
 - `procs` — process viewer with search. Use over `ps`.
 - `hyperfine` — benchmark commands with statistical analysis.
 - `pueue` — queue and manage background tasks.
@@ -167,6 +170,7 @@ Never guess flags — always check help first.
 - `doctl` — DigitalOcean operations.
 - `mc` — S3-compatible object storage operations.
 - `vercel` — Vercel deployment CLI.
+- `gcloud` — Google Cloud CLI (gcloud, gsutil, bq).
 
 **AI Tools:**
 - `gemini-cli` — Google Gemini CLI.
@@ -176,6 +180,10 @@ Never guess flags — always check help first.
 - `ccusage` — Claude Code usage stats tracker.
 - `ccstatusline` — Claude Code status line.
 - `claude-squad` — manage multiple AI terminal agents in parallel (tmux-based).
+- `rtk` — Rust Token Killer. Transparent CLI proxy that compresses command output 60-90% before it reaches context. Hook auto-rewrites commands (git, ls, grep, docker, etc.). Use `rtk gain` to check savings, `rtk gain --graph` for history, `rtk discover` to find missed opportunities. Do NOT prefix commands manually — hook handles it.
+- `better-ccflare` — Claude API proxy. Routes Claude Code through a local relay (OAuth, Vertex AI, etc.). Activated via ANTHROPIC_BASE_URL in settings.json.
+- `nlm` — Google NotebookLM CLI. Create notebooks, add sources, generate podcasts/reports/quizzes. Use `nlm --ai` for full docs. Requires `nlm login` (session expires ~20min).
+- `kilocode` — Kilo Code CLI. AI coding assistant (VS Code extension backend).
 
 **Documentation:**
 - `pandoc` — convert between document formats.
