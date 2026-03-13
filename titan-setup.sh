@@ -204,6 +204,217 @@ case "$UNAME_ARCH" in
   *) fail "Unsupported architecture: $UNAME_ARCH"; exit 1 ;;
 esac
 
+# ─── VPS Pre-hardening (before tool installation) ───
+if [[ "$INSTALL_MODE" == "vps" ]]; then
+  section "VPS — Server Hardening"
+
+  # ── Require Tailscale auth key ─────────────────────────────────────────
+  if [[ -z "$TAILSCALE_KEY" ]]; then
+    echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
+    read -rsp "  Key: " TAILSCALE_KEY
+    echo ""
+    [[ -z "$TAILSCALE_KEY" ]] && { fail "Tailscale key required for VPS mode"; exit 1; }
+  fi
+
+  # ── Require non-root Claude user ───────────────────────────────────────
+  if [[ -z "$CLAUDE_USER" ]]; then
+    read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
+    [[ -z "$CLAUDE_USER" ]] && { fail "--claude-user required for VPS mode"; exit 1; }
+  fi
+
+  # ── Security packages ──────────────────────────────────────────────────
+  run_q sudo apt install -y ufw fail2ban unattended-upgrades
+  ok "Security packages (ufw, fail2ban, unattended-upgrades)"
+
+  # ── SSH hardening ──────────────────────────────────────────────────────
+  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+  ok "SSH hardened (password auth off, root login disabled)"
+
+  # ── UFW firewall ───────────────────────────────────────────────────────
+  sudo ufw --force default deny incoming
+  sudo ufw --force default allow outgoing
+  sudo ufw --force allow 22/tcp          # temporary — removed once Tailscale locks in
+  sudo ufw --force allow OpenSSH || true
+  sudo ufw --force allow 41641/udp       # Tailscale WireGuard (direct peer connections)
+  sudo ufw --force enable
+  ok "UFW enabled (deny incoming; SSH+Tailscale open)"
+
+  # ── fail2ban + unattended-upgrades ────────────────────────────────────
+  sudo systemctl enable fail2ban --now
+  sudo systemctl enable unattended-upgrades --now
+  ok "fail2ban and unattended-upgrades active"
+
+  # ── Repo supply chain guard ───────────────────────────────────────────
+  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
+#!/bin/bash
+set -euo pipefail
+# Allowlist includes Ubuntu/Debian base repos plus all repos titan-setup.sh adds
+ALLOWLIST='^(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|packages\.cloud\.google\.com|dl\.google\.com|download\.docker\.com|apt\.kubernetes\.io|pkgs\.tailscale\.com|aquasecurity\.github\.io|apt\.releases\.hashicorp\.com|cli\.github\.com|packages\.github\.com|artifacts-cli\.infisical\.com|ppa\.launchpadcontent\.net)$'
+VIOLATIONS="/var/log/repo_allowlist_violations.log"
+: > "$VIOLATIONS"
+
+check_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+http:// ]]; then
+      sed -i "s|^\([[:space:]]*deb[[:space:]]\+http://.*\)$|# disabled-insecure-http \1|g" "$file"
+    fi
+    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+https?://([^/[:space:]]+) ]]; then
+      host="${BASH_REMATCH[1]}"
+      if ! [[ "$host" =~ $ALLOWLIST ]]; then
+        echo "non-allowlisted repo host in $file: $host" >> "$VIOLATIONS"
+      fi
+    fi
+  done < "$file"
+}
+
+check_file /etc/apt/sources.list
+shopt -s nullglob
+for f in /etc/apt/sources.list.d/*.list; do
+  check_file "$f"
+done
+shopt -u nullglob
+
+apt-get update
+GUARD_EOF
+  sudo chmod 755 /usr/local/sbin/repo_supply_chain_guard.sh
+  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh
+  ok "Repo supply chain guard installed and run"
+
+  # ── Compliance check script ───────────────────────────────────────────
+  sudo tee /usr/local/bin/compliance_check.sh > /dev/null << 'COMPLIANCE_EOF'
+#!/bin/bash
+set -euo pipefail
+
+FAIL=0
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1"; FAIL=1; }
+
+if grep -Eiq '^\s*PasswordAuthentication\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
+  pass "ssh password auth disabled"
+else
+  fail "ssh password auth disabled"
+fi
+
+if grep -Eiq '^\s*PermitRootLogin\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
+  pass "ssh root login disabled"
+else
+  fail "ssh root login disabled"
+fi
+
+if ufw status | grep -q 'Status: active'; then
+  pass "ufw active"
+else
+  fail "ufw active"
+fi
+
+if systemctl is-active --quiet fail2ban; then
+  pass "fail2ban active"
+else
+  fail "fail2ban active"
+fi
+
+if systemctl is-enabled --quiet unattended-upgrades; then
+  pass "unattended upgrades enabled"
+else
+  fail "unattended upgrades enabled"
+fi
+
+if ! grep -R --line-number -E '^[[:space:]]*deb[[:space:]]+http://' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
+  pass "no insecure apt repos"
+else
+  fail "no insecure apt repos"
+fi
+
+if [[ -f /var/log/repo_allowlist_violations.log ]] && [[ -s /var/log/repo_allowlist_violations.log ]]; then
+  fail "allowlist violations detected in /var/log/repo_allowlist_violations.log"
+else
+  pass "repo allowlist violations not detected"
+fi
+
+if passwd -S root 2>/dev/null | grep -qE ' L '; then
+  pass "root account locked"
+else
+  fail "root account locked"
+fi
+
+# Tailscale checks (mandatory on VPS)
+if ! command -v tailscale >/dev/null 2>&1; then
+  fail "tailscale installed"
+  fail "tailscale running"
+  fail "tailscale has IPv4 address"
+  fail "sshd restricted to tailscale IP"
+  fail "ufw ssh restricted to tailscale0"
+  exit "$FAIL"
+fi
+
+if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
+  pass "tailscale running"
+else
+  fail "tailscale running"
+fi
+
+TS_IP=$(tailscale ip -4 2>/dev/null || true)
+if [ -n "$TS_IP" ]; then
+  pass "tailscale has IPv4 address ($TS_IP)"
+else
+  fail "tailscale has IPv4 address"
+fi
+
+if grep -Eq "^ListenAddress[[:space:]]+$TS_IP" /etc/ssh/sshd_config 2>/dev/null; then
+  pass "sshd restricted to tailscale IP"
+else
+  fail "sshd restricted to tailscale IP"
+fi
+
+if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
+  pass "ufw ssh restricted to tailscale0"
+else
+  fail "ufw ssh restricted to tailscale0"
+fi
+
+exit "$FAIL"
+COMPLIANCE_EOF
+  sudo chmod 755 /usr/local/bin/compliance_check.sh
+  ok "Compliance check script installed"
+
+  # ── Compliance systemd timer (every 6h) ───────────────────────────────
+  sudo tee /etc/systemd/system/compliance-check.service > /dev/null << 'SVC_EOF'
+[Unit]
+Description=Run server compliance checks
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/bin/compliance_check.sh
+SVC_EOF
+
+  sudo tee /etc/systemd/system/compliance-check.timer > /dev/null << 'TIMER_EOF'
+[Unit]
+Description=Periodic compliance checks
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=6h
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMER_EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now compliance-check.timer
+  ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
+
+fi
+
 section "Phase 1/6 — System Prerequisites"
 
 run_q sudo apt update
@@ -1588,215 +1799,8 @@ echo -e "
     ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
 "
 
-# ─── VPS-specific installs ───
+# ─── VPS — Tailscale + finalize ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
-  section "VPS — Server Hardening"
-
-  # ── Require Tailscale auth key ─────────────────────────────────────────
-  if [[ -z "$TAILSCALE_KEY" ]]; then
-    echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
-    read -rsp "  Key: " TAILSCALE_KEY
-    echo ""
-    [[ -z "$TAILSCALE_KEY" ]] && { fail "Tailscale key required for VPS mode"; exit 1; }
-  fi
-
-  # ── Require non-root Claude user ───────────────────────────────────────
-  if [[ -z "$CLAUDE_USER" ]]; then
-    read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
-    [[ -z "$CLAUDE_USER" ]] && { fail "--claude-user required for VPS mode"; exit 1; }
-  fi
-
-  # ── Security packages ──────────────────────────────────────────────────
-  run_q sudo apt install -y ufw fail2ban unattended-upgrades
-  ok "Security packages (ufw, fail2ban, unattended-upgrades)"
-
-  # ── SSH hardening ──────────────────────────────────────────────────────
-  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardened (password auth off, root login disabled)"
-
-  # ── UFW firewall ───────────────────────────────────────────────────────
-  sudo ufw --force default deny incoming
-  sudo ufw --force default allow outgoing
-  sudo ufw --force allow 22/tcp          # temporary — removed once Tailscale locks in
-  sudo ufw --force allow OpenSSH || true
-  sudo ufw --force allow 41641/udp       # Tailscale WireGuard (direct peer connections)
-  sudo ufw --force enable
-  ok "UFW enabled (deny incoming; SSH+Tailscale open)"
-
-  # ── fail2ban + unattended-upgrades ────────────────────────────────────
-  sudo systemctl enable fail2ban --now
-  sudo systemctl enable unattended-upgrades --now
-  ok "fail2ban and unattended-upgrades active"
-
-  # ── Repo supply chain guard ───────────────────────────────────────────
-  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
-#!/bin/bash
-set -euo pipefail
-# Allowlist includes Ubuntu/Debian base repos plus all repos titan-setup.sh adds
-ALLOWLIST='^(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|packages\.cloud\.google\.com|dl\.google\.com|download\.docker\.com|apt\.kubernetes\.io|pkgs\.tailscale\.com|aquasecurity\.github\.io|apt\.releases\.hashicorp\.com|cli\.github\.com|packages\.github\.com|artifacts-cli\.infisical\.com|ppa\.launchpadcontent\.net)$'
-VIOLATIONS="/var/log/repo_allowlist_violations.log"
-: > "$VIOLATIONS"
-
-check_file() {
-  local file="$1"
-  [[ -f "$file" ]] || return 0
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
-    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+http:// ]]; then
-      sed -i "s|^\([[:space:]]*deb[[:space:]]\+http://.*\)$|# disabled-insecure-http \1|g" "$file"
-    fi
-    if [[ "$line" =~ ^[[:space:]]*deb[[:space:]]+https?://([^/[:space:]]+) ]]; then
-      host="${BASH_REMATCH[1]}"
-      if ! [[ "$host" =~ $ALLOWLIST ]]; then
-        echo "non-allowlisted repo host in $file: $host" >> "$VIOLATIONS"
-      fi
-    fi
-  done < "$file"
-}
-
-check_file /etc/apt/sources.list
-shopt -s nullglob
-for f in /etc/apt/sources.list.d/*.list; do
-  check_file "$f"
-done
-shopt -u nullglob
-
-apt-get update
-GUARD_EOF
-  sudo chmod 755 /usr/local/sbin/repo_supply_chain_guard.sh
-  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh
-  ok "Repo supply chain guard installed and run"
-
-  # ── Compliance check script ───────────────────────────────────────────
-  sudo tee /usr/local/bin/compliance_check.sh > /dev/null << 'COMPLIANCE_EOF'
-#!/bin/bash
-set -euo pipefail
-
-FAIL=0
-pass() { printf 'PASS: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1"; FAIL=1; }
-
-if grep -Eiq '^\s*PasswordAuthentication\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
-  pass "ssh password auth disabled"
-else
-  fail "ssh password auth disabled"
-fi
-
-if grep -Eiq '^\s*PermitRootLogin\s+no\b' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null; then
-  pass "ssh root login disabled"
-else
-  fail "ssh root login disabled"
-fi
-
-if ufw status | grep -q 'Status: active'; then
-  pass "ufw active"
-else
-  fail "ufw active"
-fi
-
-if systemctl is-active --quiet fail2ban; then
-  pass "fail2ban active"
-else
-  fail "fail2ban active"
-fi
-
-if systemctl is-enabled --quiet unattended-upgrades; then
-  pass "unattended upgrades enabled"
-else
-  fail "unattended upgrades enabled"
-fi
-
-if ! grep -R --line-number -E '^[[:space:]]*deb[[:space:]]+http://' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
-  pass "no insecure apt repos"
-else
-  fail "no insecure apt repos"
-fi
-
-if [[ -f /var/log/repo_allowlist_violations.log ]] && [[ -s /var/log/repo_allowlist_violations.log ]]; then
-  fail "allowlist violations detected in /var/log/repo_allowlist_violations.log"
-else
-  pass "repo allowlist violations not detected"
-fi
-
-if passwd -S root 2>/dev/null | grep -qE ' L '; then
-  pass "root account locked"
-else
-  fail "root account locked"
-fi
-
-# Tailscale checks (mandatory on VPS)
-if ! command -v tailscale >/dev/null 2>&1; then
-  fail "tailscale installed"
-  fail "tailscale running"
-  fail "tailscale has IPv4 address"
-  fail "sshd restricted to tailscale IP"
-  fail "ufw ssh restricted to tailscale0"
-  exit "$FAIL"
-fi
-
-if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
-  pass "tailscale running"
-else
-  fail "tailscale running"
-fi
-
-TS_IP=$(tailscale ip -4 2>/dev/null || true)
-if [ -n "$TS_IP" ]; then
-  pass "tailscale has IPv4 address ($TS_IP)"
-else
-  fail "tailscale has IPv4 address"
-fi
-
-if grep -Eq "^ListenAddress[[:space:]]+$TS_IP" /etc/ssh/sshd_config 2>/dev/null; then
-  pass "sshd restricted to tailscale IP"
-else
-  fail "sshd restricted to tailscale IP"
-fi
-
-if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
-  pass "ufw ssh restricted to tailscale0"
-else
-  fail "ufw ssh restricted to tailscale0"
-fi
-
-exit "$FAIL"
-COMPLIANCE_EOF
-  sudo chmod 755 /usr/local/bin/compliance_check.sh
-  ok "Compliance check script installed"
-
-  # ── Compliance systemd timer (every 6h) ───────────────────────────────
-  sudo tee /etc/systemd/system/compliance-check.service > /dev/null << 'SVC_EOF'
-[Unit]
-Description=Run server compliance checks
-After=network-online.target
-
-[Service]
-Type=oneshot
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/usr/local/bin/compliance_check.sh
-SVC_EOF
-
-  sudo tee /etc/systemd/system/compliance-check.timer > /dev/null << 'TIMER_EOF'
-[Unit]
-Description=Periodic compliance checks
-
-[Timer]
-OnBootSec=5m
-OnUnitActiveSec=6h
-RandomizedDelaySec=5m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-TIMER_EOF
-
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now compliance-check.timer
-  ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
-
   # ── Tailscale — install, connect, lock SSH ─────────────────────────────
   if ! command -v tailscale &>/dev/null; then
     run_q curl -fsSL https://tailscale.com/install.sh | sh
