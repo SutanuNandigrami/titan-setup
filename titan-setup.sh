@@ -1817,15 +1817,6 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   done
   [[ -z "$TS_IP" ]] && { fail "Tailscale connected but no IPv4 assigned — aborting"; exit 1; }
 
-  # Lock SSH to Tailscale interface only, close public port 22
-  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  sudo ufw delete allow 22/tcp || true
-  sudo ufw delete allow OpenSSH 2>/dev/null || true
-  sudo ufw allow in on tailscale0 to any port 22 proto tcp
-  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed"
-
   # Get MagicDNS hostname for service URLs
   TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 
@@ -1841,7 +1832,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
       || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
   fi
 
-  # ── Add Claude user to docker group (user was created + sudo'd before Phase 1) ──
+  # ── Add Claude user to docker group ────────────────────────────────────
   command -v docker &>/dev/null && sudo usermod -aG docker "$CLAUDE_USER" || true
   ok "$CLAUDE_USER: docker group membership ensured"
 
@@ -1869,6 +1860,18 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo ""
   echo "  Claude user: ${CLAUDE_USER}  (su - ${CLAUDE_USER})"
   echo "  Tailscale SSH: ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
+  echo ""
+  echo -e "  ${YELLOW}⚠ SSH is about to be locked to Tailscale only — public port 22 will close.${NC}"
+  echo -e "  ${YELLOW}  Reconnect with: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
+  echo ""
+  # ── Lock SSH to Tailscale interface — LAST STEP, causes SSH disconnect ──
+  sudo ufw allow in on tailscale0 to any port 22 proto tcp
+  sudo ufw delete allow 22/tcp || true
+  sudo ufw delete allow OpenSSH 2>/dev/null || true
+  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed. This session will disconnect."
 elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   if command -v xdg-open &>/dev/null; then
     section "Opening dashboards"
