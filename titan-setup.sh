@@ -353,7 +353,9 @@ if ! command -v tailscale >/dev/null 2>&1; then
   exit "$FAIL"
 fi
 
-if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"'; then
+if tailscale status 2>/dev/null | grep -qE 'logged in|Connected|is running'; then
+  pass "tailscale running"
+elif [ -n "$(tailscale ip -4 2>/dev/null || true)" ]; then
   pass "tailscale running"
 else
   fail "tailscale running"
@@ -1786,10 +1788,12 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 
   # ── tailscale serve — expose local services on Tailscale network ───────
-  if command -v docker &>/dev/null; then
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
     tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
       && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
       || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
+  elif command -v docker &>/dev/null; then
+    ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
   fi
   if ! $CCFLARE_SKIP; then
     tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
@@ -1804,11 +1808,6 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Lock root account ──────────────────────────────────────────────────
   sudo passwd -l root
   ok "Root account locked"
-
-  # ── Final compliance run ───────────────────────────────────────────────
-  echo ""
-  echo -e "  ${CYAN}Compliance check results:${NC}"
-  sudo /usr/local/bin/compliance_check.sh || true
 
 fi
 
@@ -1837,6 +1836,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
   ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed. This session will disconnect."
+
+  # ── Final compliance run (after SSH lock so all checks pass) ───────────
+  echo ""
+  echo -e "  ${CYAN}Compliance check results:${NC}"
+  sudo /usr/local/bin/compliance_check.sh || true
 elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   if command -v xdg-open &>/dev/null; then
     section "Opening dashboards"
