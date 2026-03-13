@@ -1770,9 +1770,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   if ! command -v tailscale &>/dev/null; then
     run_q curl -fsSL https://tailscale.com/install.sh | sh
   fi
-  # Allow non-root user to manage Tailscale, then connect
-  sudo tailscale set --operator="$USER" 2>/dev/null || true
-  sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns
+  # --reset ensures idempotent re-runs; --operator grants non-root user access
+  sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \
+    --operator="$USER" --reset
   ok "Tailscale connected"
 
   # Wait for Tailscale IP (up to 60s)
