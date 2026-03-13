@@ -21,6 +21,7 @@
     "cleanupPeriodDays": 30
   },
   "showTurnDuration": true,
+  "effortLevel": "medium",
   "includeCoAuthoredBy": true,
   "respectGitignore": true,
   "permissions": {
