@@ -1433,8 +1433,17 @@ echo "  Installing official and community plugins..."
 
 # Prompt for login interactively if running in a TTY and not yet authenticated
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
-  warn "Claude not authenticated — launching login now..."
-  claude auth login || true
+  echo ""
+  echo "  ┌──────────────────────────────────────────────────────────────┐"
+  echo "  │  Claude login required to install plugins                    │"
+  echo "  │                                                              │"
+  echo "  │  Open a NEW terminal tab and run:                           │"
+  echo "  │    claude auth login                                         │"
+  echo "  │                                                              │"
+  echo "  │  Complete the browser flow, then come back here.            │"
+  echo "  └──────────────────────────────────────────────────────────────┘"
+  echo ""
+  read -r -p "  Press Enter once authenticated (Ctrl+C to skip plugins)... "
 fi
 
 if ! command -v claude &>/dev/null; then
