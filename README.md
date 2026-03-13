@@ -85,7 +85,7 @@ Instead of injecting 8,000 tokens of GitHub MCP schemas, Titan installs `gh` and
 Titan is a modularized bash script (~1860 lines) that transforms a fresh Ubuntu machine into a fully configured Claude Code workstation in one run. Static content (CLAUDE.md, agents, hooks, rules, skills, commands) is extracted to versioned repo files and installed via `install -Dm644/755`, keeping the script lean and updateable.
 
 1. **155+ CLI tools** across 5 package managers (cargo, uv, bun, go, apt) — replacing every common MCP server
-2. **Defense-in-depth safety** — 66 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
+2. **Defense-in-depth safety** — 73 permission deny rules + PreToolUse hooks that block destructive commands (`rm -rf`, force push, `pip install`) before they execute
 3. **Auto-linting pipeline** — every file write is async-linted (shellcheck for .sh, ruff for .py, hadolint for Dockerfile)
 4. **Session persistence** — hooks automatically save/restore session state across conversations via handoff files and persistent memory
 5. **Discovery-based skills** — 11 inline skills + 3 selective community skills, descriptions loaded at startup (~2-5K tokens)
@@ -98,7 +98,7 @@ Titan startup cost:    ~1,700 tokens (CLAUDE.md + memory)
 MCP equivalent:        55,000-134,000 tokens
 Context savings:       98.5%+
 Tools available:       155+ (vs ~20 typical MCP setup)
-Safety rules:          66 deny rules + 17 hook-enforced blocks
+Safety rules:          73 deny rules + 17 hook-enforced blocks
 ```
 
 You get **more tools with less overhead**, and the safety guardrails that MCPs don't provide.
@@ -190,7 +190,7 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
   - `TS_AUTHKEY`: Tailscale authentication key (required for VPS mode)
   - `TAILSCALE_PORT`: custom Tailscale port (optional, default 41641)
 
-*Lifecycle hooks (12 events wired, all zero context cost):*
+*Lifecycle hooks (16 events wired, all zero context cost):*
 - `PreToolUse`: block destructive commands (rm -rf, force push, pip, npm, commits on main, chmod 777, kill -9, unsafe piping, infra/k8s/docker destruction)
 - `PreToolUse` (file guard): block edits to .env, credentials, secrets, .pem, .key
 - `PreToolUse` (RTK rewrite): compress verbose command output before it reaches context (60-90% token reduction)
@@ -203,8 +203,9 @@ CLIProxyAPI (cloned to `~/tools/` — CLI proxy for API access)
 - `SessionStart`: display handoff + memory status + audit log rotation + show loaded agent slots
 - `SessionEnd`: reliable final state capture at session termination (ntfy notification if `NTFY_URL` set)
 - `UserPromptSubmit`: keyword-triggered memory injection (only on recall intent keywords)
+- `TaskCompleted`, `InstructionsLoaded`, `ConfigChange`, `TeammateIdle`: async audit logging (require CC 2.1+; safely ignored on older versions)
 
-*Permissions:* 1 allow rule (Bash), 7 wildcard allow rules (Read/Edit/Write/Glob/Grep/Skill), 66 deny rules (Bash, Read, Edit, Write)
+*Permissions:* 1 allow rule (Bash), 7 wildcard allow rules (Read/Edit/Write/Glob/Grep/Skill), 73 deny rules (Bash, Read, Edit, Write)
 
 *Preferences & settings:*
 - `cleanupPeriodDays: 30`: auto-delete conversation files >30 days old
@@ -474,9 +475,10 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - **Impact:** 60-90% token reduction on verbose tool outputs (git, docker, test runners, ls, grep); 71%+ observed in first session
 - **Tracking:** `rtk gain --graph` shows daily savings history
 
-**settings.json fixes (CC v2.0.73+ validation):**
-- **Fixed:** Removed 4 invalid hook events (`ConfigChange`, `InstructionsLoaded`, `TaskCompleted`, `TeammateIdle`) that caused CC to skip the entire settings.json
-- **Fixed:** Permission syntax — `Bash(*)` → `Bash` in allow; all deny `*` → `:*` for prefix matching; removed unsupported middle-wildcard patterns
+**settings.json fixes:**
+- **Fixed:** Bash(\*) → Bash in allow list (CC 2.0.73 on VPS rejected this syntax)
+- **Fixed:** All deny \* → :\* for prefix matching; middle-wildcard patterns retained (supported on CC 2.1+)
+- **Note:** ConfigChange, InstructionsLoaded, TaskCompleted, TeammateIdle require CC 2.1+ — CC 2.0.73 skips entire settings.json on unknown events; upgrade CC on VPS to activate
 - **Added:** `effortLevel: medium` and `showTurnDuration: true` to template
 - **Added:** `ANTHROPIC_BASE_URL` auto-injected into settings.json env block when better-ccflare is installed
 
@@ -490,7 +492,7 @@ The global `~/.claude/` config works everywhere. For project-specific needs, add
 - **Fixed:** `tailscale up --reset --operator=$USER` — idempotent on re-runs, non-root user gets management rights
 - **Fixed:** SSH port 22 closure moved to absolute last step — all output (compliance, Setup Complete) prints before session may drop
 
-**Total: 156+ CLI tools, 12 hook events, 66 deny rules**
+**Total: 156+ CLI tools, 16 hook events, 73 deny rules**
 
 ---
 
