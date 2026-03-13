@@ -1825,17 +1825,17 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo "  Claude user: ${CLAUDE_USER}  (su - ${CLAUDE_USER})"
   echo "  Tailscale SSH: ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
-  echo -e "  ${YELLOW}⚠ SSH is about to be locked to Tailscale only — public port 22 will close.${NC}"
-  echo -e "  ${YELLOW}  Reconnect with: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
+  echo -e "  ${YELLOW}⚠ Locking SSH to Tailscale — public port 22 closing.${NC}"
+  echo -e "  ${YELLOW}  This session stays alive. Next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
   echo ""
-  # ── Lock SSH to Tailscale interface — LAST STEP, causes SSH disconnect ──
+  # ── Lock SSH to Tailscale interface — reload preserves current session ──
   sudo ufw allow in on tailscale0 to any port 22 proto tcp
   sudo ufw delete allow 22/tcp || true
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed. This session will disconnect."
+  ok "SSH locked to Tailscale ($TS_IP) — public port 22 closed"
 
   # ── Final compliance run (after SSH lock so all checks pass) ───────────
   echo ""
