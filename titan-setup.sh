@@ -1432,12 +1432,19 @@ section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
 
 # Prompt for login interactively if running in a TTY and not yet authenticated
+# claude auth login uses raw/no-echo terminal mode; wrap in `script` to give
+# it a proper PTY so paste + Enter work correctly inside the running script
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1 && [ -t 0 ]; then
   echo ""
   echo "  Claude login required. A URL will appear below."
-  echo "  Visit it in your browser → complete auth → paste the code here → Enter."
+  echo "  Visit it in your browser → complete auth → paste the code → Enter."
   echo ""
-  claude auth login || true
+  if command -v script &>/dev/null; then
+    script -q -c "claude auth login" /dev/null || true
+  else
+    claude auth login || true
+  fi
+  stty sane 2>/dev/null || true   # restore terminal state in case auth left it broken
 fi
 
 if ! command -v claude &>/dev/null; then
