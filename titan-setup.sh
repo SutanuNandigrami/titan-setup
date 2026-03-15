@@ -90,6 +90,8 @@ USAGE
   exit 0
 }
 
+_ORIG_ARGS=("$@")
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
@@ -187,6 +189,22 @@ fi
 # Go, some build tools, and mktemp -d with relative paths all call getcwd() and fail.
 cd "$HOME" || cd /tmp
 
+# ─── Disconnect resilience: re-exec inside screen if not already there ───
+# Install takes 30-60 min; SSH drops must not kill it.
+if [[ -z "${STY:-}" ]] && [[ -z "${TMUX:-}" ]] && [[ "${TITAN_SCREEN:-}" != "1" ]]; then
+  if ! command -v screen &>/dev/null; then
+    sudo apt-get install -y -qq screen 2>/dev/null || true
+  fi
+  if command -v screen &>/dev/null; then
+    _SCREEN_LOG="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+    echo -e "\n  ${CYAN}Re-launching inside screen (SSH-disconnect safe)${NC}"
+    echo -e "  ${GREEN}Reconnect:${NC} screen -r titan-setup"
+    echo -e "  ${GREEN}Log:${NC}       tail -f $_SCREEN_LOG\n"
+    TITAN_SCREEN=1 exec screen -L -Logfile "$_SCREEN_LOG" -S titan-setup \
+      bash "$0" "${_ORIG_ARGS[@]}"
+  fi
+fi
+
 # ─── Log file for quiet mode ───
 LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
 # run_q: run a command, routing output to log file unless --verbose
@@ -227,9 +245,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   run_q sudo apt-get update
-  run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y -qq \
     -o Dpkg::Options::="--force-confold" \
-    ufw fail2ban unattended-upgrades
+    ufw fail2ban unattended-upgrades screen
   ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
@@ -431,11 +449,11 @@ fi
 
 section "Phase 1/6 — System Prerequisites"
 
-run_q sudo apt update
-run_q sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y \
+run_q sudo apt-get update -qq
+run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
   -o Dpkg::Options::="--force-confold"
 
-run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   -o Dpkg::Options::="--force-confold" \
   curl wget git build-essential unzip software-properties-common \
   lsb-release apt-transport-https gnupg ca-certificates \
@@ -446,11 +464,11 @@ run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y \
   universal-ctags chafa \
   libclang-dev cmake libxml2-dev libcurl4-openssl-dev
 
-run_q sudo apt autoremove -y
+run_q sudo apt-get autoremove -y -qq
 
 # Desktop-only packages (screenshot/X11 tools not needed on VPS)
 if [[ "$INSTALL_MODE" == "desktop" ]]; then
-  run_q sudo apt install -y maim xdotool
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq maim xdotool
 fi
 
 # ─── JetBrains Mono Nerd Font (desktop only — Powerline statusline) ───
@@ -861,10 +879,10 @@ echo -e "\n  ${CYAN}Rust tools (cargo):${NC}"
 echo "  This takes a while on first install (compiling from source)..."
 
 # TLS/dbus build deps (needed by several crates on both modes)
-run_q sudo apt install -y libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed"
+run_q sudo apt-get install -y -qq libssl-dev libdbus-1-dev pkg-config || warn "some build deps failed"
 # Audio build deps (only needed for spotify_player on desktop)
 if [[ "$INSTALL_MODE" == "desktop" ]]; then
-  run_q sudo apt install -y libpulse-dev libasound2-dev || warn "audio build deps failed — spotify_player may not compile"
+  run_q sudo apt-get install -y -qq libpulse-dev libasound2-dev || warn "audio build deps failed — spotify_player may not compile"
 fi
 
 # Update Rust first
