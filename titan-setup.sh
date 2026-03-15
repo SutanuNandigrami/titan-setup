@@ -53,6 +53,7 @@ CLAUDE_USER=""
 TS_HOSTNAME=""
 CC_VERSION=""
 CC_NO_AUTOUPDATE=""
+CC_ASKED=false
 DRY_RUN=false
 VERBOSE=false
 CCFLARE_SKIP=false
@@ -99,6 +100,7 @@ while [[ $# -gt 0 ]]; do
     --claude-user)     [[ $# -ge 2 ]] || { fail "--claude-user requires a value"; usage; }; CLAUDE_USER="$2"; shift 2 ;;
     --cc-version)      [[ $# -ge 2 ]] || { fail "--cc-version requires a value"; usage; }; CC_VERSION="$2"; shift 2 ;;
     --no-autoupdate)   CC_NO_AUTOUPDATE="true"; shift ;;
+    --cc-asked)        CC_ASKED=true; shift ;;
     --dry-run)         DRY_RUN=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
@@ -135,10 +137,10 @@ fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
 # ─── Claude Code version + autoupdate ───
-if [[ -z "$CC_VERSION" ]]; then
+if [[ -z "$CC_VERSION" ]] && ! $CC_ASKED; then
   read -rp "  Claude Code version to install (blank = latest): " CC_VERSION
 fi
-if [[ -z "$CC_NO_AUTOUPDATE" ]]; then
+if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
   read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
   case "${_au_ans,,}" in
     y|yes) CC_NO_AUTOUPDATE="true" ;;
@@ -170,6 +172,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
       --claude-user "$CLAUDE_USER" \
       --tailscale-key "$TAILSCALE_KEY" \
       --name "$ENGINEER_NAME" \
+      --cc-asked \
       ${CC_VERSION:+--cc-version "$CC_VERSION"} \
       ${CC_NO_AUTOUPDATE:+--no-autoupdate} \
       ${VERBOSE:+--verbose} \
@@ -223,6 +226,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
+  run_q sudo apt-get update
   run_q sudo apt install -y ufw fail2ban unattended-upgrades
   ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
@@ -1391,10 +1395,9 @@ if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
   ok "settings.json (ANTHROPIC_BASE_URL → http://127.0.0.1:${CCFLARE_PORT})"
 fi
 
-# ccstatusline config is user-managed via `ccstatusline` TUI editor
-# The script installs the binary (bun install -g ccstatusline) but does NOT
-# write config — run `ccstatusline` interactively to customize
-ok "ccstatusline (config is user-managed, run 'ccstatusline' to customize)"
+# ─── ccstatusline config ───
+install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json"
+ok "ccstatusline: config"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
