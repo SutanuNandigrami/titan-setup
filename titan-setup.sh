@@ -227,7 +227,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   run_q sudo apt-get update
-  run_q sudo apt install -y ufw fail2ban unattended-upgrades
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+    -o Dpkg::Options::="--force-confold" \
+    ufw fail2ban unattended-upgrades
   ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
@@ -430,9 +432,11 @@ fi
 section "Phase 1/6 — System Prerequisites"
 
 run_q sudo apt update
-run_q sudo apt upgrade -y
+run_q sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y \
+  -o Dpkg::Options::="--force-confold"
 
-run_q sudo apt install -y \
+run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+  -o Dpkg::Options::="--force-confold" \
   curl wget git build-essential unzip software-properties-common \
   lsb-release apt-transport-https gnupg ca-certificates \
   jq mtr nmap tmux pandoc direnv entr nikto lynis \
