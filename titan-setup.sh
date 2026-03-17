@@ -51,6 +51,7 @@ fail()    { echo -e "  ${RED}✗${NC} $1"; }
 ENGINEER_NAME=""
 INSTALL_MODE=""
 TAILSCALE_KEY=""
+_TAILSCALE_FAILED=false
 CLAUDE_USER=""
 TS_HOSTNAME=""
 CC_VERSION=""
@@ -262,6 +263,9 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
       printf 'TITAN_TMUX=1 bash %q' "$0"
       printf ' %q' "${_ORIG_ARGS[@]+"${_ORIG_ARGS[@]}"}"
       # Carry forward interactively-resolved values not present in _ORIG_ARGS
+      if [[ -n "${TAILSCALE_KEY:-}" ]]; then
+        printf ' --tailscale-key %q' "$TAILSCALE_KEY"
+      fi
       if [[ -n "$SEMGREP_TOKEN" ]]; then
         printf ' --semgrep-token %q' "$SEMGREP_TOKEN"
       elif $SEMGREP_SKIP; then
@@ -3230,44 +3234,57 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     run_q curl -fsSL https://tailscale.com/install.sh | sh
   fi
   # --reset ensures idempotent re-runs; --operator grants non-root user access
-  sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \
-    --operator="$USER" --reset
-  ok "Tailscale connected"
-
-  # Wait for Tailscale IP (up to 60s)
-  TS_IP=""
-  for _i in $(seq 1 30); do
-    TS_IP=$(tailscale ip -4 2>/dev/null || true)
-    [[ -n "$TS_IP" ]] && break
-    sleep 2
-  done
-  [[ -z "$TS_IP" ]] && { fail "Tailscale connected but no IPv4 assigned — aborting"; exit 1; }
-
-  # Get MagicDNS hostname for service URLs
-  TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
-
-  # ── tailscale serve — expose local services on Tailscale network ───────
-  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
-    tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
-      && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
-      || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
-  elif command -v docker &>/dev/null; then
-    ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
+  if sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \
+    --operator="$USER" --reset 2>&1; then
+    ok "Tailscale connected"
+  else
+    warn "Tailscale auth failed — key may be expired/invalid. Run manually after setup:"
+    warn "  sudo tailscale up --authkey=YOUR_KEY --ssh --accept-routes --accept-dns --operator=$USER --reset"
+    # Skip SSH lockdown to Tailscale since Tailscale isn't connected
+    _TAILSCALE_FAILED=true
   fi
-  if ! $CCFLARE_SKIP; then
-    tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
-      && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
-      || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
+
+  if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
+    # Wait for Tailscale IP (up to 60s)
+    TS_IP=""
+    for _i in $(seq 1 30); do
+      TS_IP=$(tailscale ip -4 2>/dev/null || true)
+      [[ -n "$TS_IP" ]] && break
+      sleep 2
+    done
+    if [[ -z "$TS_IP" ]]; then
+      warn "Tailscale connected but no IPv4 assigned — skipping SSH lockdown"
+      _TAILSCALE_FAILED=true
+    fi
   fi
-  if ! $LETTA_SKIP; then
-    tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null \
-      && ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" \
-      || warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
-  fi
-  if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP; then
-    tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null \
-      && ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" \
-      || warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
+
+  if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
+    # Get MagicDNS hostname for service URLs
+    TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
+
+    # ── tailscale serve — expose local services on Tailscale network ───────
+    if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
+      tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
+        && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
+        || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
+    elif command -v docker &>/dev/null; then
+      ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
+    fi
+    if ! $CCFLARE_SKIP; then
+      tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
+        && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
+        || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
+    fi
+    if ! $LETTA_SKIP; then
+      tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null \
+        && ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" \
+        || warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
+    fi
+    if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP; then
+      tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null \
+        && ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" \
+        || warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
+    fi
   fi
 
   # ── Add Claude user to docker group ────────────────────────────────────
@@ -3281,13 +3298,18 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 fi
 
 # ── VPS: lock SSH to Tailscale (silently — summary follows) ────────────────
-if [[ "$INSTALL_MODE" == "vps" ]]; then
+if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   sudo ufw allow in on tailscale0 to any port 22 proto tcp
   sudo ufw delete allow 22/tcp || true
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
   echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   # Capture compliance output BEFORE sshd restart (restart runs last, after all output)
+  COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
+elif [[ "$INSTALL_MODE" == "vps" ]]; then
+  warn "SSH lockdown skipped — Tailscale not connected. Run tailscale up manually, then:"
+  warn "  sudo ufw allow in on tailscale0 to any port 22 proto tcp"
+  warn "  sudo ufw delete allow 22/tcp"
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 fi
 
@@ -3370,6 +3392,6 @@ echo -e "
 # ── VPS: restart sshd last — rebinds socket to Tailscale IP only ───────────
 # Must be after all output is printed; will drop this session if connected
 # via public IP (expected — reconnect via Tailscale)
-if [[ "$INSTALL_MODE" == "vps" ]]; then
+if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
 fi
