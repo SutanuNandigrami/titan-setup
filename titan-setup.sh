@@ -189,19 +189,25 @@ fi
 # Go, some build tools, and mktemp -d with relative paths all call getcwd() and fail.
 cd "$HOME" || cd /tmp
 
-# ─── Disconnect resilience: re-exec inside screen if not already there ───
+# ─── Disconnect resilience: re-exec inside tmux if not already there ───
 # Install takes 30-60 min; SSH drops must not kill it.
-if [[ -z "${STY:-}" ]] && [[ -z "${TMUX:-}" ]] && [[ "${TITAN_SCREEN:-}" != "1" ]]; then
-  if ! command -v screen &>/dev/null; then
-    sudo apt-get install -y -qq screen 2>/dev/null || true
+if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
+  if ! command -v tmux &>/dev/null; then
+    sudo apt-get install -y -qq tmux 2>/dev/null || true
   fi
-  if command -v screen &>/dev/null; then
-    _SCREEN_LOG="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
-    echo -e "\n  ${CYAN}Re-launching inside screen (SSH-disconnect safe)${NC}"
-    echo -e "  ${GREEN}Reconnect:${NC} screen -r titan-setup"
-    echo -e "  ${GREEN}Log:${NC}       tail -f $_SCREEN_LOG\n"
-    TITAN_SCREEN=1 exec screen -L -Logfile "$_SCREEN_LOG" -S titan-setup \
-      bash "$0" "${_ORIG_ARGS[@]}"
+  if command -v tmux &>/dev/null; then
+    _TMUX_LOG="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+    _TMUX_WRAPPER=$(mktemp /tmp/titan-tmux-XXXXXX.sh)
+    {
+      printf 'TITAN_TMUX=1 bash %q' "$0"
+      printf ' %q' "${_ORIG_ARGS[@]+"${_ORIG_ARGS[@]}"}"
+      printf ' 2>&1 | tee %q\n' "$_TMUX_LOG"
+    } > "$_TMUX_WRAPPER"
+    chmod +x "$_TMUX_WRAPPER"
+    echo -e "\n  ${CYAN}Re-launching inside tmux (SSH-disconnect safe)${NC}"
+    echo -e "  ${GREEN}Reconnect:${NC} tmux attach -t titan-setup"
+    echo -e "  ${GREEN}Log:${NC}       tail -f $_TMUX_LOG\n"
+    exec tmux new-session -s titan-setup "bash $_TMUX_WRAPPER"
   fi
 fi
 
@@ -247,7 +253,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   run_q sudo apt-get update
   run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y -qq \
     -o Dpkg::Options::="--force-confold" \
-    ufw fail2ban unattended-upgrades screen
+    ufw fail2ban unattended-upgrades
   ok "Security packages (ufw, fail2ban, unattended-upgrades)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
@@ -910,10 +916,13 @@ CARGO_CRATES=(
   xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
 )
 
-# rtk (Rust Token Killer) — must install from git, not crates.io (name collision)
+# rtk (Rust Token Killer) — build from source with null-fix patch for Vertex AI
 if ! command -v rtk &>/dev/null || ! rtk gain &>/dev/null 2>&1; then
   echo -n "  rtk (Token Killer)..."
-  if run_q cargo install --git https://github.com/rtk-ai/rtk; then
+  _RTK_SRC="$WORKDIR/rtk-src"
+  if run_q git clone --depth=1 https://github.com/rtk-ai/rtk "$_RTK_SRC" \
+    && patch -p1 -d "$_RTK_SRC" < "$REPO_FILES/config/rtk/ccusage.patch" \
+    && run_q cargo install --path "$_RTK_SRC"; then
     echo -e " ${GREEN}✓${NC}"
   else
     echo -e " ${YELLOW}⚠ rtk install failed${NC}"
@@ -1418,8 +1427,8 @@ if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
 fi
 
 # ─── ccstatusline config ───
-install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json"
-ok "ccstatusline: config"
+install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
+  && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:

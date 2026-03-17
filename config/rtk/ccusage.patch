@@ -1,0 +1,47 @@
+--- a/src/ccusage.rs
++++ b/src/ccusage.rs
+@@ -9,22 +9,39 @@
+ use serde::Deserialize;
+ use std::process::Command;
+
++
++// ── Null-safe deserializers (Vertex AI returns null for cost/token fields) ──
++
++fn null_to_zero_u64<'de, D>(de: D) -> Result<u64, D::Error>
++where
++    D: serde::Deserializer<'de>,
++{
++    Ok(Option::<u64>::deserialize(de)?.unwrap_or(0))
++}
++
++fn null_to_zero_f64<'de, D>(de: D) -> Result<f64, D::Error>
++where
++    D: serde::Deserializer<'de>,
++{
++    Ok(Option::<f64>::deserialize(de)?.unwrap_or(0.0))
++}
++
+ // ── Public Types ──
+
+ /// Metrics from ccusage for a single period (day/week/month)
+ #[derive(Debug, Deserialize)]
+ pub struct CcusageMetrics {
+-    #[serde(rename = "inputTokens")]
++    #[serde(rename = "inputTokens", deserialize_with = "null_to_zero_u64")]
+     pub input_tokens: u64,
+-    #[serde(rename = "outputTokens")]
++    #[serde(rename = "outputTokens", deserialize_with = "null_to_zero_u64")]
+     pub output_tokens: u64,
+-    #[serde(rename = "cacheCreationTokens", default)]
++    #[serde(rename = "cacheCreationTokens", default, deserialize_with = "null_to_zero_u64")]
+     pub cache_creation_tokens: u64,
+-    #[serde(rename = "cacheReadTokens", default)]
++    #[serde(rename = "cacheReadTokens", default, deserialize_with = "null_to_zero_u64")]
+     pub cache_read_tokens: u64,
+-    #[serde(rename = "totalTokens")]
++    #[serde(rename = "totalTokens", deserialize_with = "null_to_zero_u64")]
+     pub total_tokens: u64,
+-    #[serde(rename = "totalCost")]
++    #[serde(rename = "totalCost", deserialize_with = "null_to_zero_f64")]
+     pub total_cost: f64,
+ }
