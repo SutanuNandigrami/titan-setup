@@ -1748,19 +1748,19 @@ install -Dm644 "/dot-claude/skills/nlm-cli/SKILL.md" "/skills/nlm-cli/SKILL.md"
 ok "skill: nlm-cli"
 
 # ─── Skill: docker-security ───
-install -Dm644 "/dot-claude/skills/docker-security/SKILL.md" "/skills/docker-security/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/docker-security/SKILL.md" "$CLAUDE_DIR/skills/docker-security/SKILL.md"
 ok "skill: docker-security"
 
 # ─── Skill: ansible-ops ───
-install -Dm644 "/dot-claude/skills/ansible-ops/SKILL.md" "/skills/ansible-ops/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/ansible-ops/SKILL.md" "$CLAUDE_DIR/skills/ansible-ops/SKILL.md"
 ok "skill: ansible-ops"
 
 # ─── Skill: incident-response ───
-install -Dm644 "/dot-claude/skills/incident-response/SKILL.md" "/skills/incident-response/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/incident-response/SKILL.md" "$CLAUDE_DIR/skills/incident-response/SKILL.md"
 ok "skill: incident-response"
 
 # ─── Skill: terraform-security ───
-install -Dm644 "/dot-claude/skills/terraform-security/SKILL.md" "/skills/terraform-security/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/terraform-security/SKILL.md" "$CLAUDE_DIR/skills/terraform-security/SKILL.md"
 ok "skill: terraform-security"
 
 # ─── Hook Scripts (Memory/Context Management) ───
