@@ -187,11 +187,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   if [[ "$(whoami)" != "$CLAUDE_USER" ]]; then
     if ! id "$CLAUDE_USER" &>/dev/null; then
-      useradd -m -s /bin/bash "$CLAUDE_USER"
+      sudo useradd -m -s /bin/bash "$CLAUDE_USER"
       echo -e "  ${GREEN}✓${NC} Created user: $CLAUDE_USER"
     fi
-    echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/"$CLAUDE_USER"
-    chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
+    echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$CLAUDE_USER" > /dev/null
+    sudo chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
     echo -e "  ${GREEN}✓${NC} Passwordless sudo granted to $CLAUDE_USER"
     echo -e "  Switching to $CLAUDE_USER and re-running...\n"
     _VPS_REEXEC_ARGS=(
@@ -1996,6 +1996,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     su - ${CLAUDE_USER}
     claude auth login
     claude doctor
+    atuin login               # optional: sync shell history across machines
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
@@ -2008,6 +2009,7 @@ else
     source ~/.bashrc
     claude auth login
     claude doctor
+    atuin login               # optional: sync shell history across machines
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"

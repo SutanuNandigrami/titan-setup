@@ -90,6 +90,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    claude --version && claude doctor
    ```
 
+5. **Optional: sync shell history across machines:**
+   ```bash
+   atuin login
+   ```
+
 ---
 
 ## Prerequisites
