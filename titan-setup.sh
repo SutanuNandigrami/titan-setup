@@ -61,7 +61,7 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
-CCFLARE_PROXY_PORT=8081  # socat proxy port for Docker container access
+CCFLARE_PROXY_PORT=8081  # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
 SEMGREP_TOKEN=""
 SEMGREP_SKIP=false
 LETTA_SKIP=false
@@ -2075,8 +2075,10 @@ else
       fi
 
       if [[ -f "$_SUBCON_AF" ]]; then
-        # Patch LLM config: use betterccflare proxy if available, else direct Anthropic
-        if ! $CCFLARE_SKIP && command -v socat &>/dev/null; then
+        # Patch LLM config: use ccflare billing proxy if available, else direct Anthropic
+        # Check bun + proxy file (billing proxy was migrated from socat to Bun)
+        if ! $CCFLARE_SKIP && command -v bun &>/dev/null \
+            && [[ -f "$HOME/.config/letta/ccflare-billing-proxy.js" ]]; then
           _SUBCON_LLM_ENDPOINT="http://host.docker.internal:${CCFLARE_PROXY_PORT}"
         else
           _SUBCON_LLM_ENDPOINT="https://api.anthropic.com/v1"
