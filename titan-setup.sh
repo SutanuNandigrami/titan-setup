@@ -712,13 +712,10 @@ echo -e "  ${CYAN}Python tools (uv):${NC}"
 UV_TOOLS=(
   "yq"              # yq — YAML/XML/TOML processor
   "semgrep"         # semgrep — static analysis
-  "codespell"       # codespell — spell checker for code
   "ansible-core"    # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
   "ansible-lint"    # ansible-lint — linter for Ansible playbooks
   "sqlmap"          # sqlmap — SQL injection testing
   "pgcli"           # pgcli — Postgres with autocomplete
-  "litecli"         # litecli — SQLite with autocomplete
-  "awscli"          # aws — AWS CLI
   "ruff"            # ruff — Python linter (replaces flake8+black+isort+pyflakes)
   "ast-grep-cli"    # ast-grep, sg — structural code search
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
@@ -1213,10 +1210,10 @@ fi
 
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat xsv htmlq
-  git-cliff git-absorb git-delta difftastic onefetch typos-cli
+  git-absorb git-delta difftastic typos-cli
   websocat bore-cli procs hyperfine
   pueue watchexec-cli just choose
-  xh mdbook ouch hurl jwt-cli oha tree-sitter-cli
+  xh ouch hurl jwt-cli oha
 )
 
 # rtk (Rust Token Killer) — build from source with null-fix patch for Vertex AI
@@ -1371,14 +1368,6 @@ else
     && sudo chmod +x /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
-# trufflehog — official install script (go install doesn't work for this project)
-if command -v trufflehog &>/dev/null; then
-  ok "trufflehog (exists)"
-else
-  echo -n "  Installing trufflehog (official script)..."
-  curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin 2>/dev/null \
-    && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
-fi
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools:${NC}"
 # claude-tmux — Rust TUI for managing Claude Code tmux sessions
@@ -1500,12 +1489,6 @@ if ! command -v gh &>/dev/null; then
   ok "gh"
 else ok "gh (exists)"; fi
 
-# fzf — release assets embed version in filename so latest/download won't work; use go install
-if ! command -v fzf &>/dev/null; then
-  run_q go install github.com/junegunn/fzf@latest \
-    && ok "fzf" || warn "fzf install failed"
-else ok "fzf (exists)"; fi
-
 # ShellCheck linter (latest binary, apt version is ancient)
 
 SHELLCHECK_VERSION=$(curl -s https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq -r .tag_name)
@@ -1570,14 +1553,6 @@ if [[ "$ARCH_AMD" == "amd64" ]]; then
   else ok "comby (exists)"; fi
 else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
 
-# runme — execute code blocks from Markdown runbooks (uses ARCH_GO: amd64/arm64)
-if ! command -v runme &>/dev/null; then
-  curl -fsSL -o "$WORKDIR/runme.tar.gz" \
-    "https://github.com/runmedev/runme/releases/latest/download/runme_linux_${ARCH_GO}.tar.gz" \
-    && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" runme 2>/dev/null \
-    && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
-    && ok "runme" || warn "runme install failed"
-else ok "runme (exists)"; fi
 
 
 section "Phase 4/6 — Claude Code CLI"
@@ -1642,7 +1617,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   ok "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/nlm-cli,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/nlm-cli,skills/docker-security,skills/ansible-ops,skills/incident-response,skills/terraform-security,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
 mkdir -p "$HOME/.config/agt"
 
 # ─── Repo files (static content loaded from git repo) ────────────────────────
@@ -1769,8 +1744,24 @@ install -Dm644 "$REPO_FILES/dot-claude/skills/process-supervisor/SKILL.md" "$CLA
 ok "skill: process-supervisor"
 
 # ─── Skill: nlm-cli ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/nlm-cli/SKILL.md" "$CLAUDE_DIR/skills/nlm-cli/SKILL.md"
+install -Dm644 "/dot-claude/skills/nlm-cli/SKILL.md" "/skills/nlm-cli/SKILL.md"
 ok "skill: nlm-cli"
+
+# ─── Skill: docker-security ───
+install -Dm644 "/dot-claude/skills/docker-security/SKILL.md" "/skills/docker-security/SKILL.md"
+ok "skill: docker-security"
+
+# ─── Skill: ansible-ops ───
+install -Dm644 "/dot-claude/skills/ansible-ops/SKILL.md" "/skills/ansible-ops/SKILL.md"
+ok "skill: ansible-ops"
+
+# ─── Skill: incident-response ───
+install -Dm644 "/dot-claude/skills/incident-response/SKILL.md" "/skills/incident-response/SKILL.md"
+ok "skill: incident-response"
+
+# ─── Skill: terraform-security ───
+install -Dm644 "/dot-claude/skills/terraform-security/SKILL.md" "/skills/terraform-security/SKILL.md"
+ok "skill: terraform-security"
 
 # ─── Hook Scripts (Memory/Context Management) ───
 
@@ -2178,7 +2169,6 @@ SHELL_BLOCK='
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
 eval "$(direnv hook bash)"
 eval "$(mise activate bash)"
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
 export GIT_PAGER="delta"
 command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
