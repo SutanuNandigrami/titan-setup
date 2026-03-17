@@ -686,7 +686,7 @@ else
   if curl -fsSL https://get.docker.com | sh 2>/dev/null; then
     ok "docker installed: $(docker --version)"
   else
-    warn "docker install failed — n8n, lazydocker, dive will still work if Docker is installed later"
+    warn "docker install failed — n8n and dive will still work if Docker is installed later"
   fi
 fi
 # Add current user to docker group (allows running without sudo)
@@ -710,10 +710,8 @@ section "Phase 3/6 — 155+ CLI Tools"
 echo -e "  ${CYAN}Python tools (uv):${NC}"
 
 UV_TOOLS=(
-  "httpie"          # http, https — HTTP client
   "yq"              # yq — YAML/XML/TOML processor
   "semgrep"         # semgrep — static analysis
-  "csvkit"          # csvlook, csvstat, csvsql + 9 more
   "codespell"       # codespell — spell checker for code
   "ansible-core"    # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
   "ansible-lint"    # ansible-lint — linter for Ansible playbooks
@@ -725,7 +723,6 @@ UV_TOOLS=(
   "ast-grep-cli"    # ast-grep, sg — structural code search
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
   "cookiecutter"    # cookiecutter — project scaffolding from templates
-  "visidata"        # vd — TUI spreadsheet for CSV, JSON, SQLite, Parquet
   "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
 )
 
@@ -1215,10 +1212,10 @@ else
 fi
 
 CARGO_CRATES=(
-  ripgrep fd-find sd eza du-dust bat broot zoxide xsv htmlq
+  ripgrep fd-find sd eza du-dust bat xsv htmlq
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
   bandwhich websocat bore-cli procs bottom hyperfine
-  pueue watchexec-cli just starship atuin navi choose
+  pueue watchexec-cli just starship atuin choose
   xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
 )
 
@@ -1305,13 +1302,9 @@ echo -e "\n  ${CYAN}Go tools:${NC}"
 # Associative array: binary_name → install_path
 # This lets us check if the binary exists before running go install
 declare -A GO_MAP=(
-  ["lazygit"]="github.com/jesseduffield/lazygit@latest"
-  # lazydocker installed via binary below (go install fails due to Docker API conflict)
-  #["lazydocker"]="github.com/jesseduffield/lazydocker@latest"
   ["dive"]="github.com/wagoodman/dive@latest"
   ["stern"]="github.com/stern/stern@latest"
   ["glow"]="github.com/charmbracelet/glow@latest"
-  ["slides"]="github.com/maaslalani/slides@latest"
   ["mkcert"]="filippo.io/mkcert@latest"
   ["task"]="github.com/go-task/task/v3/cmd/task@latest"
   ["nuclei"]="github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
@@ -1325,7 +1318,6 @@ declare -A GO_MAP=(
   ["doctl"]="github.com/digitalocean/doctl/cmd/doctl@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
-  ["gum"]="github.com/charmbracelet/gum@latest"
   ["act"]="github.com/nektos/act@latest"
   ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
   ["gron"]="github.com/tomnomnom/gron@latest"
@@ -1336,7 +1328,6 @@ declare -A GO_MAP=(
   ["cosign"]="github.com/sigstore/cosign/v2/cmd/cosign@latest"
   ["crane"]="github.com/google/go-containerregistry/cmd/crane@latest"
   ["scc"]="github.com/boyter/scc/v3@latest"
-  ["dasel"]="github.com/tomwright/dasel/v2/cmd/dasel@latest"
 )
 
 GO_FAILED=()
@@ -1373,18 +1364,6 @@ else
   run_q go install filippo.io/age/cmd/...@latest && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
-# lazydocker — go install broken (Docker API conflict), use binary release
-if command -v lazydocker &>/dev/null; then
-  ok "lazydocker (exists)"
-else
-  LAZYDOCKER_VERSION=$(curl -s https://api.github.com/repos/jesseduffield/lazydocker/releases/latest | jq -r .tag_name)
-  if [[ -z "$LAZYDOCKER_VERSION" || "$LAZYDOCKER_VERSION" == "null" ]]; then
-    warn "lazydocker — failed to fetch version"
-  else
-    curl -sL "https://github.com/jesseduffield/lazydocker/releases/download/${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION#v}_Linux_${ARCH_FULL/aarch64/arm64}.tar.gz" | tar xz -C "$WORKDIR" lazydocker \
-      && sudo mv "$WORKDIR/lazydocker" /usr/local/bin/ && ok "lazydocker" || warn "lazydocker install failed"
-  fi
-fi
 
 # ctop — archived project, go install broken, use pinned binary release
 if command -v ctop &>/dev/null; then
@@ -1440,11 +1419,6 @@ if ! command -v kubectl &>/dev/null; then
   ok "kubectl"
 else ok "kubectl (exists)"; fi
 
-# k9s
-if ! command -v k9s &>/dev/null; then
-  curl -sS https://webi.sh/k9s | sh 2>/dev/null \
-    && ok "k9s" || warn "k9s install failed"
-else ok "k9s (exists)"; fi
 
 # helm
 if ! command -v helm &>/dev/null; then
@@ -1546,14 +1520,6 @@ elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep ve
     && ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
 else ok "shellcheck (exists)"; fi
 
-# yazi (file manager — cargo build is broken due to rand_core conflict)
-if ! command -v yazi &>/dev/null; then
-  curl -sL -o "$WORKDIR/yazi.zip" "https://github.com/sxyazi/yazi/releases/latest/download/yazi-${ARCH_RUST}-unknown-linux-gnu.zip"
-  unzip -qo "$WORKDIR/yazi.zip" -d "$WORKDIR"
-  sudo mv "$WORKDIR/yazi-${ARCH_RUST}-unknown-linux-gnu/yazi" /usr/local/bin/
-  sudo mv "$WORKDIR/yazi-${ARCH_RUST}-unknown-linux-gnu/ya" /usr/local/bin/
-  ok "yazi"
-else ok "yazi (exists)"; fi
 
 # Dippy — auto-approve safe commands for Claude Code (brew preferred, fallback to clone)
 if ! command -v dippy &>/dev/null && ! [ -f "$HOME/.local/bin/dippy" ]; then
@@ -1588,17 +1554,6 @@ if ! command -v cloudflared &>/dev/null; then
     && ok "cloudflared" || warn "cloudflared install failed"
 else ok "cloudflared (exists)"; fi
 
-# syft — SBOM generation for containers and filesystems
-if ! command -v syft &>/dev/null; then
-  curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin \
-    && ok "syft" || warn "syft install failed"
-else ok "syft (exists)"; fi
-
-# grype — vulnerability scanner for containers and filesystems (pairs with syft)
-if ! command -v grype &>/dev/null; then
-  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin \
-    && ok "grype" || warn "grype install failed"
-else ok "grype (exists)"; fi
 
 # step-cli — certificate inspection, generation, and TLS debugging
 # Uses versionless asset name (step-cli_amd64.deb) so latest/download works reliably
@@ -2232,7 +2187,6 @@ fi
 SHELL_BLOCK='
 # ══════ Titan CLI Arsenal ══════
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
-eval "$(zoxide init bash)"
 eval "$(starship init bash)"
 eval "$(direnv hook bash)"
 eval "$(mise activate bash)"
