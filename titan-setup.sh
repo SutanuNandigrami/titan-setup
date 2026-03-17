@@ -1348,17 +1348,19 @@ if ! command -v step &>/dev/null; then
     && ok "step-cli" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
-# comby — structural code search/replace that understands syntax
-if ! command -v comby &>/dev/null; then
-  sudo apt install -y libpcre3-dev 2>/dev/null
-  echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
-    && ok "comby" || warn "comby install failed"
-else ok "comby (exists)"; fi
+# comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
+if [[ "$ARCH_AMD" == "amd64" ]]; then
+  if ! command -v comby &>/dev/null; then
+    sudo apt install -y libpcre3-dev 2>/dev/null
+    echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
+      && ok "comby" || warn "comby install failed"
+  else ok "comby (exists)"; fi
+else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
 
-# runme — execute code blocks from Markdown runbooks (repo moved to runmedev org, arch is x86_64)
+# runme — execute code blocks from Markdown runbooks (uses ARCH_GO: amd64/arm64)
 if ! command -v runme &>/dev/null; then
   curl -fsSL -o "$WORKDIR/runme.tar.gz" \
-    "https://github.com/runmedev/runme/releases/latest/download/runme_linux_${ARCH_FULL}.tar.gz" \
+    "https://github.com/runmedev/runme/releases/latest/download/runme_linux_${ARCH_GO}.tar.gz" \
     && tar xzf "$WORKDIR/runme.tar.gz" -C "$WORKDIR" runme 2>/dev/null \
     && sudo install -m 0755 "$WORKDIR/runme" /usr/local/bin/runme \
     && ok "runme" || warn "runme install failed"
@@ -1385,8 +1387,8 @@ else
   echo "    3. Run: claude doctor   (to verify)"
 fi
 
-# ─── Claude Desktop (desktop only — Electron GUI app) ───
-if [[ "$INSTALL_MODE" == "desktop" ]]; then
+# ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
+if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
     echo "  Installing Claude Desktop..."
     curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
@@ -1396,7 +1398,7 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
     ok "Claude Desktop (exists)"
   fi
 
-  # ─── Claude Cowork Service (desktop only — community package) ───
+  # ─── Claude Cowork Service (desktop only — community package, x86_64 only) ───
   if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
     echo "  Installing Claude Cowork Service..."
     curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
@@ -1405,6 +1407,8 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else
     ok "Claude Cowork Service (exists)"
   fi
+elif [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" != "amd64" ]]; then
+  warn "Claude Desktop: skipped (amd64 only, detected ${ARCH_AMD})"
 fi
 
 
