@@ -6,6 +6,20 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ---
 
+### v3.18 — GitHub Action security hardening, documentation overhaul
+
+**GitHub Action security:**
+- Restricted `@claude` trigger in GitHub Actions to repository owner and collaborators only — prevents prompt injection from anonymous external users filing issues with malicious `@claude` mentions
+- Added `actor-permission` check (write access required) before the Claude Code action runs
+- Security model: only users with repository write access can trigger automated Claude responses
+
+**Documentation:**
+- README: added table of contents, flag reference table, improved troubleshooting (PATH debugging steps, tool-not-found guide), changelog version table
+- USER_GUIDE: added table of contents, Quick Start section, complete Slash Commands reference (all 11 commands documented with examples) — this section was previously missing
+- CHANGELOG: added this entry
+
+---
+
 ### v3.17 — ARM64 fixes, VPS reliability, consistency audit
 
 **ARM64 (aarch64) compatibility — verified on OCI Ampere:**

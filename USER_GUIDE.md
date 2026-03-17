@@ -1,6 +1,39 @@
 # Titan Workstation User Guide
 
-Welcome to your Claude Code workstation. This guide covers 155+ CLI tools installed and ready to use.
+Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
+
+## Table of Contents
+
+- [How This Works](#how-this-works)
+- [Quick Start](#quick-start)
+- [Slash Commands](#slash-commands)
+- [Search & Navigation](#search--navigation)
+- [File Operations](#file-operations)
+- [Data Processing](#data-processing)
+- [HTTP & APIs](#http--apis)
+- [Git & Version Control](#git--version-control)
+- [Security & Scanning](#security--scanning)
+- [Network & DNS](#network--dns)
+- [Process & System](#process--system)
+- [Containers & Kubernetes](#containers--kubernetes)
+- [Cloud & Infrastructure](#cloud--infrastructure)
+- [Secrets & Certificates](#secrets--certificates)
+- [Code Quality & Formatting](#code-quality--formatting)
+- [DevOps & Automation](#devops--automation)
+- [Container Registry](#container-registry)
+- [Databases](#databases)
+- [Terminal UI & Utilities](#terminal-ui--utilities)
+- [Code Stats & Analysis](#code-stats--analysis)
+- [Documentation & Generation](#documentation--generation)
+- [Python Development](#python-development)
+- [Claude Code Ecosystem](#claude-code-ecosystem)
+- [Web & JavaScript](#web--javascript)
+- [Shell Enhancement](#shell-enhancement)
+- [Agents & Custom Agent Loading](#agents--custom-agent-loading)
+- [Tips & Best Practices](#tips--best-practices)
+- [Getting Help](#getting-help)
+
+---
 
 ## How This Works
 
@@ -17,7 +50,73 @@ This document is a **reference** — browse when you want to know what's availab
 
 ---
 
+## Quick Start
+
+
+After running `titan-setup.sh`, here's how to get started immediately:
+
+```bash
+# 1. Source your shell config
+source ~/.bashrc
+
+# 2. Authenticate Claude
+claude auth login
+
+# 3. Verify installation
+claude --version && claude doctor
+
+# 4. Start Claude in any project directory
+cd ~/my-project
+claude
+
+# 5. Check what's available
+/tools          # List all configured tools
+/workspace-init # Auto-detect project type and set up workspace
+```
+
+**First things to try in Claude:**
+- `"Show me the structure of this project"` — Claude uses `eza --tree` or `fd`
+- `"Search for all TODO comments"` — Claude uses `rg 'TODO'`
+- `"What's using the most disk space?"` — Claude uses `dust`
+- `"Run a security scan on this project"` — or just type `/scan`
+
+---
+
+## Slash Commands
+
+Titan installs 11 slash commands that automate common workflows. Type these directly in Claude Code:
+
+| Command | What it does |
+|---------|-------------|
+| `/ship` | Full pre-push pipeline: lint → test → gitleaks scan → commit → push → optional PR |
+| `/scan` | Security scan: gitleaks + trivy + osv-scanner + hadolint + tflint (as applicable) |
+| `/review` | Code review of current branch vs. main using the reviewer agent |
+| `/workspace-init` | Detect project type, generate `_workspace.json`, create `.envrc` with direnv |
+| `/remember <thing>` | Save a fact, preference, or pattern to persistent memory |
+| `/recall` | Surface memory + session handoff from previous sessions (0 startup cost) |
+| `/catchup` | Summarize git branch state, recent commits, and pending work |
+| `/standup` | Generate standup from yesterday's git activity |
+| `/handoff` | Save current session state to handoff.md for next session |
+| `/context` | Show current context usage and compression status |
+| `/tools` | List all configured CLI tools and their status |
+| `/gh-action` | Set up a GitHub Actions workflow for the current project |
+
+### Usage Examples
+
+```
+/ship                    # Push everything with full safety checks
+/scan                    # Security audit the current project
+/review                  # Review what you've changed vs. main
+/remember "always use ruff not flake8 in this project"
+/recall                  # What was I working on last session?
+/standup                 # Generate my standup notes
+/workspace-init          # Set up this new project
+```
+
+---
+
 ## Search & Navigation
+
 
 #### rg (ripgrep)
 Fast recursive text search across files. Replaces `grep` completely.
