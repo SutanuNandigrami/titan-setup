@@ -61,8 +61,13 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
+CCFLARE_PROXY_PORT=8081  # socat proxy port for Docker container access
 SEMGREP_TOKEN=""
 SEMGREP_SKIP=false
+LETTA_SKIP=false
+LETTA_PORT=8283
+LETTA_PASSWORD=""
+OLLAMA_SKIP=false
 
 usage() {
   cat <<USAGE
@@ -86,6 +91,12 @@ Options:
   semgrep options:
   --semgrep-token TOKEN    Semgrep App Token (enables semgrep plugin in Claude Code)
   --no-semgrep             Skip semgrep plugin entirely (no token needed)
+
+  letta / subconscious options:
+  --letta-skip             Skip Letta server + claude-subconscious plugin
+  --letta-port PORT        Letta server port (default: 8283)
+  --letta-password PASS    Letta server password (auto-generated if omitted)
+  --no-ollama              Skip Ollama install (use OPENAI_API_KEY for embeddings instead)
 
   --version                Show script version
   -h, --help               Show this help message
@@ -119,6 +130,10 @@ while [[ $# -gt 0 ]]; do
     --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
     --semgrep-token)   [[ $# -ge 2 ]] || { fail "--semgrep-token requires a value"; usage; }; SEMGREP_TOKEN="$2"; shift 2 ;;
     --no-semgrep)      SEMGREP_SKIP=true; shift ;;
+    --letta-skip)      LETTA_SKIP=true; shift ;;
+    --letta-port)      [[ $# -ge 2 ]] || { fail "--letta-port requires a value"; usage; }; LETTA_PORT="$2"; shift 2 ;;
+    --letta-password)  [[ $# -ge 2 ]] || { fail "--letta-password requires a value"; usage; }; LETTA_PASSWORD="$2"; shift 2 ;;
+    --no-ollama)       OLLAMA_SKIP=true; shift ;;
     --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
@@ -208,6 +223,10 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     _VPS_REEXEC_ARGS+=(--ccflare-port "$CCFLARE_PORT" --ccflare-host "$CCFLARE_HOST")
     [[ -n "$SEMGREP_TOKEN" ]]      && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
     $SEMGREP_SKIP                  && _VPS_REEXEC_ARGS+=(--no-semgrep)
+    $LETTA_SKIP                    && _VPS_REEXEC_ARGS+=(--letta-skip)
+    _VPS_REEXEC_ARGS+=(--letta-port "$LETTA_PORT")
+    [[ -n "$LETTA_PASSWORD" ]]     && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
+    $OLLAMA_SKIP                   && _VPS_REEXEC_ARGS+=(--no-ollama)
     exec sudo -u "$CLAUDE_USER" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
   fi
 fi
@@ -675,6 +694,16 @@ if command -v docker &>/dev/null && ! groups "$USER" | grep -q docker; then
   sudo usermod -aG docker "$USER" 2>/dev/null && ok "added $USER to docker group (re-login to take effect)" || true
 fi
 
+# ─── Letta resource check ───
+if ! $LETTA_SKIP; then
+  _TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+  if (( _TOTAL_RAM_MB < 3072 )); then
+    warn "System has ${_TOTAL_RAM_MB}MB RAM — Letta+Ollama need ~2GB."
+    echo "  Consider --letta-skip or adding swap:"
+    echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
+  fi
+fi
+
 section "Phase 3/6 — 155+ CLI Tools"
 
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
@@ -817,6 +846,150 @@ SERVICEEOF
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
+# ─── Ollama — local embedding model server (required by Letta for agent creation) ───
+if $LETTA_SKIP || $OLLAMA_SKIP; then
+  ok "Ollama (skipped)"
+else
+  if command -v ollama &>/dev/null; then
+    ok "ollama already installed: $(ollama --version 2>/dev/null | head -1 || echo installed)"
+  else
+    echo "  Installing Ollama..."
+    if curl -fsSL https://ollama.com/install.sh | sh >> "$LOG_FILE" 2>&1; then
+      ok "ollama installed"
+    else
+      warn "ollama install failed — Letta will need OpenAI embeddings (set OPENAI_API_KEY)"
+      OLLAMA_SKIP=true
+    fi
+  fi
+
+  if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
+    # Ollama installer creates /etc/systemd/system/ollama.service (system-level)
+    # Bind to 0.0.0.0 so Docker bridge containers can reach it via host.docker.internal
+    sudo mkdir -p /etc/systemd/system/ollama.service.d
+    printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0:11434"\n' \
+      | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
+    sudo systemctl daemon-reload 2>/dev/null || true
+    sudo systemctl enable ollama 2>/dev/null || true
+    sudo systemctl start ollama 2>/dev/null || true
+    # Wait for Ollama to be ready (up to 30s)
+    for _oi in $(seq 1 15); do
+      ollama list &>/dev/null 2>&1 && break
+      sleep 2
+    done
+    if ! ollama list &>/dev/null 2>&1; then
+      warn "ollama service not responding — check: sudo systemctl status ollama"
+      OLLAMA_SKIP=true
+    fi
+  fi
+
+  if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
+    if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+      ok "nomic-embed-text (exists)"
+    else
+      echo -n "  Pulling nomic-embed-text (~274MB)..."
+      if ollama pull nomic-embed-text >> "$LOG_FILE" 2>&1; then
+        echo -e " ${GREEN}✓${NC}"
+      else
+        echo -e " ${YELLOW}⚠ pull failed — retry: ollama pull nomic-embed-text${NC}"
+        OLLAMA_SKIP=true
+      fi
+    fi
+  fi
+fi
+
+# ─── Letta password + credentials (generated before Docker container setup) ───
+if ! $LETTA_SKIP; then
+  if [[ -z "$LETTA_PASSWORD" ]]; then
+    LETTA_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+  fi
+  mkdir -p "$HOME/.config/letta"
+  cat > "$HOME/.config/letta/credentials" << CREDEOF
+# Letta server credentials (generated by titan-setup ${SCRIPT_VERSION})
+LETTA_SERVER_PASSWORD=${LETTA_PASSWORD}
+LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}
+LETTA_API_KEY=${LETTA_PASSWORD}
+CREDEOF
+  chmod 600 "$HOME/.config/letta/credentials"
+
+  # Docker env file for Letta container
+  cat > "$HOME/.config/letta/docker.env" << ENVEOF
+SECURE=true
+LETTA_SERVER_PASSWORD=${LETTA_PASSWORD}
+ENVEOF
+  if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
+    echo "OLLAMA_BASE_URL=http://host.docker.internal:11434/v1" >> "$HOME/.config/letta/docker.env"
+  fi
+  if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
+    echo "ANTHROPIC_BASE_URL=http://host.docker.internal:${CCFLARE_PROXY_PORT}" >> "$HOME/.config/letta/docker.env"
+    echo "ANTHROPIC_API_KEY=sk-proxy-via-ccflare" >> "$HOME/.config/letta/docker.env"
+  elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> "$HOME/.config/letta/docker.env"
+  fi
+  chmod 600 "$HOME/.config/letta/docker.env"
+  ok "Letta credentials (~/.config/letta/)"
+fi
+
+# ─── Letta Server — persistent memory backend for claude-subconscious ───
+if $LETTA_SKIP; then
+  ok "Letta server (skipped)"
+elif ! command -v docker &>/dev/null; then
+  warn "Letta server skipped — Docker not available (install Docker and re-run)"
+  LETTA_SKIP=true
+else
+  # Pull Letta Docker image (bundles Postgres+pgvector)
+  _DOCKER_BIN=$(command -v docker)
+  if run_q docker pull letta/letta:latest; then
+    ok "letta/letta:latest image"
+  else
+    warn "letta docker pull failed — check: docker pull letta/letta:latest"
+    LETTA_SKIP=true
+  fi
+
+  if ! $LETTA_SKIP; then
+    mkdir -p "$HOME/.letta/.persist/pgdata"
+
+    # Systemd user service using --env-file to avoid secrets in unit file
+    mkdir -p "$HOME/.config/systemd/user"
+    cat > "$HOME/.config/systemd/user/letta.service" << SERVICEEOF
+[Unit]
+Description=Letta persistent memory server
+After=default.target
+
+[Service]
+Type=simple
+ExecStartPre=-${_DOCKER_BIN} rm -f letta-server
+ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p ${LETTA_PORT}:8283 --add-host=host.docker.internal:host-gateway -v %h/.letta/.persist/pgdata:/var/lib/postgresql/data --env-file %h/.config/letta/docker.env letta/letta:latest
+ExecStop=${_DOCKER_BIN} stop letta-server
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target
+SERVICEEOF
+
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user enable letta 2>/dev/null || true
+    systemctl --user start letta 2>/dev/null || true
+    ok "letta service (http://127.0.0.1:${LETTA_PORT})"
+
+    # Wait for Letta health (up to 60s — Postgres init slow on first run)
+    _LETTA_READY=false
+    for _li in $(seq 1 30); do
+      if curl -sf "http://127.0.0.1:${LETTA_PORT}/v1/health" &>/dev/null; then
+        _LETTA_READY=true
+        break
+      fi
+      sleep 2
+    done
+    if $_LETTA_READY; then
+      ok "letta server healthy (http://127.0.0.1:${LETTA_PORT})"
+    else
+      warn "letta server not responding yet — check: journalctl --user -u letta -f"
+      echo "  (Postgres init can take 30-60s on first run; service will recover automatically)"
+    fi
+  fi
+fi
+
 # ─── better-ccflare — Claude Code load balancer proxy ───
 # Distributes requests across Claude OAuth, Vertex AI, Z.ai, OpenRouter, local models
 # Dashboard: http://${CCFLARE_HOST}:${CCFLARE_PORT} | Docs: https://github.com/tombii/better-ccflare
@@ -922,6 +1095,92 @@ SERVICEEOF
   echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
   echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"
   echo "  ANTHROPIC_BASE_URL is auto-set in settings.json after accounts are added."
+
+  # Billing header proxy (fixes better-ccflare issue #89):
+  # - betterccflare binds to 127.0.0.1 only → Docker can't reach it directly
+  # - OAuth accounts require x-anthropic-billing-header in system[0] for Sonnet/Opus
+  # - This Bun proxy: 0.0.0.0:PROXY_PORT → injects header → 127.0.0.1:CCFLARE_PORT
+  # - betterccflare upstream fix pending; when merged, this proxy still works (idempotent)
+  _BUN_BIN=$(command -v bun 2>/dev/null || echo "$HOME/.local/bin/bun")
+  if [[ -x "$_BUN_BIN" ]]; then
+    mkdir -p "$HOME/.config/letta"
+    cat > "$HOME/.config/letta/ccflare-billing-proxy.js" << 'BPROXY'
+// ccflare-billing-proxy: fix for better-ccflare issue #89 (Sonnet/Opus 400 via OAuth)
+// Injects x-anthropic-billing-header as system[0] block — required by Anthropic API
+import { createHash } from "node:crypto";
+const UPSTREAM = `http://127.0.0.1:${process.env.CCFLARE_PORT || 8080}`;
+const PORT = Number(process.env.CCFLARE_PROXY_PORT || 8081);
+const CC_VERSION = "2.1.77";
+const SALT = "59cf53e54c78";
+function computeBillingHeader(firstUserText) {
+  const chars = [4, 7, 20].map(i => firstUserText[i] || "0").join("");
+  const hash = createHash("sha256").update(SALT + chars + CC_VERSION).digest("hex").slice(0, 3);
+  return `x-anthropic-billing-header: cc_version=${CC_VERSION}.${hash}; cc_entrypoint=cli; cch=00000;`;
+}
+function injectBillingHeader(body) {
+  try {
+    const json = JSON.parse(body);
+    const sys = json.system;
+    if (Array.isArray(sys) && sys.some(b => b.type === "text" && b.text?.startsWith("x-anthropic-billing-header:"))) return body;
+    let firstUserText = "";
+    if (Array.isArray(json.messages)) {
+      for (const msg of json.messages) {
+        if (msg.role === "user") {
+          if (typeof msg.content === "string") firstUserText = msg.content;
+          else if (Array.isArray(msg.content)) { const tb = msg.content.find(b => b.type === "text"); if (tb) firstUserText = tb.text || ""; }
+          break;
+        }
+      }
+    }
+    const bb = { type: "text", text: computeBillingHeader(firstUserText) };
+    if (Array.isArray(json.system)) json.system.unshift(bb);
+    else if (typeof json.system === "string") json.system = [bb, { type: "text", text: json.system }];
+    else json.system = [bb];
+    return JSON.stringify(json);
+  } catch { return body; }
+}
+Bun.serve({
+  port: PORT, hostname: "0.0.0.0",
+  async fetch(req) {
+    const url = new URL(req.url);
+    let body = await req.arrayBuffer();
+    const headers = new Headers(req.headers);
+    if (req.method === "POST" && url.pathname.includes("/v1/messages")) {
+      const patched = injectBillingHeader(new TextDecoder().decode(body));
+      body = new TextEncoder().encode(patched);
+      headers.set("content-length", body.byteLength.toString());
+    }
+    const resp = await fetch(UPSTREAM + url.pathname + url.search, { method: req.method, headers, body: req.method !== "GET" && req.method !== "HEAD" ? body : undefined });
+    return new Response(resp.body, { status: resp.status, headers: resp.headers });
+  },
+});
+BPROXY
+
+    cat > "$HOME/.config/systemd/user/ccflare-docker-proxy.service" << SVCEOF
+[Unit]
+Description=betterccflare billing header proxy (issue #89 — Sonnet/Opus via OAuth)
+After=better-ccflare.service
+BindsTo=better-ccflare.service
+
+[Service]
+Type=simple
+ExecStart=${_BUN_BIN} run %h/.config/letta/ccflare-billing-proxy.js
+Environment="CCFLARE_PORT=${CCFLARE_PORT}"
+Environment="CCFLARE_PROXY_PORT=${CCFLARE_PROXY_PORT}"
+Environment="PATH=${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+SVCEOF
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user enable ccflare-docker-proxy 2>/dev/null || true
+    systemctl --user start ccflare-docker-proxy 2>/dev/null || true
+    ok "ccflare-billing-proxy (0.0.0.0:${CCFLARE_PROXY_PORT} → 127.0.0.1:${CCFLARE_PORT}, billing header injection)"
+  else
+    warn "bun not found — ccflare-billing-proxy skipped (Letta LLM calls will fail)"
+  fi
 fi  # end $CCFLARE_SKIP
 
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
@@ -1487,6 +1746,24 @@ if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
   ok "settings.json (ANTHROPIC_BASE_URL → http://127.0.0.1:${CCFLARE_PORT})"
 fi
 
+# Inject Letta env vars if Letta is installed
+if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
+  _LETTA_PASS=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
+  jq --arg url "http://127.0.0.1:${LETTA_PORT}" \
+     --arg key "$_LETTA_PASS" \
+     --arg model "anthropic/claude-sonnet-4-6" \
+     --arg mode "whisper" \
+     --arg tools "read-only" \
+     '.env.LETTA_BASE_URL = $url |
+      .env.LETTA_API_KEY = $key |
+      .env.LETTA_MODEL = $model |
+      .env.LETTA_MODE = $mode |
+      .env.LETTA_SDK_TOOLS = $tools' \
+    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+  ok "settings.json (Letta env vars injected — LETTA_BASE_URL, LETTA_API_KEY, LETTA_MODEL, LETTA_MODE)"
+fi
+
 # ─── ccstatusline config ───
 install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
   && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
@@ -1821,6 +2098,79 @@ else
     && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 
+  # claude-subconscious — Letta-based persistent cross-session memory agent
+  if ! $LETTA_SKIP; then
+    claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null \
+      && ok "letta marketplace" || ok "letta marketplace (exists)"
+    if claude plugin install claude-subconscious 2>/dev/null; then
+      ok "claude-subconscious plugin"
+
+      # Install node_modules (tsx + @letta-ai/letta-code-sdk) — CC does not auto-install plugin deps
+      _SUBCON_DIR=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
+        "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+      if [[ -n "$_SUBCON_DIR" ]] && [[ -f "$_SUBCON_DIR/package.json" ]]; then
+        (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) \
+          && ok "subconscious: node_modules installed" \
+          || warn "subconscious: npm install failed — hooks may not work"
+      fi
+
+      # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
+      # Default .af uses openai/text-embedding-3-small and zai/glm-5 (cloud only)
+      _SUBCON_AF=""
+      if [[ -f "$HOME/.claude/plugins/installed_plugins.json" ]]; then
+        _SUBCON_INSTALL=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
+          "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+        [[ -n "$_SUBCON_INSTALL" ]] && _SUBCON_AF="$_SUBCON_INSTALL/Subconscious.af"
+      fi
+
+      if [[ -f "$_SUBCON_AF" ]]; then
+        # Patch LLM config: use betterccflare proxy if available, else direct Anthropic
+        if ! $CCFLARE_SKIP && command -v socat &>/dev/null; then
+          _SUBCON_LLM_ENDPOINT="http://host.docker.internal:${CCFLARE_PROXY_PORT}"
+        else
+          _SUBCON_LLM_ENDPOINT="https://api.anthropic.com/v1"
+        fi
+        # Use Sonnet via billing-header proxy (ccflare-billing-proxy injects required header)
+        jq --arg ep "$_SUBCON_LLM_ENDPOINT" '
+          .agents[0].llm_config.model = "claude-sonnet-4-6" |
+          .agents[0].llm_config.model_endpoint_type = "anthropic" |
+          .agents[0].llm_config.model_endpoint = $ep |
+          .agents[0].llm_config.provider_name = "anthropic" |
+          .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
+          .agents[0].llm_config.context_window = 200000
+        ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
+          && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+          && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
+          || warn "subconscious: .af LLM patch failed"
+
+        # Patch embedding config: use host.docker.internal (Letta runs in Docker, must reach host Ollama)
+        if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
+          jq '
+            .agents[0].embedding_config.embedding_endpoint_type = "ollama" |
+            .agents[0].embedding_config.embedding_endpoint = "http://host.docker.internal:11434/v1" |
+            .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
+            .agents[0].embedding_config.embedding_dim = 768 |
+            .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
+          ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
+            && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+            && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
+            || warn "subconscious: .af embedding patch failed"
+        fi
+      else
+        warn "subconscious: Subconscious.af not found — .af patching skipped"
+      fi
+
+      # Enable plugin in settings.json
+      jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
+        "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+        && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
+        && ok "subconscious: enabled in settings.json" \
+        || warn "subconscious: settings.json update failed"
+    else
+      warn "claude-subconscious plugin install failed"
+    fi
+  fi
+
   # Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
   # This prevents skill-creator/hookify/episodic-memory from loading on every turn (93% token reduction)
   _patch_plugin_skill() {
@@ -1945,6 +2295,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
       && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
       || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
   fi
+  if ! $LETTA_SKIP; then
+    tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null \
+      && ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" \
+      || warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
+  fi
 
   # ── Add Claude user to docker group ────────────────────────────────────
   command -v docker &>/dev/null && sudo usermod -aG docker "$CLAUDE_USER" || true
@@ -1993,8 +2348,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo "$COMPLIANCE_OUT" | sed 's/^/    /'
   echo ""
   echo -e "  ${CYAN}Services (Tailscale):${NC}"
-  command -v docker &>/dev/null && echo "    n8n:           https://${TS_HOSTNAME}:5678"
+  command -v docker &>/dev/null && echo "    n8n:            https://${TS_HOSTNAME}:5678"
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
+  $LETTA_SKIP   || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
   echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
@@ -2012,15 +2368,25 @@ else
   echo -e "  ${CYAN}Services:${NC}
     n8n:              http://localhost:5678"
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
+  $LETTA_SKIP   || echo "    letta:            http://localhost:${LETTA_PORT}"
   echo ""
   echo -e "  ${CYAN}Next steps:${NC}
     source ~/.bashrc
     claude auth login
+    better-ccflare --add-account NAME --mode claude-oauth  # authenticate proxy
     claude doctor
     atuin login               # optional: sync shell history across machines
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
+  if ! $LETTA_SKIP; then
+    echo -e "
+  ${CYAN}Letta subconscious memory:${NC}
+    Auto-starts on first Claude Code session (agent created automatically)
+    Credentials:  cat ~/.config/letta/credentials
+    Logs:         journalctl --user -u letta -f
+    Verify:       source ~/.config/letta/credentials && curl -s -H \"Authorization: Bearer \$LETTA_API_KEY\" http://127.0.0.1:${LETTA_PORT}/v1/agents | jq"
+  fi
 fi
 
 echo -e "
