@@ -2136,14 +2136,44 @@ else
       # Write server
       cat > "$HOME/.config/letta/letta-ctrl-server.js" << 'LETTA_CTRL_SERVER'
 import { spawnSync, spawn } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const PORT = Number(process.env.LETTA_CTRL_PORT || 8284);
 const LETTA_URL = process.env.LETTA_BASE_URL || "http://127.0.0.1:8283";
 const HTML_FILE = join(homedir(), ".config/letta/letta-ctrl.html");
+
+// ── Auth token ──────────────────────────────────────────────────────────────
+const TOKEN_FILE = join(homedir(), ".config/letta/ctrl-token");
+let AUTH_TOKEN = process.env.LETTA_CTRL_TOKEN || "";
+if (!AUTH_TOKEN) {
+  if (existsSync(TOKEN_FILE)) {
+    AUTH_TOKEN = readFileSync(TOKEN_FILE, "utf8").trim();
+  }
+  if (!AUTH_TOKEN) {
+    AUTH_TOKEN = randomBytes(32).toString("hex");
+    const tokenDir = join(homedir(), ".config/letta");
+    if (!existsSync(tokenDir)) mkdirSync(tokenDir, { recursive: true });
+    writeFileSync(TOKEN_FILE, AUTH_TOKEN + "\n", { mode: 0o600 });
+    try { chmodSync(TOKEN_FILE, 0o600); } catch {}
+    console.log(`Generated LettaCtrl token: ${AUTH_TOKEN}`);
+    console.log(`Token saved to: ${TOKEN_FILE}`);
+  }
+}
+
+function checkAuth(req) {
+  const hdr = req.headers.get("authorization") || "";
+  const prefix = "Bearer ";
+  if (!hdr.startsWith(prefix)) return false;
+  const provided = hdr.slice(prefix.length);
+  const a = Buffer.from(AUTH_TOKEN);
+  const b = Buffer.from(provided);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 // Read Letta credentials from file (set at install time by titan-setup.sh)
 const CREDS_FILE = join(homedir(), ".config/letta/credentials");
@@ -2287,11 +2317,23 @@ Bun.serve({
     if (req.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" },
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
       });
     }
 
+    // Auth check for all /api/* routes
+    if (path.startsWith("/api/")) {
+      if (!checkAuth(req)) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     // API
+    if (path === "/api/ping") return Response.json({ ok: true });
     if (path === "/api/status") return handleStatus();
     if (path.startsWith("/api/logs/")) return handleLogs(path.slice("/api/logs/".length));
 
@@ -2508,7 +2550,21 @@ input,textarea{font-family:inherit;font-size:inherit}
     <button class="tab"     onclick="goTab('logs',this)">Logs</button>
   </div>
   <div class="nav-right" id="health-pills"></div>
+  <button onclick="logout()" title="Logout" style="background:none;border:1px solid #374151;color:#6b7280;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;margin-left:12px">Logout</button>
 </nav>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;align-items:center;justify-content:center">
+  <div style="background:#1f2937;border:1px solid #374151;border-radius:12px;padding:32px;min-width:320px;max-width:400px">
+    <div style="color:#8b5cf6;font-weight:700;font-size:16px;margin-bottom:16px">⬡ LettaCtrl — Enter Token</div>
+    <p style="color:#9ca3af;font-size:13px;margin-bottom:16px">Enter your LettaCtrl token to continue.<br>Find it with: <code style="color:#c4b5fd">cat ~/.config/letta/ctrl-token</code></p>
+    <input id="token-input" type="password" placeholder="Paste token here"
+      style="width:100%;padding:10px 12px;background:#111827;border:1px solid #374151;border-radius:8px;color:#f9fafb;font-size:14px;margin-bottom:8px;outline:none"
+      onkeydown="if(event.key==='Enter')saveToken()">
+    <div id="token-error" style="color:#ef4444;font-size:12px;min-height:18px;margin-bottom:12px"></div>
+    <button onclick="saveToken()" style="width:100%;padding:10px;background:#7c3aed;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Connect</button>
+  </div>
+</div>
 
 <!-- OVERVIEW -->
 <div class="panel on" id="panel-overview">
@@ -2567,6 +2623,49 @@ input,textarea{font-family:inherit;font-size:inherit}
 </div>
 
 <script>
+// ── Auth ──────────────────────────────────────────────────────────────────
+let _token = localStorage.getItem("lettaCtrlToken") || "";
+
+function authFetch(url, opts = {}) {
+  const headers = Object.assign({ "Authorization": "Bearer " + _token }, opts.headers || {});
+  return fetch(url, Object.assign({}, opts, { headers }));
+}
+
+function showTokenPrompt() {
+  document.getElementById("auth-overlay").style.display = "flex";
+}
+
+function hideTokenPrompt() {
+  document.getElementById("auth-overlay").style.display = "none";
+}
+
+async function saveToken() {
+  const val = document.getElementById("token-input").value.trim();
+  if (!val) return;
+  _token = val;
+  localStorage.setItem("lettaCtrlToken", val);
+  // Verify token
+  try {
+    const r = await authFetch("/api/ping");
+    if (r.status === 401) {
+      document.getElementById("token-error").textContent = "Invalid token — try again";
+      return;
+    }
+    hideTokenPrompt();
+    await pollStatus();
+    await fetchAgents();
+    buildLogNav();
+  } catch {
+    document.getElementById("token-error").textContent = "Server unreachable";
+  }
+}
+
+function logout() {
+  _token = "";
+  localStorage.removeItem("lettaCtrlToken");
+  showTokenPrompt();
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 const SVCS = ["letta","ollama","better-ccflare","ccflare-docker-proxy"];
 let status     = {};
@@ -2655,14 +2754,14 @@ function updateSvcCard(s) {
 
 // ── Service actions ───────────────────────────────────────────────────────
 async function svcAction(action, svcName) {
-  await fetch(`/api/svc/${svcName}/${action}`, {method:"POST"});
+  await authFetch(`/api/svc/${svcName}/${action}`, {method:"POST"});
   setTimeout(pollStatus, 1000);
 }
 
 // ── Status polling ────────────────────────────────────────────────────────
 async function pollStatus() {
   try {
-    const r = await fetch("/api/status");
+    const r = await authFetch("/api/status");
     status = await r.json();
     if (!document.getElementById("hp-letta")) buildHealthPills();
     else updatePills();
@@ -2693,7 +2792,7 @@ function renderAgentsStrip() {
 // ── Agents CRUD ───────────────────────────────────────────────────────────
 async function fetchAgents() {
   try {
-    const r = await fetch("/api/agents");
+    const r = await authFetch("/api/agents");
     agents = await r.json();
     renderAgentList();
     renderAgentsStrip();
@@ -2753,7 +2852,7 @@ async function renderDtab() {
   if (!body) return;
   if (curDtab === "memory") {
     try {
-      const r = await fetch(`/api/agents/${curAgent.id}/blocks`);
+      const r = await authFetch(`/api/agents/${curAgent.id}/blocks`);
       const blocks = await r.json();
       body.innerHTML = blocks.map(b => {
         const rawLbl = b.label||b.id;
@@ -2807,7 +2906,7 @@ async function saveBlock(agentId, label) {
   if (!el || !btn) return;
   btn.disabled = true; btn.textContent = "Saving…";
   try {
-    const r = await fetch(`/api/agents/${agentId}/blocks/${label}`, {
+    const r = await authFetch(`/api/agents/${agentId}/blocks/${label}`, {
       method: "PATCH",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({value: el.innerText}),
@@ -2826,7 +2925,7 @@ async function sendTestMsg() {
   if (!curAgent) { out.style.color = "#f87171"; out.textContent = "No agent selected."; return; }
   btn.disabled = true; out.style.color = "#71717a"; out.textContent = "Sending…";
   try {
-    const r = await fetch(`/api/agents/${curAgent.id}/messages`, {
+    const r = await authFetch(`/api/agents/${curAgent.id}/messages`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({messages:[{role:"user",content:textarea.value}]}),
@@ -2843,7 +2942,7 @@ async function sendTestMsg() {
 
 async function deleteAgent(id) {
   if (!confirm("Delete this agent? This cannot be undone.")) return;
-  await fetch(`/api/agents/${id}`, {method:"DELETE"});
+  await authFetch(`/api/agents/${id}`, {method:"DELETE"});
   curAgent = null;
   document.getElementById("agent-detail").innerHTML =
     `<div style="display:flex;align-items:center;justify-content:center;flex:1;color:#52525b;font-size:13px">Select an agent</div>`;
@@ -2857,7 +2956,7 @@ async function createAgent() {
   const name  = document.getElementById("new-agent-name").value.trim();
   const model = document.getElementById("new-agent-model").value.trim();
   if (!name) return alert("Name is required");
-  const r = await fetch("/api/agents", {
+  const r = await authFetch("/api/agents", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({name, llm: model, embedding: "ollama/nomic-embed-text",
@@ -2934,6 +3033,23 @@ function escHtml(s) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 (async () => {
+  if (!_token) {
+    showTokenPrompt();
+    return;
+  }
+  // Verify existing token
+  try {
+    const r = await authFetch("/api/ping");
+    if (r.status === 401) {
+      _token = "";
+      localStorage.removeItem("lettaCtrlToken");
+      showTokenPrompt();
+      return;
+    }
+  } catch {
+    showTokenPrompt();
+    return;
+  }
   await pollStatus();
   await fetchAgents();
   buildLogNav();
