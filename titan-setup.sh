@@ -190,18 +190,21 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
     echo -e "  ${GREEN}✓${NC} Passwordless sudo granted to $CLAUDE_USER"
     echo -e "  Switching to $CLAUDE_USER and re-running...\n"
-    exec sudo -u "$CLAUDE_USER" bash "$0" \
-      --mode vps \
-      --claude-user "$CLAUDE_USER" \
-      --tailscale-key "$TAILSCALE_KEY" \
-      --name "$ENGINEER_NAME" \
-      --cc-asked \
-      ${CC_VERSION:+--cc-version "$CC_VERSION"} \
-      ${CC_NO_AUTOUPDATE:+--no-autoupdate} \
-      ${VERBOSE:+--verbose} \
-      ${CCFLARE_SKIP:+--ccflare-skip} \
-      --ccflare-port "$CCFLARE_PORT" \
-      --ccflare-host "$CCFLARE_HOST"
+    _VPS_REEXEC_ARGS=(
+      --mode vps
+      --claude-user "$CLAUDE_USER"
+      --tailscale-key "$TAILSCALE_KEY"
+      --name "$ENGINEER_NAME"
+      --cc-asked
+    )
+    [[ -n "$CC_VERSION" ]]         && _VPS_REEXEC_ARGS+=(--cc-version "$CC_VERSION")
+    [[ "$CC_NO_AUTOUPDATE" == "true" ]] && _VPS_REEXEC_ARGS+=(--no-autoupdate)
+    $VERBOSE                       && _VPS_REEXEC_ARGS+=(--verbose)
+    $CCFLARE_SKIP                  && _VPS_REEXEC_ARGS+=(--ccflare-skip)
+    _VPS_REEXEC_ARGS+=(--ccflare-port "$CCFLARE_PORT" --ccflare-host "$CCFLARE_HOST")
+    [[ -n "$SEMGREP_TOKEN" ]]      && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
+    $SEMGREP_SKIP                  && _VPS_REEXEC_ARGS+=(--no-semgrep)
+    exec sudo -u "$CLAUDE_USER" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
   fi
 fi
 
@@ -222,6 +225,12 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     {
       printf 'TITAN_TMUX=1 bash %q' "$0"
       printf ' %q' "${_ORIG_ARGS[@]+"${_ORIG_ARGS[@]}"}"
+      # Carry forward interactively-resolved values not present in _ORIG_ARGS
+      if [[ -n "$SEMGREP_TOKEN" ]]; then
+        printf ' --semgrep-token %q' "$SEMGREP_TOKEN"
+      elif $SEMGREP_SKIP; then
+        printf ' --no-semgrep'
+      fi
       printf ' 2>&1 | tee %q\n' "$_TMUX_LOG"
     } > "$_TMUX_WRAPPER"
     chmod +x "$_TMUX_WRAPPER"
@@ -475,6 +484,15 @@ TIMER_EOF
 fi
 
 section "Phase 1/6 — System Prerequisites"
+
+# Suppress needrestart interactive kernel/service restart prompts on Ubuntu VPS
+# Sets restart mode to automatic so apt upgrades never block waiting for user input
+if [[ -d /etc/needrestart ]]; then
+  sudo mkdir -p /etc/needrestart/conf.d
+  echo "\$nrconf{restart} = 'a';" | sudo tee /etc/needrestart/conf.d/titan-auto.conf > /dev/null
+fi
+# Also suppress apt post-upgrade "Pending kernel upgrade" dialog via debconf
+sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive needrestart 2>/dev/null || true
 
 run_q sudo apt-get update -qq
 run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
