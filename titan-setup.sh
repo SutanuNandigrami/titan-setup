@@ -1699,6 +1699,14 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   ok "settings.json (Letta env vars injected — LETTA_BASE_URL, LETTA_API_KEY, LETTA_MODEL, LETTA_MODE)"
 fi
 
+# ─── ntfy push notifications — set NTFY_TOPIC to enable ───
+# Injects NTFY_TOPIC and NTFY_URL into Claude Code env so session hooks can send push alerts.
+# Leave NTFY_TOPIC blank to disable. Set to any ntfy.sh topic name or self-hosted topic.
+jq '.env.NTFY_TOPIC = "" | .env.NTFY_URL = "https://ntfy.sh"' \
+  "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+  && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+ok "settings.json (ntfy env vars added — set NTFY_TOPIC to enable push alerts)"
+
 # ─── ccstatusline config ───
 install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
   && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
