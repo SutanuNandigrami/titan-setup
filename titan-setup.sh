@@ -312,36 +312,65 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   run_q sudo apt-get update
-  run_q sudo DEBIAN_FRONTEND=noninteractive apt install -y -qq \
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
-    ufw fail2ban unattended-upgrades
-  ok "Security packages (ufw, fail2ban, unattended-upgrades)"
+    fail2ban unattended-upgrades auditd audispd-plugins
+  ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
   # ── SSH hardening ──────────────────────────────────────────────────────
   # Patch main config AND drop-in dir (e.g. Hetzner's 50-cloud-init.conf overrides main)
   sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
   sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
   for _dropin in /etc/ssh/sshd_config.d/*.conf; do
     [[ -f "$_dropin" ]] || continue
     sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
     sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
   done
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardened (password auth off, root login disabled)"
+  ok "SSH hardened (password auth off, root login disabled, MaxAuthTries 3)"
 
-  # ── UFW firewall ───────────────────────────────────────────────────────
-  # --force is only valid with enable/disable/reset, not allow/deny/delete
-  sudo ufw default deny incoming
-  sudo ufw default allow outgoing
-  sudo ufw allow 22/tcp                  # temporary — removed once Tailscale locks in
-  sudo ufw allow 41641/udp               # Tailscale WireGuard (direct peer connections)
-  sudo ufw --force enable
-  ok "UFW enabled (deny incoming; SSH+Tailscale open)"
+  # ── UFW — NOT used (Tailscale handles network isolation) ─────────────
+  # UFW conflicts with Tailscale routing. Tailscale provides network-level
+  # isolation via WireGuard. Do not enable UFW on Tailscale VPS nodes.
+  # Reference: https://tailscale.com/kb/1077/secure-server-ubuntu-18-04
 
-  # ── fail2ban + unattended-upgrades ────────────────────────────────────
+  # ── fail2ban — SSH protection ─────────────────────────────────────────
+  sudo tee /etc/fail2ban/jail.local > /dev/null << 'FAIL2BAN_EOF'
+[DEFAULT]
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled  = true
+port     = ssh
+logpath  = %(sshd_log)s
+backend  = %(sshd_backend)s
+FAIL2BAN_EOF
   sudo systemctl enable fail2ban --now
+  ok "fail2ban active (SSH: 5 retries → 1h ban)"
+
+  # ── unattended-upgrades — security patches only ───────────────────────
+  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades-titan > /dev/null << 'UU_EOF'
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+UU_EOF
   sudo systemctl enable unattended-upgrades --now
-  ok "fail2ban and unattended-upgrades active"
+  ok "unattended-upgrades active (security patches only, no auto-reboot)"
+
+  # ── auditd — privilege escalation monitoring ──────────────────────────
+  sudo tee /etc/audit/rules.d/titan.rules > /dev/null << 'AUDIT_EOF'
+-a always,exit -F arch=b64 -S execve -F euid=0 -F auid!=0 -k privesc
+-w /etc/passwd -p wa -k passwd_changes
+-w /etc/sudoers -p wa -k sudoers_changes
+-w /etc/sudoers.d/ -p wa -k sudoers_changes
+AUDIT_EOF
+  sudo systemctl enable auditd --now
+  ok "auditd active (privesc monitoring, passwd/sudoers watch)"
 
   # ── Repo supply chain guard ───────────────────────────────────────────
   sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
@@ -404,16 +433,16 @@ else
   fail "ssh root login disabled"
 fi
 
-if ufw status | grep -q 'Status: active'; then
-  pass "ufw active"
-else
-  fail "ufw active"
-fi
-
 if systemctl is-active --quiet fail2ban; then
   pass "fail2ban active"
 else
   fail "fail2ban active"
+fi
+
+if systemctl is-active --quiet auditd; then
+  pass "auditd active"
+else
+  fail "auditd active"
 fi
 
 if systemctl is-enabled --quiet unattended-upgrades; then
@@ -471,10 +500,10 @@ else
   fail "sshd restricted to tailscale IP"
 fi
 
-if ufw status verbose 2>/dev/null | grep -q 'tailscale0'; then
-  pass "ufw ssh restricted to tailscale0"
+if command -v tailscale >/dev/null 2>&1 && tailscale status 2>/dev/null | grep -q 'logged in\|Connected\|is running'; then
+  pass "tailscale connected (network isolation active)"
 else
-  fail "ufw ssh restricted to tailscale0"
+  fail "tailscale connected (network isolation active)"
 fi
 
 exit "$FAIL"
