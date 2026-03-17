@@ -10,7 +10,12 @@ if [[ ! -f "$0" ]]; then
   curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh \
     -o "$_SELF"
   chmod a+rx "$_SELF"
-  exec bash "$_SELF" "$@"
+  # Use bash+exit instead of exec to keep the process-substitution pipe open.
+  # exec would close the pipe fd immediately, causing the original curl to fail
+  # with "curl: (23) Failure writing output to destination".
+  bash "$_SELF" "$@"; _rc=$?
+  rm -f "$_SELF"
+  exit "$_rc"
 fi
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -491,7 +496,7 @@ if ! command -v tailscale >/dev/null 2>&1; then
   exit "$FAIL"
 fi
 
-if tailscale status 2>/dev/null | grep -qE 'logged in|Connected|is running'; then
+if tailscale status &>/dev/null; then
   pass "tailscale running"
 elif [ -n "$(tailscale ip -4 2>/dev/null || true)" ]; then
   pass "tailscale running"
@@ -512,7 +517,7 @@ else
   fail "sshd restricted to tailscale IP"
 fi
 
-if command -v tailscale >/dev/null 2>&1 && tailscale status 2>/dev/null | grep -q 'logged in\|Connected\|is running'; then
+if command -v tailscale >/dev/null 2>&1 && tailscale status &>/dev/null; then
   pass "tailscale connected (network isolation active)"
 else
   fail "tailscale connected (network isolation active)"
