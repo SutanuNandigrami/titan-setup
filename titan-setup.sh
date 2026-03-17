@@ -717,9 +717,11 @@ echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 # claude-agent-sdk is a library (not a CLI tool) — needs --break-system-packages on Ubuntu 24.04 externally-managed Python
+_PYSITE="$HOME/.local/lib/python3.12/site-packages"
 python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || \
-  { uv pip install --system --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || \
-    warn "claude-agent-sdk (install manually: uv pip install --system claude-agent-sdk)"; }
+  { mkdir -p "$_PYSITE" && uv pip install --target "$_PYSITE" --quiet claude-agent-sdk 2>/dev/null \
+    && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install --target ~/.local/lib/python3.12/site-packages claude-agent-sdk)"; }
+unset _PYSITE
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
 
@@ -1120,7 +1122,7 @@ else
   if [[ -z "$LAZYDOCKER_VERSION" || "$LAZYDOCKER_VERSION" == "null" ]]; then
     warn "lazydocker — failed to fetch version"
   else
-    curl -sL "https://github.com/jesseduffield/lazydocker/releases/download/${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION#v}_Linux_${ARCH_FULL}.tar.gz" | tar xz -C "$WORKDIR" lazydocker \
+    curl -sL "https://github.com/jesseduffield/lazydocker/releases/download/${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION#v}_Linux_${ARCH_FULL/aarch64/arm64}.tar.gz" | tar xz -C "$WORKDIR" lazydocker \
       && sudo mv "$WORKDIR/lazydocker" /usr/local/bin/ && ok "lazydocker" || warn "lazydocker install failed"
   fi
 fi
@@ -1223,7 +1225,7 @@ else ok "infracost (exists)"; fi
 
 # hadolint
 if ! command -v hadolint &>/dev/null; then
-  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-${ARCH_FULL}" \
+  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-linux-${ARCH_FULL/aarch64/arm64}" \
     && sudo chmod +x /usr/local/bin/hadolint \
     && ok "hadolint" || warn "hadolint install failed"
 else ok "hadolint (exists)"; fi
