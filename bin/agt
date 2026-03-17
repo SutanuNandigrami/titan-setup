@@ -284,6 +284,82 @@ cmd_build_index() {
   ok "Index built: $count agents → $INDEX"
 }
 
+cmd_reload() {
+  local slot='' agent_name=''
+  [[ $# -ge 2 ]] || die "Usage: agt reload <slot-N> <agent-name>"
+  slot="$1"; agent_name="$2"
+
+  # normalize slot (accept "1" or "slot-1")
+  if [[ "$slot" =~ ^[0-9]+$ ]]; then
+    slot="slot-$slot"
+  fi
+  [[ "$slot" =~ ^slot-[0-9]+$ ]] || die "Invalid slot: $slot"
+
+  ensure_loaded_dir
+
+  local current="[empty]"
+  if [[ -s "$MANIFEST" ]]; then
+    current=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "[empty]")
+    [[ -n "$current" ]] || current="[empty]"
+  fi
+
+  info "Unloading: $current from $slot"
+  cmd_unload "$slot" 2>/dev/null || true
+  info "Loading: $agent_name into $slot"
+  cmd_load "$agent_name" --slot "${slot#slot-}"
+
+  local slot_m
+  slot_m=$(slot_model "$slot")
+  ok "$slot → $agent_name [$slot_m]"
+  echo "  Note: CC restart required for slot changes to take effect"
+}
+
+cmd_list_stash() {
+  require_stash
+  local count=0 name desc
+
+  # count agents first
+  while IFS= read -r -d '' _; do
+    (( count++ )) || true
+  done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0)
+
+  echo -e "${BOLD}Available agents in stash ($count total):${NC}"
+
+  while IFS= read -r -d '' md_file; do
+    name=$(basename "$md_file" .md)
+    desc=""
+
+    # try YAML frontmatter description: field first
+    if head -1 "$md_file" | grep -q '^---'; then
+      desc=$(fm_field "$md_file" "description")
+    fi
+
+    # fallback: first non-empty, non-# line
+    if [[ -z "$desc" ]]; then
+      desc=$(grep -v -m1 -E '^\s*$|^#|^---' "$md_file" 2>/dev/null || true)
+    fi
+
+    printf "  ${BOLD}%-22s${NC} — %s\n" "$name" "${desc:-[no description]}"
+  done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0 | sort -z)
+}
+
+cmd_current() {
+  ensure_loaded_dir
+  echo -e "${BOLD}Loaded slots:${NC}"
+  local i
+  for i in $(seq 1 "$SLOT_COUNT"); do
+    local slot="slot-$i"
+    local slot_m
+    slot_m=$(slot_model "$slot")
+    local agent_name="[empty]"
+    if [[ -f "$LOADED_DIR/${slot}.md" ]] && [[ -s "$MANIFEST" ]]; then
+      agent_name=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "[empty]")
+      [[ -n "$agent_name" ]] || agent_name="[empty]"
+    fi
+    printf "  ${CYAN}%s${NC} (%-6s) → %s\n" "$slot" "$slot_m" "$agent_name"
+  done
+}
+
 cmd_refresh() {
   [[ -d "$STASH_DIR/.git" ]] || die "Stash is not a git repo: $STASH_DIR — clone first"
   info "Pulling latest from remote..."
@@ -300,9 +376,12 @@ cmd_refresh() {
   echo ""
   echo "  search <query>           Fuzzy search agents by name/tags/description"
   echo "  list                     List all agents in stash"
+  echo "  list-stash               Compact agent list with one-line descriptions"
   echo "  load <name> [--slot N]   Load agent into a slot (auto-picks free slot)"
   echo "  unload <slot|name|all>   Remove agent from slot"
+  echo "  reload <slot> <name>     Swap agent in a slot (unload + load)"
   echo "  status                   Show slot occupancy"
+  echo "  current                  Show loaded agent per slot (compact)"
   echo "  info <name>              Preview agent definition"
   echo "  refresh                  Pull latest from GitHub + rebuild index"
   echo "  build-index              Rebuild index.tsv from stash"
@@ -313,9 +392,12 @@ cmd="$1"; shift
 case "$cmd" in
   search)      cmd_search "$@" ;;
   list)        cmd_list ;;
+  list-stash)  cmd_list_stash ;;
   load)        cmd_load "$@" ;;
   unload)      cmd_unload "$@" ;;
+  reload)      cmd_reload "$@" ;;
   status)      cmd_status ;;
+  current)     cmd_current ;;
   info)        cmd_info "$@" ;;
   refresh)     cmd_refresh ;;
   build-index) cmd_build_index ;;
