@@ -59,6 +59,8 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
+SEMGREP_TOKEN=""
+SEMGREP_SKIP=false
 
 usage() {
   cat <<USAGE
@@ -78,6 +80,10 @@ Options:
   --ccflare-skip           Skip better-ccflare install entirely
   --ccflare-port PORT      Proxy port (default: 8080)
   --ccflare-host HOST      Bind address (default: 127.0.0.1)
+
+  semgrep options:
+  --semgrep-token TOKEN    Semgrep App Token (enables semgrep plugin in Claude Code)
+  --no-semgrep             Skip semgrep plugin entirely (no token needed)
 
   -h, --help               Show this help message
 
@@ -108,6 +114,8 @@ while [[ $# -gt 0 ]]; do
     --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
     --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
     --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
+    --semgrep-token)   [[ $# -ge 2 ]] || { fail "--semgrep-token requires a value"; usage; }; SEMGREP_TOKEN="$2"; shift 2 ;;
+    --no-semgrep)      SEMGREP_SKIP=true; shift ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
   esac
@@ -151,6 +159,19 @@ if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
 fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
 [[ "$CC_NO_AUTOUPDATE" == "true" ]] && echo -e "  Auto-updates:  ${YELLOW}disabled${NC}" || echo -e "  Auto-updates:  ${GREEN}enabled${NC}"
+
+# ─── Semgrep token (interactive prompt if not set via flag) ───
+if ! $SEMGREP_SKIP && [[ -z "$SEMGREP_TOKEN" ]]; then
+  echo -e "\n  ${CYAN}Semgrep (static analysis in Claude Code):${NC}"
+  echo "  Get a free token at semgrep.dev → Settings → Tokens"
+  read -rp "  Semgrep App Token (Enter to skip): " SEMGREP_TOKEN
+  [[ -z "$SEMGREP_TOKEN" ]] && SEMGREP_SKIP=true
+fi
+if $SEMGREP_SKIP; then
+  echo -e "  Semgrep:       ${YELLOW}skipped${NC}"
+elif [[ -n "$SEMGREP_TOKEN" ]]; then
+  echo -e "  Semgrep:       ${GREEN}enabled${NC}"
+fi
 echo ""
 
 # ─── VPS: create Claude user and re-exec as them ───
@@ -1412,6 +1433,16 @@ if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
 else
   ok "settings.json"
 fi
+# ─── Semgrep token injection ───
+if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
+  jq --arg tok "$SEMGREP_TOKEN" \
+    '.env.SEMGREP_APP_TOKEN = $tok | .enabledPlugins["semgrep@claude-plugins-official"] = true' \
+    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
+    && ok "settings.json (SEMGREP_APP_TOKEN injected, plugin enabled)" \
+    || warn "semgrep token injection failed"
+fi
+
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
 if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
   run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" \
@@ -1734,6 +1765,25 @@ else
   claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
   claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
+
+  # semgrep plugin — only if token was provided
+  if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
+    if claude plugin install semgrep 2>/dev/null; then
+      ok "semgrep plugin"
+      # Patch semgrep hooks.json to guard against non-git-repo dirs
+      # semgrep ci requires a git root; without this guard, every Write/Edit outside a repo fails
+      _SEMGREP_HOOKS=$(find "$HOME/.claude/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
+      if [[ -f "$_SEMGREP_HOOKS" ]]; then
+        jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
+          "$_SEMGREP_HOOKS" > /tmp/_semgrep_hooks.json \
+          && mv /tmp/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
+          && ok "semgrep: hooks patched (git-repo guard added)" \
+          || warn "semgrep hooks patch failed"
+      fi
+    else
+      warn "semgrep plugin"
+    fi
+  fi
 
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
