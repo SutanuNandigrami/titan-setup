@@ -3,3 +3,4 @@ _handoff.md
 .env*
 *.pem
 *.key
+.worktrees/
