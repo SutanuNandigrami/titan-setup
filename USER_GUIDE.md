@@ -1,6 +1,6 @@
 # Titan Workstation User Guide
 
-Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
+Welcome to your Claude Code workstation — ~100+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
 
 ## Table of Contents
 
@@ -138,49 +138,6 @@ Fast file finder with intuitive syntax. Replaces `find`.
 
 > **Example prompt:** "Find all .pyc files in the project and show how many there are"
 
-#### broot
-Interactive file tree browser with fuzzy search. Great for exploring projects.
-
-- Navigate directory trees interactively
-- Search files while browsing
-- Preview file contents
-- Launch commands on selected files
-
-> **Example prompt:** "Show me the project structure interactively, focusing on the src directory"
-
-#### fzf (fuzzy finder)
-Fuzzy search for any list: files, command history, environment variables.
-
-- Find files with fuzzy matching
-- Search shell history
-- Multi-select with Tab
-- Preview before selecting
-
-> **Example prompt:** "Let me fuzzy search for a file I edited recently"
-
-#### zoxide
-Smart directory jumper that learns your habits. Replaces `cd` for faster navigation.
-
-- Jump to frequently visited directories
-- Fuzzy match directory names
-- Automatic frecency ranking
-
-> **Example prompt:** "Jump to the projects directory using frecency"
-
-#### yazi
-Terminal file manager with image preview and async operations.
-
-- Browse files and directories
-- Preview images inline
-- Bulk operations with selection
-- Git status indicators
-
-> **Example prompt:** "Browse the current directory and show me the largest files"
-
----
-
-## File Operations
-
 #### sd (structural diff)
 Find and replace with regex. Modern, intuitive sed replacement.
 
@@ -305,36 +262,6 @@ Flatten JSON into greppable lines. Convert nested structures to key-value pairs.
 
 > **Example prompt:** "Flatten this JSON file so I can search for a specific value"
 
-#### jnv
-Interactive JSON explorer with a visual jq filter builder.
-
-- Explore JSON files interactively
-- Build jq filters visually
-- Navigate nested structures
-- Preview filter results in real-time
-
-> **Example prompt:** "Let me explore this API response JSON interactively"
-
-#### dasel
-Read/write any data format (JSON, YAML, TOML, CSV, XML) with unified syntax.
-
-- Query any format with consistent syntax
-- Update nested values
-- Convert between formats
-- Batch modifications
-
-> **Example prompt:** "Update the debug setting to false in all YAML config files"
-
-#### visidata
-TUI spreadsheet for viewing and editing CSV, JSON, SQL, Parquet files.
-
-- Browse large datasets interactively
-- Sort and filter columns
-- Aggregate and transform data
-- Navigate relationships between columns
-
-> **Example prompt:** "Open this CSV file and let me explore it interactively"
-
 #### htmlq
 Extract HTML elements using CSS selectors. Like jq for HTML.
 
@@ -378,16 +305,6 @@ HTTP client with syntax highlighting and colored output. Modern curl replacement
 - Pretty-print responses
 
 > **Example prompt:** "Make a GET request to the API endpoint and show me the response"
-
-#### httpie
-Human-friendly HTTP client for testing APIs (http/https commands).
-
-- Interactive API testing
-- JSON and form data support
-- Request/response history
-- Cookie and session management
-
-> **Example prompt:** "Test the API by posting JSON data to this endpoint"
 
 #### hurl
 Define HTTP test chains in plain text files. Like Postman but version-controllable.
@@ -433,16 +350,6 @@ Intercept, inspect, and modify HTTP/HTTPS traffic in real-time.
 
 ## Git & Version Control
 
-#### lazygit
-TUI for git with beautiful visualization of branches, diffs, and stash.
-
-- Stage changes interactively
-- Browse commit history visually
-- Resolve merge conflicts
-- Manage branches and stashes
-
-> **Example prompt:** "Show me the git history and let me browse commits interactively"
-
 #### delta (git-delta)
 Beautiful diff pager for git. Syntax highlighting and side-by-side diffs.
 
@@ -452,16 +359,6 @@ Beautiful diff pager for git. Syntax highlighting and side-by-side diffs.
 - Side-by-side diffs
 
 > **Example prompt:** "Show me the diff of my recent changes with syntax highlighting"
-
-#### git-cliff
-Changelog generator from conventional commits.
-
-- Auto-generate changelogs
-- Follow semantic versioning
-- Customize changelog format
-- Template-based generation
-
-> **Example prompt:** "Generate a changelog from commits since the last release"
 
 #### git-absorb
 Smart auto-fixup that rewrites commits to "absorb" staged changes.
@@ -482,16 +379,6 @@ Structural diff that understands code syntax instead of just lines.
 - Works with many languages
 
 > **Example prompt:** "Show me a structural diff of the changes to this Python file"
-
-#### onefetch
-Git repository summary with stats, languages, and ASCII art logo.
-
-- One-command repo overview
-- Language distribution
-- Contributors and stats
-- ASCII art project logo
-
-> **Example prompt:** "Show me a summary of this git repository"
 
 #### gitleaks
 Scan for secrets and credentials in git history.
@@ -600,26 +487,6 @@ Integration with Claude Code IDE for real-time security scanning and findings ma
 
 > **Example prompt:** "Scan this code with the semgrep plugin and show findings"
 
-#### syft
-Generate Software Bill of Materials (SBOM) from container images and filesystems.
-
-- Create SBOM from Docker images
-- Scan filesystem for dependencies
-- CycloneDX and SPDX formats
-- Dependency tracking
-
-> **Example prompt:** "Generate an SBOM (bill of materials) for this Docker image"
-
-#### grype
-Scan SBOMs and images for known vulnerabilities. Uses Syft SBOMs.
-
-- Check dependencies against vulnerability DB
-- Scan container images
-- Process Syft SBOMs
-- Integration with CI/CD
-
-> **Example prompt:** "Check this Docker image for vulnerable dependencies"
-
 #### osv-scanner
 Google's open source vulnerability scanner. Checks dependencies against OSV database.
 
@@ -629,16 +496,6 @@ Google's open source vulnerability scanner. Checks dependencies against OSV data
 - Integration with lockfiles
 
 > **Example prompt:** "Scan my Python requirements.txt for vulnerable packages"
-
-#### trufflehog
-Find secrets in git history and filesystems. Prevents credential leaks.
-
-- Scan git history for secrets
-- Check filesystems
-- Regex and entropy-based detection
-- Post-commit hooks
-
-> **Example prompt:** "Scan the git history for any accidentally committed API keys"
 
 #### comby
 Structural code search and replace. Regex-aware and syntax-aware. **amd64 only — skipped on ARM64.**
@@ -754,16 +611,6 @@ Web crawler for discovering paths and attack surface.
 
 > **Example prompt:** "Crawl this website and show me all the unique paths found"
 
-#### bore-cli
-Expose local ports to the internet securely. Similar to ngrok.
-
-- Share local services publicly
-- Secure tunneling
-- No account required
-- Real-time traffic inspection
-
-> **Example prompt:** "Expose my local development server to the internet"
-
 #### cloudflared
 Cloudflare tunnel client. Create secure tunnels to internal services.
 
@@ -773,20 +620,6 @@ Cloudflare tunnel client. Create secure tunnels to internal services.
 - Internal service exposure
 
 > **Example prompt:** "Create a Cloudflare tunnel to expose this internal service"
-
-#### bandwhich
-Real-time network utilization by process. See which apps consume bandwidth.
-
-- Monitor network usage
-- Show per-process bandwidth
-- Real-time stats
-- Protocol breakdown
-
-> **Example prompt:** "Show me which processes are using the most network bandwidth"
-
----
-
-## Process & System
 
 #### btop
 Beautiful TUI system resource monitor for CPU, RAM, disk, and network.
@@ -807,16 +640,6 @@ Modern `ps` replacement with color and tree view of processes.
 - Sort by resource usage
 
 > **Example prompt:** "Show all Python processes running on the system"
-
-#### bottom
-TUI system monitor with graphs and detailed resource breakdown.
-
-- System metrics with graphs
-- CPU, memory, network, disk stats
-- Process monitoring
-- Temperature sensors
-
-> **Example prompt:** "Show me system metrics with graphs over time"
 
 #### hyperfine
 Benchmark commands and compare performance.
@@ -892,16 +715,6 @@ Container runtime and engine. Build, run, and manage containers.
 
 > **Example prompt:** "Build a Docker image from the Dockerfile"
 
-#### lazydocker
-TUI for Docker with beautiful container and image management interface.
-
-- Manage containers and images interactively
-- View logs and stats
-- Access containers
-- Perform bulk operations
-
-> **Example prompt:** "Show me all running containers and let me manage them"
-
 #### dive
 Explore Docker image layers interactively. See what's consuming space.
 
@@ -931,16 +744,6 @@ Kubernetes cluster management. Deploy, manage, and troubleshoot applications.
 - Troubleshoot issues
 
 > **Example prompt:** "Deploy this Kubernetes manifest to the cluster"
-
-#### k9s
-TUI for Kubernetes with interactive cluster management and troubleshooting.
-
-- Browse cluster resources
-- View pod logs and events
-- Manage resources interactively
-- Switch between namespaces
-
-> **Example prompt:** "Show me the Kubernetes cluster and let me explore resources"
 
 #### helm
 Kubernetes package manager. Install and manage Helm charts.
@@ -995,16 +798,6 @@ Hetzner Cloud CLI. Manage servers and cloud resources on Hetzner.
 - SSH key management
 
 > **Example prompt:** "List all servers in my Hetzner account"
-
-#### doctl
-DigitalOcean CLI. Manage droplets, databases, and other resources.
-
-- Create and manage droplets
-- Manage DNS records
-- Database provisioning
-- App platform management
-
-> **Example prompt:** "List my DigitalOcean droplets"
 
 #### terraform
 Infrastructure as Code. Define and manage cloud infrastructure.
@@ -1174,16 +967,6 @@ Fast typo fixer for source code. Catches misspellings.
 
 > **Example prompt:** "Find typos in the codebase"
 
-#### codespell
-Spell checker tuned for source code. Understands programming terminology.
-
-- Check spelling in code
-- Ignore common technical terms
-- Dictionary customization
-- Performance optimized
-
-> **Example prompt:** "Check for spelling mistakes in the documentation"
-
 #### prettier
 Code formatter for JavaScript, TypeScript, JSON, YAML, Markdown, CSS.
 
@@ -1238,16 +1021,6 @@ Linter for Ansible playbooks. Check for issues and best practices.
 
 > **Example prompt:** "Check this Ansible playbook for issues"
 
-#### runme
-Run code blocks directly from Markdown runbooks. Executable documentation.
-
-- Execute code from Markdown
-- Multi-step workflows
-- Variables and templating
-- Interactive prompts
-
-> **Example prompt:** "Run the commands in this Markdown runbook"
-
 #### direnv
 Auto-load `.envrc` files when entering directories. Environment management.
 
@@ -1272,40 +1045,6 @@ Record and share terminal sessions. Create terminal demos and tutorials.
 
 ## Container Registry
 
-#### crane
-Interact with container registries without Docker daemon.
-
-- List images in registries
-- Copy between registries
-- Inspect image metadata
-- No Docker daemon required
-
-> **Example prompt:** "List all images in this Docker registry"
-
-#### cosign
-Sign and verify container images. Container image integrity.
-
-- Sign container images
-- Verify signatures
-- Keyless signing with identity
-- Supply chain security
-
-> **Example prompt:** "Sign this Docker image"
-
-#### syft
-Generate Software Bill of Materials from container images.
-
-- Create SBOM from images
-- Show dependencies
-- CycloneDX and SPDX formats
-- Filesystem scanning
-
-> **Example prompt:** "Generate an SBOM for this Docker image"
-
----
-
-## Databases
-
 #### pgcli
 Postgres CLI with autocomplete and syntax highlighting.
 
@@ -1315,16 +1054,6 @@ Postgres CLI with autocomplete and syntax highlighting.
 - Syntax highlighting
 
 > **Example prompt:** "Connect to the database and query the users table"
-
-#### litecli
-SQLite CLI with autocomplete and syntax highlighting.
-
-- Open SQLite databases
-- Execute SQL queries
-- Autocomplete for schema
-- Pretty-printed results
-
-> **Example prompt:** "Open the database and show me all tables"
 
 #### usql
 Universal SQL client supporting Postgres, MySQL, SQLite, and many more.
@@ -1350,16 +1079,6 @@ Redis command line client. Interact with Redis databases.
 
 ## Terminal UI & Utilities
 
-#### gum
-Beautiful interactive shell script prompts. Input, selection, confirmation.
-
-- Create interactive prompts
-- Selection menus
-- Confirm actions
-- Styled text output
-
-> **Example prompt:** "Ask the user to confirm before proceeding"
-
 #### glow
 Render markdown in the terminal. Beautiful TUI markdown viewer.
 
@@ -1369,16 +1088,6 @@ Render markdown in the terminal. Beautiful TUI markdown viewer.
 - Inline images
 
 > **Example prompt:** "Show me this README formatted nicely in the terminal"
-
-#### slides
-Terminal presentations from markdown files. Create slideshows.
-
-- Convert Markdown to slides
-- Present in terminal
-- Speaker notes
-- Customizable themes
-
-> **Example prompt:** "Create a presentation from this markdown file"
 
 #### tmux
 Terminal multiplexer. Sessions, panes, and windows for powerful terminal workflows.
@@ -1430,40 +1139,6 @@ Multi-protocol download manager. Fast downloads with parallel connections.
 
 > **Example prompt:** "Download this file using multiple connections"
 
-#### navi
-Interactive cheatsheet tool. Browse and use command-line recipes.
-
-- Browse cheatsheets
-- Search for commands
-- Interactive suggestions
-- Custom cheatsheet creation
-
-> **Example prompt:** "Show me how to use a specific command"
-
-#### atuin
-Shell history with search, sync, and statistics.
-
-- Search shell history
-- Sync history across machines
-- Statistics on command usage
-- Automatic session capture
-
-> **Example prompt:** "Search my command history for a specific command"
-
-#### starship
-Cross-shell prompt that's fast and customizable.
-
-- Custom shell prompt
-- Git status in prompt
-- Language version indicators
-- Fast and lightweight
-
-> **Example prompt:** "Customize my shell prompt"
-
----
-
-## Code Stats & Analysis
-
 #### scc
 Count lines of code with complexity metrics. Code statistics.
 
@@ -1473,16 +1148,6 @@ Count lines of code with complexity metrics. Code statistics.
 - Exclude patterns
 
 > **Example prompt:** "Show code statistics for this project"
-
-#### onefetch
-Git repository summary with stats and ASCII art.
-
-- Repository overview
-- Language distribution
-- Contributor stats
-- Project ASCII art
-
-> **Example prompt:** "Show me statistics about this git repository"
 
 #### universal-ctags
 Code tag generation for navigation. Jump to definitions in editors.
@@ -1507,16 +1172,6 @@ Pack entire repository into AI-friendly context. Prepare code for LLMs.
 - Code analysis ready format
 
 > **Example prompt:** "Export this repository in a format I can send to Claude"
-
-#### mdbook
-Build a book from markdown files. Create documentation sites.
-
-- Convert markdown to books
-- Generate static HTML
-- Multi-chapter support
-- Customizable themes
-
-> **Example prompt:** "Build a documentation site from these markdown files"
 
 #### mermaid-cli
 Render Mermaid diagrams to PNG/SVG. Create diagrams as code.
@@ -1720,46 +1375,6 @@ Simplified community man pages. Quick command help.
 
 ## Shell Enhancement
 
-#### zoxide
-Smart cd replacement. Jump to directories by frecency.
-
-- Quick directory jumping
-- Learning from history
-- Fuzzy matching
-- Cross-shell support
-
-> **Example prompt:** "Jump to the projects directory"
-
-#### atuin
-Searchable shell history with sync and statistics.
-
-- Search command history
-- Sync across machines
-- Usage statistics
-- Enhanced recall
-
-> **Example prompt:** "Find a command I used recently"
-
-#### navi
-Interactive cheatsheet for command help.
-
-- Browse recipes
-- Search for commands
-- Interactive suggestions
-- Execution from cheatsheet
-
-> **Example prompt:** "Show me how to use a specific tool"
-
-#### fzf
-Fuzzy finder for files, history, environment variables.
-
-- Fuzzy file search
-- History search
-- Multi-select
-- Preview support
-
-> **Example prompt:** "Let me fuzzy search for a file"
-
 #### nushell
 Structured data shell. Work with pipelines as structured data.
 
@@ -1950,7 +1565,7 @@ Tools work best together:
 
 - Find files with `fd` → Process with `rg` → Transform output with `jq`
 - Scan codebase with `ast-grep` → Review with `difftastic` → Commit with `git`
-- Query data with `duckdb` → Format with `jq` → Visualize with `visidata`
+- Query data with `duckdb` → Format with `jq` → Analyze with `miller`
 
 ### Common Workflows
 
@@ -1983,7 +1598,7 @@ estimate costs with infracost, then create a deployment plan"
 ### Security Reminders
 
 - Always run `gitleaks detect` before pushing to remote
-- Use `trufflehog` to scan git history for leaked secrets
+- Use `gitleaks` to scan git history for leaked secrets
 - Run `trivy` on container images before deployment
 - Use `sops` or `age` for encrypted secrets files
 - Never commit `.env` files or credentials

@@ -24,13 +24,13 @@
 
 ## What Does This Do?
 
-Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **155+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
+Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **~100+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
 
 In plain English:
 
 | What | How |
 |------|-----|
-| Installs 155+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
+| Installs ~100+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
 | Configures Claude Code | Sets up `~/.claude/` with hooks, skills, commands, agents, and token optimization |
 | Adds smart safety | Permission rules, destructive command blocks, file guards, git protections |
 | Runs idempotently | Safe to re-run — existing tools are skipped, missing ones are installed |
@@ -101,11 +101,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    claude plugin install semgrep
    ```
 
-5. **Optional: sync shell history across machines:**
-   ```bash
-   atuin login
-   ```
-
 6. **Quick sanity check:**
    ```bash
    # Check tool counts
@@ -158,10 +153,10 @@ Every common MCP server has a free, fast CLI equivalent that costs **zero contex
 | GitHub MCP | `gh` (GitHub CLI) | 0 |
 | Postgres MCP | `pgcli` | 0 |
 | Docker MCP | `docker` | 0 |
-| Fetch MCP | `xh` (httpie) | 0 |
+| Fetch MCP | `xh` | 0 |
 | File search | `rg` + `fd` | 0 |
 
-Instead of injecting 55K tokens of schemas, Titan installs 155+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
+Instead of injecting 55K tokens of schemas, Titan installs ~100+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
 
 ### The Result
 
@@ -169,7 +164,7 @@ Instead of injecting 55K tokens of schemas, Titan installs 155+ CLI tools and te
 Typical MCP setup:  55–134K tokens at startup
 Titan setup:        ~4–7K tokens
 Savings:            94–97%
-More tools:         155+ vs ~20
+More tools:         ~100+ vs ~20
 Better recall:      Fewer turns consumed by overhead
 ```
 
@@ -190,21 +185,21 @@ Desktop only: `maim`, `xdotool`.
 | **Rust / cargo** | Rust CLI tools (ripgrep, fd, bat, etc.) + auto-upgrade |
 | **uv** | Python CLI tools (semgrep, ansible, pgcli, etc.) |
 | **bun** | JavaScript CLI tools (prettier, repomix, ccstatusline, etc.) |
-| **Go** | Go CLI tools (lazygit, dive, stern, etc.) |
+| **Go** | Go CLI tools (dive, stern, glow, etc.) |
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
 | **Docker** | Container runtime |
 
-### 155+ CLI Tools
+### ~100+ CLI Tools
 
-**Python (uv):** httpie · yq · semgrep · csvkit · codespell · ansible-core · sqlmap · pgcli · awscli · ruff · ast-grep-cli · sherlock · mitmproxy · visidata · nlm (NotebookLM)
+**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm
 
 **JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · playwright · vercel
 
-**Rust (cargo):** ripgrep · fd · sd · eza · bat · zoxide · xsv · htmlq · git-cliff · difftastic · ouch · hurl · jwt-cli · oha · rtk
+**Rust (cargo):** ripgrep · fd · sd · eza · bat · xsv · htmlq · git-absorb · git-delta · difftastic · typos-cli · xh · ouch · hurl · jwt-cli · oha · rtk
 
-**Go:** lazygit · dive · glow · mkcert · task · nuclei · ffuf · usql · gitleaks · gum · act · shfmt · gron · httpx · subfinder · dnsx · katana · cosign · crane · dasel
+**Go:** dive · stern · glow · mkcert · task · nuclei · ffuf · usql · gitleaks · act · shfmt · gron · httpx · subfinder · dnsx · katana · scc
 
-**Binary:** kubectl · k9s · helm · terraform · duckdb · trivy · gh · fzf · shellcheck · yazi · lazydocker · trufflehog · syft · grype · step-cli · comby · cloudflared
+**Binary:** kubectl · helm · terraform · hadolint · duckdb · trivy · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy
 
 **Docker services:** n8n (workflow automation, localhost:5678)
 
@@ -383,7 +378,7 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 ## Detailed Tool Reference
 
 See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
-- 155+ CLI tools (what they do, example prompts)
+- ~100+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
 - Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline)
