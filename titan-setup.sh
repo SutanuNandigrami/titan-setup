@@ -1214,9 +1214,9 @@ fi
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat xsv htmlq
   git-cliff git-absorb git-delta difftastic onefetch typos-cli
-  bandwhich websocat bore-cli procs bottom hyperfine
-  pueue watchexec-cli just starship atuin choose
-  xh mdbook jnv ouch hurl jwt-cli oha tree-sitter-cli
+  websocat bore-cli procs hyperfine
+  pueue watchexec-cli just choose
+  xh mdbook ouch hurl jwt-cli oha tree-sitter-cli
 )
 
 # rtk (Rust Token Killer) — build from source with null-fix patch for Vertex AI
@@ -1315,7 +1315,6 @@ declare -A GO_MAP=(
   ["osv-scanner"]="github.com/google/osv-scanner/cmd/osv-scanner@latest"
   ["hcloud"]="github.com/hetznercloud/cli/cmd/hcloud@latest"
   ["sops"]="github.com/getsops/sops/v3/cmd/sops@latest"
-  ["doctl"]="github.com/digitalocean/doctl/cmd/doctl@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
   ["act"]="github.com/nektos/act@latest"
@@ -1325,8 +1324,6 @@ declare -A GO_MAP=(
   ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
   ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
   ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
-  ["cosign"]="github.com/sigstore/cosign/v2/cmd/cosign@latest"
-  ["crane"]="github.com/google/go-containerregistry/cmd/crane@latest"
   ["scc"]="github.com/boyter/scc/v3@latest"
 )
 
@@ -2175,24 +2172,13 @@ fi
 
 section "Phase 6/6 — Shell Integration"
 
-# bash-preexec is required for atuin to record history
-if [[ ! -f ~/.bash-preexec.sh ]]; then
-  curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o ~/.bash-preexec.sh
-  ok "bash-preexec downloaded"
-else
-  ok "bash-preexec already present"
-fi
-
 # Build the shell config block
 SHELL_BLOCK='
 # ══════ Titan CLI Arsenal ══════
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
-eval "$(starship init bash)"
 eval "$(direnv hook bash)"
 eval "$(mise activate bash)"
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
-[[ -f ~/.bash-preexec.sh ]] && source ~/.bash-preexec.sh
-eval "$(atuin init bash)"
 export GIT_PAGER="delta"
 command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
@@ -2314,7 +2300,6 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     su - ${CLAUDE_USER}
     claude auth login
     claude doctor
-    atuin login               # optional: sync shell history across machines
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
@@ -2329,7 +2314,6 @@ else
     claude auth login
     better-ccflare --add-account NAME --mode claude-oauth  # authenticate proxy
     claude doctor
-    atuin login               # optional: sync shell history across machines
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
