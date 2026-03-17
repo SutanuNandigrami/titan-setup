@@ -235,7 +235,12 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $OLLAMA_SKIP                   && _VPS_REEXEC_ARGS+=(--no-ollama)
     $LETTA_CTRL_SKIP                   && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
-    exec sudo -u "$CLAUDE_USER" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
+    # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
+    # so the re-executed script would see itself as "not in tmux" and try to
+    # launch another session, causing the nested-tmux / duplicate-session error.
+    _VPS_TMUX_ENV=()
+    [[ -n "${TMUX:-}" || "${TITAN_TMUX:-}" == "1" ]] && _VPS_TMUX_ENV=(TITAN_TMUX=1)
+    exec sudo -u "$CLAUDE_USER" "${_VPS_TMUX_ENV[@]+"${_VPS_TMUX_ENV[@]}"}" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
   fi
 fi
 
@@ -268,6 +273,9 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     echo -e "\n  ${CYAN}Re-launching inside tmux (SSH-disconnect safe)${NC}"
     echo -e "  ${GREEN}Reconnect:${NC} tmux attach -t titan-setup"
     echo -e "  ${GREEN}Log:${NC}       tail -f $_TMUX_LOG\n"
+    # Kill any stale session from a previous run before creating a new one.
+    # Without this, re-running the script fails with "duplicate session: titan-setup".
+    tmux kill-session -t titan-setup 2>/dev/null || true
     exec tmux new-session -s titan-setup "bash $_TMUX_WRAPPER"
   fi
 fi
