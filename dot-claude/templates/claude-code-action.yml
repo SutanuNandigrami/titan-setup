@@ -13,11 +13,20 @@ on:
 
 jobs:
   claude:
+    # Security: restrict to repo owner/collaborators only — prevents arbitrary users
+    # on a public repo from triggering Claude via @claude comments (prompt injection risk)
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude')) ||
-      (github.event_name == 'pull_request')
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'COLLABORATOR' ||
+        github.event_name == 'pull_request' ||
+        github.event_name == 'issues'
+      ) && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude')) ||
+        (github.event_name == 'pull_request')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
