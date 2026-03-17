@@ -14,19 +14,19 @@ That's it. Everything installs automatically.
 
 ```bash
 # With your name
-bash <(curl -fsSL .../titan-setup.sh) --name "Alice"
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --name "Alice"
 
 # VPS install (creates dedicated user, Tailscale, hardens SSH + firewall)
-bash <(curl -fsSL .../titan-setup.sh) --mode vps --tailscale-key tskey-...
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --mode vps --tailscale-key tskey-...
 
 # Pin a specific Claude Code version
-bash <(curl -fsSL .../titan-setup.sh) --cc-version 1.2.3
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --cc-version 1.2.3
 
 # Disable Claude Code auto-updates
-bash <(curl -fsSL .../titan-setup.sh) --no-autoupdate
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --no-autoupdate
 
 # Preview without making changes
-bash <(curl -fsSL .../titan-setup.sh) --dry-run
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --dry-run
 
 # Clone and run locally
 git clone https://github.com/SutanuNandigrami/titan-setup.git
