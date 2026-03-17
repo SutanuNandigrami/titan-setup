@@ -542,7 +542,7 @@ Find secrets in git history and filesystems. Prevents credential leaks.
 > **Example prompt:** "Scan the git history for any accidentally committed API keys"
 
 #### comby
-Structural code search and replace. Regex-aware and syntax-aware.
+Structural code search and replace. Regex-aware and syntax-aware. **amd64 only — skipped on ARM64.**
 
 - Search across languages
 - Pattern matching with holes

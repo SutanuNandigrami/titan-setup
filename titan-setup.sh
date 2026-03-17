@@ -34,7 +34,7 @@ fi
 # ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-SCRIPT_VERSION="v3.16"
+SCRIPT_VERSION="v3.17"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'

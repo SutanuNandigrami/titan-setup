@@ -6,6 +6,32 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ---
 
+### v3.17 — ARM64 fixes, VPS reliability, consistency audit
+
+**ARM64 (aarch64) compatibility — verified on OCI Ampere:**
+- `claude-desktop-bin`, `comby`: skip with `⚠ skipped (amd64 only)` on ARM64 — no binaries available
+- `lazydocker`: fixed archive naming — releases use `arm64` not `aarch64`
+- `hadolint`: fixed URL — `Linux` → `linux` (case) and `aarch64` → `arm64`
+- `runme`: fixed archive naming — `ARCH_FULL` (aarch64) → `ARCH_GO` (arm64)
+- `claude-agent-sdk`: replaced missing `pip3`/`pip` with `uv pip install --target ~/.local/lib/python3.12/site-packages` — works on Ubuntu 24.04's externally-managed Python without root
+
+**VPS reliability:**
+- `needrestart`: add `kernelhints=-1` and `ucodehints=0` alongside `restart='a'` — fully suppresses the "Pending kernel upgrade" ncurses dialog during apt installs
+- Sudoers write now uses `sudo tee` + `sudo chmod` — fixes "Permission denied" when initial VPS user is non-root (OCI ubuntu, AWS ec2-user, etc.) — was crashing script on any non-root cloud instance
+- Semgrep token prompt no longer repeats: both tmux re-exec wrapper and VPS user re-exec now carry forward interactively-entered `SEMGREP_TOKEN` / `--no-semgrep`
+
+**Consistency audit fixes:**
+- Self-materialize URL: was pointing to archived `titan-setup` repo — fixed to `claude-titan-setup`
+- Phase 3 header and startup banner: `100 CLI Tools` → `155+ CLI Tools`
+- Added `SCRIPT_VERSION="v3.17"` constant — `--version` flag now works, version shown in summary
+- CHANGELOG v3.11: corrected ccflare flag count (3 implemented: skip/port/host, not 7)
+- Cargo PATH: `source ~/.cargo/env` moved inside the install branch so `cargo --version` doesn't fail on fresh installs
+
+**Post-install UX:**
+- `atuin login` hint added to next-steps (both VPS and desktop)
+
+---
+
 ### v3.16 — Tmux resilience, Vertex AI RTK fix, semgrep integration
 
 **Disconnect resilience:**

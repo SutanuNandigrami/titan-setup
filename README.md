@@ -102,8 +102,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | Requirement | Detail |
 |-------------|--------|
 | OS | Ubuntu 22.04+ (Debian-based systems supported) |
-| Architecture | x86_64 or aarch64 (auto-detected) |
-| Permissions | `sudo` access required |
+| Architecture | x86_64 or aarch64/arm64 (auto-detected; a few tools are amd64-only and skip gracefully) |
+| Permissions | `sudo` access required (non-root initial user is fine — OCI, AWS, Azure) |
 | Network | Internet access for downloads (can be offline after first run) |
 | Time | ~30–45 minutes first run (Rust crates compile) |
 | VPS mode | Tailscale auth key required (`--tailscale-key`) |
@@ -302,6 +302,14 @@ which rtk && rtk --version
 
 If missing, re-run titan-setup (Rust phase will re-install).
 
+### VPS install fails with "Permission denied" on sudoers
+
+Fixed in v3.17. On OCI, AWS, and Azure the initial SSH user (`ubuntu`, `ec2-user`) is not root. Earlier versions tried to write `/etc/sudoers.d/` directly. Re-run with the latest script:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --mode vps
+```
+
 ### SSH disconnected during VPS install
 
 Reconnect to the tmux session:
@@ -317,6 +325,7 @@ The script runs inside a named `titan-setup` session and survives SSH drops. Log
 
 All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 
+- **v3.17** — ARM64 fixes, VPS reliability, consistency audit
 - **v3.16** — tmux resilience, Vertex AI RTK fix, semgrep integration
 - **v3.15** — RTK token compression (60–90% reduction)
 - **v3.14** — modularization, VPS mode, agent slots
