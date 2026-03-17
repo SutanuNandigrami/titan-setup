@@ -7,7 +7,7 @@ set -euo pipefail
 # real temp file and re-exec with all original args preserved.
 if [[ ! -f "$0" ]]; then
   _SELF=$(mktemp /tmp/titan-setup-XXXXXX.sh)
-  curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/titan-setup/main/titan-setup.sh \
+  curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh \
     -o "$_SELF"
   chmod a+rx "$_SELF"
   exec bash "$_SELF" "$@"
@@ -21,7 +21,7 @@ fi
 # ║  What this does:                                                 ║
 # ║   1. System prerequisites + Linux tuning                        ║
 # ║   2. Package managers: uv, bun, cargo, go, mise                ║
-# ║   3. 100 CLI tools (zero pip, zero npm -g)                     ║
+# ║   3. 155+ CLI tools (zero pip, zero npm -g)                    ║
 # ║   4. Claude Code CLI (native binary)                            ║
 # ║   5. ~/.claude/ global config (skills, hooks, commands, agents) ║
 # ║   6. Shell integration + verification                           ║
@@ -33,6 +33,8 @@ fi
 # ║  URLs before running. Claude Desktop (desktop mode only) installs ║
 # ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
+
+SCRIPT_VERSION="v3.16"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -85,6 +87,7 @@ Options:
   --semgrep-token TOKEN    Semgrep App Token (enables semgrep plugin in Claude Code)
   --no-semgrep             Skip semgrep plugin entirely (no token needed)
 
+  --version                Show script version
   -h, --help               Show this help message
 
 Examples:
@@ -116,6 +119,7 @@ while [[ $# -gt 0 ]]; do
     --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
     --semgrep-token)   [[ $# -ge 2 ]] || { fail "--semgrep-token requires a value"; usage; }; SEMGREP_TOKEN="$2"; shift 2 ;;
     --no-semgrep)      SEMGREP_SKIP=true; shift ;;
+    --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
   esac
@@ -669,7 +673,7 @@ if command -v docker &>/dev/null && ! groups "$USER" | grep -q docker; then
   sudo usermod -aG docker "$USER" 2>/dev/null && ok "added $USER to docker group (re-login to take effect)" || true
 fi
 
-section "Phase 3/6 — 100 CLI Tools"
+section "Phase 3/6 — 155+ CLI Tools"
 
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
 echo -e "  ${CYAN}Python tools (uv):${NC}"
@@ -1966,11 +1970,11 @@ fi
 section "Setup Complete"
 
 echo -e "
-  ${GREEN}Everything is installed and configured.${NC}
+  ${GREEN}Everything is installed and configured.${NC}  (titan-setup ${SCRIPT_VERSION})
 
   ${CYAN}Installed:${NC}
     Package managers: uv, bun, cargo, go, mise
-    CLI tools:        ~100 across all managers
+    CLI tools:        ~155+ across all managers
     Claude Code:      native binary
     Config:           ~/.claude/ (skills, hooks, commands, agents)
     Log:              $LOG_FILE

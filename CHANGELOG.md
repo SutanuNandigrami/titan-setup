@@ -131,7 +131,7 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 ### v3.11 — better-ccflare: provider wizard + CLI flags
 
 - Full provider account wizard during install (OAuth, Vertex AI, OpenAI-compatible, Anthropic-compatible, Bedrock, etc.)
-- 7 new CLI flags for unattended installs: `--ccflare-skip`, `--ccflare-port`, `--ccflare-host`, `--ccflare-proxy`, `--ccflare-loglevel`, `--ccflare-oauth`, `--ccflare-vertex`
+- 3 CLI flags for unattended installs: `--ccflare-skip`, `--ccflare-port`, `--ccflare-host`
 
 ---
 
