@@ -1797,7 +1797,7 @@ install -Dm644 "$REPO_FILES/dot-claude/skills/process-supervisor/SKILL.md" "$CLA
 ok "skill: process-supervisor"
 
 # ─── Skill: nlm-cli ───
-install -Dm644 "/dot-claude/skills/nlm-cli/SKILL.md" "/skills/nlm-cli/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/nlm-cli/SKILL.md" "$CLAUDE_DIR/skills/nlm-cli/SKILL.md"
 ok "skill: nlm-cli"
 
 # ─── Skill: docker-security ───
