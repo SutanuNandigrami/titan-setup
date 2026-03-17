@@ -1797,7 +1797,7 @@ install -Dm644 "$REPO_FILES/dot-claude/skills/process-supervisor/SKILL.md" "$CLA
 ok "skill: process-supervisor"
 
 # ─── Skill: nlm-cli ───
-install -Dm644 "/dot-claude/skills/nlm-cli/SKILL.md" "/skills/nlm-cli/SKILL.md"
+install -Dm644 "$REPO_FILES/dot-claude/skills/nlm-cli/SKILL.md" "$CLAUDE_DIR/skills/nlm-cli/SKILL.md"
 ok "skill: nlm-cli"
 
 # ─── Skill: docker-security ───
@@ -1815,6 +1815,10 @@ ok "skill: incident-response"
 # ─── Skill: terraform-security ───
 install -Dm644 "$REPO_FILES/dot-claude/skills/terraform-security/SKILL.md" "$CLAUDE_DIR/skills/terraform-security/SKILL.md"
 ok "skill: terraform-security"
+
+# ─── Skill: shell-consistency ───
+install -Dm644 "$REPO_FILES/dot-claude/skills/shell-consistency/SKILL.md" "$CLAUDE_DIR/skills/shell-consistency/SKILL.md"
+ok "skill: shell-consistency"
 
 # ─── Hook Scripts (Memory/Context Management) ───
 
@@ -1869,29 +1873,29 @@ install -Dm644 "$REPO_FILES/dot-claude/commands/remember.md" "$CLAUDE_DIR/comman
 ok "command: /remember"
 
 # obra/superpowers (multiple useful skills)
-if [ ! -d ~/.claude/skills/tdd ]; then
+if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
   git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null || true
   if [ -d /tmp/superpowers/skills ]; then
-    cp -r /tmp/superpowers/skills/test-driven-development ~/.claude/skills/tdd 2>/dev/null || true
-    cp -r /tmp/superpowers/skills/systematic-debugging ~/.claude/skills/systematic-debugging 2>/dev/null || true
-    cp -r /tmp/superpowers/skills/brainstorming ~/.claude/skills/brainstorming 2>/dev/null || true
-    cp -r /tmp/superpowers/skills/verification-before-completion ~/.claude/skills/verification-before-completion 2>/dev/null || true
-    cp -r /tmp/superpowers/skills/writing-plans ~/.claude/skills/writing-plans 2>/dev/null || true
+    cp -r /tmp/superpowers/skills/test-driven-development "$CLAUDE_DIR/skills/tdd" 2>/dev/null || true
+    cp -r /tmp/superpowers/skills/systematic-debugging "$CLAUDE_DIR/skills/systematic-debugging" 2>/dev/null || true
+    cp -r /tmp/superpowers/skills/brainstorming "$CLAUDE_DIR/skills/brainstorming" 2>/dev/null || true
+    cp -r /tmp/superpowers/skills/verification-before-completion "$CLAUDE_DIR/skills/verification-before-completion" 2>/dev/null || true
+    cp -r /tmp/superpowers/skills/writing-plans "$CLAUDE_DIR/skills/writing-plans" 2>/dev/null || true
     # Add paths scoping to large skills so they don't load on every session (bug #14882)
-    if [ -f ~/.claude/skills/tdd/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/tdd/SKILL.md 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.go", "**/*.rs", "**/*.java", "**/*.cpp", "**/*.c", "**/*.rb", "**/test*", "**/spec*", "**/*_test*", "**/*_spec*", "**/pytest.ini", "**/jest.config*", "**/go.mod"]' ~/.claude/skills/tdd/SKILL.md
+    if [ -f "$CLAUDE_DIR/skills/tdd/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/tdd/SKILL.md" 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.go", "**/*.rs", "**/*.java", "**/*.cpp", "**/*.c", "**/*.rb", "**/test*", "**/spec*", "**/*_test*", "**/*_spec*", "**/pytest.ini", "**/jest.config*", "**/go.mod"]' "$CLAUDE_DIR/skills/tdd/SKILL.md"
     fi
-    if [ -f ~/.claude/skills/systematic-debugging/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/systematic-debugging/SKILL.md 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' ~/.claude/skills/systematic-debugging/SKILL.md
+    if [ -f "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md"
     fi
-    if [ -f ~/.claude/skills/brainstorming/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/brainstorming/SKILL.md 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/*.spec.md", "**/brainstorm*"]' ~/.claude/skills/brainstorming/SKILL.md
+    if [ -f "$CLAUDE_DIR/skills/brainstorming/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/brainstorming/SKILL.md" 2>/dev/null; then
+      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/*.spec.md", "**/brainstorm*"]' "$CLAUDE_DIR/skills/brainstorming/SKILL.md"
     fi
-    if [ -f ~/.claude/skills/verification-before-completion/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/verification-before-completion/SKILL.md 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/test*", "**/spec*", "**/Makefile"]' ~/.claude/skills/verification-before-completion/SKILL.md
+    if [ -f "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" 2>/dev/null; then
+      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/test*", "**/spec*", "**/Makefile"]' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md"
     fi
-    if [ -f ~/.claude/skills/writing-plans/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/writing-plans/SKILL.md 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/plan*", "**/*.spec.md"]' ~/.claude/skills/writing-plans/SKILL.md
+    if [ -f "$CLAUDE_DIR/skills/writing-plans/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/writing-plans/SKILL.md" 2>/dev/null; then
+      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/plan*", "**/*.spec.md"]' "$CLAUDE_DIR/skills/writing-plans/SKILL.md"
     fi
     ok "superpowers skills"
   else
@@ -1903,21 +1907,21 @@ else
 fi
 
 # Security skills
-if [ ! -d ~/.claude/skills/vibesec ]; then
-  git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git ~/.claude/skills/vibesec 2>/dev/null && ok "vibesec" || warn "vibesec"
+if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
+  git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
-if [ -f ~/.claude/skills/vibesec/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/vibesec/SKILL.md 2>/dev/null; then
-  sed -i '3a paths: ["**/*.html", "**/*.htm", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.py", "**/routes*", "**/auth*", "**/views*", "**/controllers*", "**/api*", "**/nginx*", "**/Dockerfile*", "**/docker-compose*"]' ~/.claude/skills/vibesec/SKILL.md
+if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
+  sed -i '3a paths: ["**/*.html", "**/*.htm", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.py", "**/routes*", "**/auth*", "**/views*", "**/controllers*", "**/api*", "**/nginx*", "**/Dockerfile*", "**/docker-compose*"]' "$CLAUDE_DIR/skills/vibesec/SKILL.md"
 fi
 
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
 # Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
 # Individual plugins can be installed on-demand via: claude plugin marketplace add trailofbits/skills
-if [ ! -d ~/.claude/skills/trailofbits-modern-python ]; then
+if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
   git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null
   if [ -d /tmp/trailofbits-skills/plugins/modern-python ]; then
-    cp -r /tmp/trailofbits-skills/plugins/modern-python ~/.claude/skills/trailofbits-modern-python 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
+    cp -r /tmp/trailofbits-skills/plugins/modern-python "$CLAUDE_DIR/skills/trailofbits-modern-python" 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
   else
     warn "trailofbits: modern-python not found in repo"
   fi
@@ -1925,27 +1929,27 @@ if [ ! -d ~/.claude/skills/trailofbits-modern-python ]; then
 else ok "trailofbits: modern-python (exists)"; fi
 # Fix SKILL.md path: plugin structure nests SKILL.md under skills/modern-python/, Claude expects root
 # Also add paths scoping so it only loads for Python files
-if [ -f ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md ] \
-   && [ ! -f ~/.claude/skills/trailofbits-modern-python/SKILL.md ]; then
+if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] \
+   && [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
   sed '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
-    ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md \
-    > ~/.claude/skills/trailofbits-modern-python/SKILL.md
+    "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" \
+    > "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
   ok "trailofbits: SKILL.md fixed at root with paths scoping"
-elif [ -f ~/.claude/skills/trailofbits-modern-python/SKILL.md ] && ! grep -q '^paths:' ~/.claude/skills/trailofbits-modern-python/SKILL.md 2>/dev/null; then
+elif [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" 2>/dev/null; then
   sed -i '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
-    ~/.claude/skills/trailofbits-modern-python/SKILL.md
+    "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
 fi
 # Remove duplicate nested SKILL.md — root copy has correct paths: scoping; nested is always-on (bug)
-rm -f ~/.claude/skills/trailofbits-modern-python/skills/modern-python/SKILL.md 2>/dev/null || true
+rm -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" 2>/dev/null || true
 
 # Cleanup: remove full trailofbits/hashicorp clones from previous installs (token bloat)
 # These dumped 60+14 SKILL.md files into context at startup (~81K lines)
-if [ -d ~/.claude/skills/trailofbits ]; then
-  rm -rf ~/.claude/skills/trailofbits
+if [ -d "$CLAUDE_DIR/skills/trailofbits" ]; then
+  rm -rf "$CLAUDE_DIR/skills/trailofbits"
   ok "removed old trailofbits full clone (60 skills → 1 selective)"
 fi
-if [ -d ~/.claude/skills/hashicorp ]; then
-  rm -rf ~/.claude/skills/hashicorp
+if [ -d "$CLAUDE_DIR/skills/hashicorp" ]; then
+  rm -rf "$CLAUDE_DIR/skills/hashicorp"
   ok "removed old hashicorp full clone (14 skills → covered by infra-deploy)"
 fi
 
@@ -2016,7 +2020,7 @@ ok "agt: CLI installed"
 
 # ─── Agent stash: clone or update from GitHub ───
 AGT_STASH_REPO="https://github.com/SutanuNandigrami/agent-stash.git"
-AGT_STASH_DIR="$HOME/.claude/agent-stash"
+AGT_STASH_DIR="$CLAUDE_DIR/agent-stash"
 if [[ -d "$AGT_STASH_DIR/.git" ]]; then
   git -C "$AGT_STASH_DIR" pull --ff-only 2>/dev/null && ok "agent-stash: updated from GitHub" || warn "agent-stash: pull failed (using existing)"
 else
@@ -2075,7 +2079,7 @@ else
       ok "semgrep plugin"
       # Patch semgrep hooks.json to guard against non-git-repo dirs
       # semgrep ci requires a git root; without this guard, every Write/Edit outside a repo fails
-      _SEMGREP_HOOKS=$(find "$HOME/.claude/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
+      _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
       if [[ -f "$_SEMGREP_HOOKS" ]]; then
         jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
           "$_SEMGREP_HOOKS" > /tmp/_semgrep_hooks.json \
@@ -2103,7 +2107,7 @@ else
 
       # Install node_modules (tsx + @letta-ai/letta-code-sdk) — CC does not auto-install plugin deps
       _SUBCON_DIR=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
-        "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+        "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null)
       if [[ -n "$_SUBCON_DIR" ]] && [[ -f "$_SUBCON_DIR/package.json" ]]; then
         (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) \
           && ok "subconscious: node_modules installed" \
@@ -2113,9 +2117,9 @@ else
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
       # Default .af uses openai/text-embedding-3-small and zai/glm-5 (cloud only)
       _SUBCON_AF=""
-      if [[ -f "$HOME/.claude/plugins/installed_plugins.json" ]]; then
+      if [[ -f "$CLAUDE_DIR/plugins/installed_plugins.json" ]]; then
         _SUBCON_INSTALL=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
-          "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+          "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null)
         [[ -n "$_SUBCON_INSTALL" ]] && _SUBCON_AF="$_SUBCON_INSTALL/Subconscious.af"
       fi
 
@@ -3150,7 +3154,7 @@ LETTA_CTRL_SVC
     local plugin_key="$1" subpath="$2" paths_value="$3"
     local install_path
     install_path=$(jq -r --arg k "$plugin_key" '.plugins[$k][0].installPath // empty' \
-      "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+      "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null)
     [[ -z "$install_path" ]] && return 0
     local skill_md="$install_path/$subpath"
     [[ -f "$skill_md" ]] || return 0
@@ -3170,9 +3174,9 @@ LETTA_CTRL_SVC
 
   # Cleanup: remove non-installed plugin dirs from marketplace cache to prevent SKILL.md bloat
   # Each marketplace add can bring many plugin dirs; only keep what's actually installed
-  INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
+  INSTALLED_JSON="$CLAUDE_DIR/plugins/installed_plugins.json"
   if [[ -f "$INSTALLED_JSON" ]]; then
-    CACHE_ROOT="$HOME/.claude/plugins/cache"
+    CACHE_ROOT="$CLAUDE_DIR/plugins/cache"
     mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$INSTALLED_JSON" 2>/dev/null)
     if [[ -d "$CACHE_ROOT" ]]; then
       while IFS= read -r -d '' vpath; do
