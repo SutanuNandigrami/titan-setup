@@ -493,10 +493,10 @@ section "Phase 1/6 — System Prerequisites"
 # Sets restart mode to automatic so apt upgrades never block waiting for user input
 if [[ -d /etc/needrestart ]]; then
   sudo mkdir -p /etc/needrestart/conf.d
-  echo "\$nrconf{restart} = 'a';" | sudo tee /etc/needrestart/conf.d/titan-auto.conf > /dev/null
+  # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
+  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' \
+    | sudo tee /etc/needrestart/conf.d/titan-auto.conf > /dev/null
 fi
-# Also suppress apt post-upgrade "Pending kernel upgrade" dialog via debconf
-sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive needrestart 2>/dev/null || true
 
 run_q sudo apt-get update -qq
 run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
@@ -577,9 +577,11 @@ if command -v cargo &>/dev/null; then
 else
   echo "  Installing Rust..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  # shellcheck source=/dev/null
+  [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
   ok "cargo installed: $(cargo --version)"
 fi
-# Ensure cargo binaries are on PATH for the rest of this script
+# Ensure cargo binaries are on PATH for the rest of this script (idempotent)
 # shellcheck source=/dev/null
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
@@ -716,8 +718,8 @@ command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccu
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 # claude-agent-sdk is a library (not a CLI tool) — needs --break-system-packages on Ubuntu 24.04 externally-managed Python
 python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || \
-  { pip3 install --user --break-system-packages --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || \
-    warn "claude-agent-sdk (install manually: pip3 install --user --break-system-packages claude-agent-sdk)"; }
+  { uv pip install --system --quiet claude-agent-sdk 2>/dev/null && ok "claude-agent-sdk" || \
+    warn "claude-agent-sdk (install manually: uv pip install --system claude-agent-sdk)"; }
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
 
