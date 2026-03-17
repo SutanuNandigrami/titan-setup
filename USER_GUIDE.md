@@ -488,6 +488,19 @@ Static analysis for security patterns, bugs, and code quality issues.
 
 > **Example prompt:** "Scan the codebase for security vulnerabilities and bad patterns"
 
+#### semgrep (Claude Code plugin)
+Integration with Claude Code IDE for real-time security scanning and findings management.
+
+- Real-time code scanning in Claude Code
+- Integration with semgrep.dev findings dashboard
+- Requires `SEMGREP_APP_TOKEN` environment variable
+- Token automatically set during titan install via `--semgrep-token TOKEN` or interactively
+- Token stored in `~/.claude/settings.json` env block
+- Post-tool hook (`post-tool-cli-scan`) is git-aware: runs only inside git repos, prevents hook failures in non-git directories
+- Enable via `claude plugin install semgrep` after obtaining API token
+
+> **Example prompt:** "Scan this code with the semgrep plugin and show findings"
+
 #### syft
 Generate Software Bill of Materials (SBOM) from container images and filesystems.
 
@@ -1489,8 +1502,9 @@ Status bar for Claude Code with Powerline theme. Terminal integration.
 
 - Display status in terminal
 - Integration with shell prompt
-- Customizable themes
+- Customizable themes and layout
 - Real-time updates
+- Config location: `~/.config/ccstatusline/settings.json` — use TUI editor: `ccstatusline`
 
 > **Example prompt:** "Show Claude Code status in my terminal prompt"
 
@@ -1499,7 +1513,8 @@ Command output compression proxy. Reduces tokens consumed by verbose CLI output.
 
 - Auto-rewrites commands transparently via PreToolUse hook (`git status`, `ls`, `grep`, `docker ps`, test runners, etc.)
 - 60-90% token reduction on verbose outputs
-- `rtk gain --graph` — view daily savings history
+- `rtk gain` — show token savings; `rtk gain --graph` — view daily savings history
+- Built from source (not crates.io) with Vertex AI null-fix patch — serialization panics on null fields no longer occur
 - Installed from `github.com/rtk-ai/rtk` (NOT crates.io — name collision with Rust Type Kit)
 - Hook appended to PreToolUse after settings.json is written — does not clobber existing safety hooks
 
@@ -1527,12 +1542,14 @@ Manage multiple Claude Code instances in tmux. Parallel work.
 > **Example prompt:** "Open multiple Claude sessions for parallel work"
 
 #### claude-tmux
-tmux integration for Claude Code. Enhanced multiplexing.
+tmux integration for Claude Code. Enhanced multiplexing and SSH resilience.
 
-- Integrate with tmux
-- Session management
-- Window creation
-- Enhanced navigation
+- Integrate with tmux for session persistence
+- Session management across terminal windows
+- Enhanced window creation and switching
+- SSH disconnect resilience: script runs inside named `titan-setup` session at startup
+- Reconnect after SSH drop: `tmux attach -t titan-setup`
+- Install log: `/tmp/titan-setup-<timestamp>.log`
 
 > **Example prompt:** "Integrate Claude with my tmux setup"
 
