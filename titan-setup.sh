@@ -68,6 +68,8 @@ LETTA_SKIP=false
 LETTA_PORT=8283
 LETTA_PASSWORD=""
 OLLAMA_SKIP=false
+LETTA_CTRL_SKIP=false
+LETTA_CTRL_PORT=8284
 
 usage() {
   cat <<USAGE
@@ -97,6 +99,8 @@ Options:
   --letta-port PORT        Letta server port (default: 8283)
   --letta-password PASS    Letta server password (auto-generated if omitted)
   --no-ollama              Skip Ollama install (use OPENAI_API_KEY for embeddings instead)
+  --letta-ctrl-skip        Skip LettaCtrl GUI (default: install if Letta is installed)
+  --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
 
   --version                Show script version
   -h, --help               Show this help message
@@ -134,6 +138,8 @@ while [[ $# -gt 0 ]]; do
     --letta-port)      [[ $# -ge 2 ]] || { fail "--letta-port requires a value"; usage; }; LETTA_PORT="$2"; shift 2 ;;
     --letta-password)  [[ $# -ge 2 ]] || { fail "--letta-password requires a value"; usage; }; LETTA_PASSWORD="$2"; shift 2 ;;
     --no-ollama)       OLLAMA_SKIP=true; shift ;;
+    --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
+    --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
     --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
@@ -227,6 +233,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     _VPS_REEXEC_ARGS+=(--letta-port "$LETTA_PORT")
     [[ -n "$LETTA_PASSWORD" ]]     && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
     $OLLAMA_SKIP                   && _VPS_REEXEC_ARGS+=(--no-ollama)
+    $LETTA_CTRL_SKIP                   && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
+    _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
     exec sudo -u "$CLAUDE_USER" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
   fi
 fi
@@ -3145,6 +3153,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   command -v docker &>/dev/null && echo "    n8n:            https://${TS_HOSTNAME}:5678"
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
   $LETTA_SKIP   || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
+  $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
   echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
@@ -3162,6 +3171,7 @@ else
     n8n:              http://localhost:5678"
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
   $LETTA_SKIP   || echo "    letta:            http://localhost:${LETTA_PORT}"
+  $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
   echo ""
   echo -e "  ${CYAN}Next steps:${NC}
     source ~/.bashrc
