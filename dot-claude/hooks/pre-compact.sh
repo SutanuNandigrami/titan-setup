@@ -2,6 +2,18 @@
 # PreCompact hook — save session state before compaction + maintenance cleanup
 set -euo pipefail
 
+# ─── ntfy push notification helper ───
+_ntfy() {
+  local title="$1" msg="$2" priority="${3:-default}"
+  [[ -z "${NTFY_TOPIC:-}" ]] && return 0
+  local url="${NTFY_URL:-https://ntfy.sh}/${NTFY_TOPIC}"
+  curl -sf -X POST "$url" \
+    -H "Title: $title" \
+    -H "Priority: $priority" \
+    -H "Tags: robot" \
+    -d "$msg" >/dev/null 2>&1 || true
+}
+
 MEMORY_DIR="$HOME/.claude/memory"
 HANDOFF="$MEMORY_DIR/handoff.md"
 mkdir -p "$MEMORY_DIR"
@@ -124,5 +136,7 @@ _prune_plugin_cache() {
   done
 }
 _prune_plugin_cache
+
+_ntfy "Context compacting" "Claude Code compacting context on $(hostname)" "low"
 
 exit 0

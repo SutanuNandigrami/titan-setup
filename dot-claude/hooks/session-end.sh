@@ -2,6 +2,18 @@
 # Stop hook — capture final session state for next session
 set -euo pipefail
 
+# ─── ntfy push notification helper ───
+_ntfy() {
+  local title="$1" msg="$2" priority="${3:-default}"
+  [[ -z "${NTFY_TOPIC:-}" ]] && return 0
+  local url="${NTFY_URL:-https://ntfy.sh}/${NTFY_TOPIC}"
+  curl -sf -X POST "$url" \
+    -H "Title: $title" \
+    -H "Priority: $priority" \
+    -H "Tags: robot" \
+    -d "$msg" >/dev/null 2>&1 || true
+}
+
 MEMORY_DIR="$HOME/.claude/memory"
 HANDOFF="$MEMORY_DIR/handoff.md"
 mkdir -p "$MEMORY_DIR"
@@ -55,5 +67,7 @@ ${DIFF_STAT:-No changes}
 ## Last Assistant Message
 ${LAST_MSG:-No message captured}
 EOF
+
+_ntfy "Claude Code session ended" "Session complete on $(hostname)" "default"
 
 exit 0
