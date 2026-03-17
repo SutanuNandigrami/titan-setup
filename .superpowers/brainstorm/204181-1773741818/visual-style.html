@@ -1,0 +1,105 @@
+<h2>Which visual style fits the tool?</h2>
+<p class="subtitle">All three use a top-nav layout. Pick the feel that matches how you think of this tool.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="dark-pro" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:16px;font-family:monospace;border-radius:6px 6px 0 0">
+      <div style="display:flex;gap:10px;align-items:center;border-bottom:1px solid #1e2030;padding-bottom:10px;margin-bottom:12px">
+        <span style="color:#7c3aed;font-weight:700;font-size:14px">⬡ LettaCtrl</span>
+        <span style="color:#6b7280;font-size:12px;margin-left:auto">Overview</span>
+        <span style="color:#6b7280;font-size:12px">Agents</span>
+        <span style="color:#6b7280;font-size:12px">Logs</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#1a1f2e;border:1px solid #2d3148;border-radius:4px;padding:10px">
+          <div style="color:#22c55e;font-size:10px">● letta</div>
+          <div style="color:#f8fafc;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#1a1f2e;border:1px solid #2d3148;border-radius:4px;padding:10px">
+          <div style="color:#22c55e;font-size:10px">● ollama</div>
+          <div style="color:#f8fafc;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#1a1f2e;border:1px solid #2d3148;border-radius:4px;padding:10px">
+          <div style="color:#22c55e;font-size:10px">● ccflare</div>
+          <div style="color:#f8fafc;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#1a1f2e;border:1px solid #2d3148;border-radius:4px;padding:10px">
+          <div style="color:#22c55e;font-size:10px">● proxy</div>
+          <div style="color:#f8fafc;font-size:12px;margin-top:2px">active</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Dark Pro</h3>
+      <p>Deep navy + purple accent. Feels like a terminal tool with polish — suits a power-user CLI crowd.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="catppuccin" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1e1e2e;padding:16px;font-family:monospace;border-radius:6px 6px 0 0">
+      <div style="display:flex;gap:10px;align-items:center;border-bottom:1px solid #313244;padding-bottom:10px;margin-bottom:12px">
+        <span style="color:#cba6f7;font-weight:700;font-size:14px">⬡ LettaCtrl</span>
+        <span style="color:#6c7086;font-size:12px;margin-left:auto">Overview</span>
+        <span style="color:#6c7086;font-size:12px">Agents</span>
+        <span style="color:#6c7086;font-size:12px">Logs</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#181825;border:1px solid #313244;border-radius:4px;padding:10px">
+          <div style="color:#a6e3a1;font-size:10px">● letta</div>
+          <div style="color:#cdd6f4;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#181825;border:1px solid #313244;border-radius:4px;padding:10px">
+          <div style="color:#a6e3a1;font-size:10px">● ollama</div>
+          <div style="color:#cdd6f4;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#181825;border:1px solid #313244;border-radius:4px;padding:10px">
+          <div style="color:#a6e3a1;font-size:10px">● ccflare</div>
+          <div style="color:#cdd6f4;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:#181825;border:1px solid #313244;border-radius:4px;padding:10px">
+          <div style="color:#a6e3a1;font-size:10px">● proxy</div>
+          <div style="color:#cdd6f4;font-size:12px;margin-top:2px">active</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Catppuccin Mocha</h3>
+      <p>Matches your ccstatusline theme. Soft pastels on dark base — familiar, easy on the eyes.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="glass" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);padding:16px;font-family:monospace;border-radius:6px 6px 0 0">
+      <div style="display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;margin-bottom:12px">
+        <span style="color:#e2d9f3;font-weight:700;font-size:14px">⬡ LettaCtrl</span>
+        <span style="color:rgba(255,255,255,0.4);font-size:12px;margin-left:auto">Overview</span>
+        <span style="color:rgba(255,255,255,0.4);font-size:12px">Agents</span>
+        <span style="color:rgba(255,255,255,0.4);font-size:12px">Logs</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:10px;backdrop-filter:blur(4px)">
+          <div style="color:#4ade80;font-size:10px">● letta</div>
+          <div style="color:#f1f5f9;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:10px">
+          <div style="color:#4ade80;font-size:10px">● ollama</div>
+          <div style="color:#f1f5f9;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:10px">
+          <div style="color:#4ade80;font-size:10px">● ccflare</div>
+          <div style="color:#f1f5f9;font-size:12px;margin-top:2px">active</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:10px">
+          <div style="color:#4ade80;font-size:10px">● proxy</div>
+          <div style="color:#f1f5f9;font-size:12px;margin-top:2px">active</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Glassmorphism</h3>
+      <p>Deep gradient background + frosted glass cards. More visual flair — sleek and modern.</p>
+    </div>
+  </div>
+
+</div>

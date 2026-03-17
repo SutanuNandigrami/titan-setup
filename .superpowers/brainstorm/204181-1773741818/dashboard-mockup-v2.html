@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LettaCtrl</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  body { background: #0a0d1a; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
+
+  /* NAV */
+  .topnav { background: #0f1420; border-bottom: 1px solid #1e2540; padding: 0 28px; display: flex; align-items: center; height: 52px; gap: 32px; flex-shrink: 0; }
+  .logo { color: #8b5cf6; font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab { padding: 6px 16px; border-radius: 6px; cursor: pointer; color: #64748b; font-size: 13px; font-weight: 500; border: none; background: none; transition: all 0.15s; }
+  .nav-tab:hover { color: #94a3b8; background: #1a1f35; }
+  .nav-tab.active { color: #e2e8f0; background: #1e2540; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .status-pill { background: #0d2218; border: 1px solid #166534; color: #4ade80; font-size: 11px; padding: 3px 12px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .status-pill.warn { background: #1a1000; border-color: #92400e; color: #fbbf24; }
+
+  /* TAB PANELS */
+  .tab-panel { display: none; flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .tab-panel.active { display: flex; flex-direction: column; }
+
+  .section-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+
+  /* SERVICE GRID — 4 cols on wide screens */
+  .service-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .svc-card { background: #0f1420; border: 1px solid #1e2540; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .svc-card.ok { border-color: #14532d44; }
+  .svc-card.dead { border-color: #7f1d1d44; }
+  .svc-header { padding: 12px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #131929; }
+  .svc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot-green { background: #4ade80; box-shadow: 0 0 5px #4ade8099; }
+  .dot-red   { background: #f87171; box-shadow: 0 0 5px #f8717199; }
+  .svc-name  { font-weight: 600; font-size: 12px; }
+  .svc-port  { font-size: 11px; color: #334155; margin-left: auto; font-family: monospace; }
+  .svc-metrics { padding: 8px 14px; display: flex; gap: 16px; border-bottom: 1px solid #0d1020; }
+  .metric { display: flex; flex-direction: column; gap: 1px; }
+  .m-label { font-size: 9px; color: #334155; text-transform: uppercase; letter-spacing: 0.06em; }
+  .m-val   { font-size: 12px; font-weight: 600; font-family: monospace; color: #a78bfa; }
+  .m-val.ok { color: #4ade80; }
+  .svc-log { background: #060810; font-family: monospace; font-size: 10.5px; color: #334155; padding: 8px 14px; height: 88px; overflow-y: auto; flex: 1; line-height: 1.65; }
+  .log-fresh { color: #64748b; }
+  .log-err   { color: #f87171; }
+  .svc-actions { padding: 8px 14px; display: flex; gap: 6px; border-top: 1px solid #0d1020; }
+  .btn { padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-restart { background: #1a1f35; color: #94a3b8; }
+  .btn-stop    { background: #2a1010; color: #f87171; }
+  .btn-start   { background: #0d2218; color: #4ade80; }
+
+  /* AGENTS BOTTOM STRIP on overview */
+  .agents-strip { display: flex; gap: 10px; flex-wrap: wrap; }
+  .agent-chip { background: #0f1420; border: 1px solid #1e2540; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .agent-chip:hover { border-color: #8b5cf6; }
+  .agent-chip-name { font-weight: 600; font-size: 13px; }
+  .agent-chip-meta { font-size: 11px; color: #475569; }
+  .chip-badge { background: #1e2540; color: #8b5cf6; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-family: monospace; }
+
+  /* ─── AGENTS TAB ─── */
+  .agents-layout { display: grid; grid-template-columns: 260px 1fr; gap: 14px; flex: 1; min-height: 0; }
+  .panel { background: #0f1420; border: 1px solid #1e2540; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .panel-header { padding: 11px 16px; border-bottom: 1px solid #131929; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .panel-title { font-size: 12px; font-weight: 600; color: #94a3b8; }
+  .btn-new  { background: #4c1d95; color: #c4b5fd; font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer; }
+  .btn-new:hover { background: #5b21b6; }
+
+  .agent-list-scroll { overflow-y: auto; flex: 1; }
+  .agent-item { padding: 11px 16px; border-bottom: 1px solid #0d1020; cursor: pointer; transition: background 0.1s; }
+  .agent-item:hover { background: #131929; }
+  .agent-item.selected { background: #12172a; border-left: 2px solid #8b5cf6; padding-left: 14px; }
+  .agent-item-name { font-size: 13px; font-weight: 600; }
+  .agent-item-meta { font-size: 11px; color: #475569; margin-top: 2px; }
+
+  .agent-right { display: flex; flex-direction: column; min-height: 0; }
+  .agent-detail-header { padding: 12px 18px; border-bottom: 1px solid #131929; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .agent-detail-name { font-weight: 700; font-size: 14px; }
+  .model-badge { background: #1e2540; color: #8b5cf6; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: monospace; }
+  .btn-delete { margin-left: auto; background: #2a1010; color: #f87171; font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer; }
+
+  .detail-tabs { display: flex; gap: 0; padding: 0 18px; border-bottom: 1px solid #131929; flex-shrink: 0; }
+  .dtab { padding: 8px 16px; font-size: 12px; color: #475569; cursor: pointer; border-bottom: 2px solid transparent; }
+  .dtab.active { color: #a78bfa; border-bottom-color: #8b5cf6; }
+
+  .detail-body { overflow-y: auto; flex: 1; padding: 14px 18px; }
+
+  .memory-block { background: #080b14; border: 1px solid #131929; border-radius: 7px; margin-bottom: 10px; }
+  .block-hdr { padding: 7px 12px; background: #0d1020; display: flex; align-items: center; border-radius: 7px 7px 0 0; border-bottom: 1px solid #131929; }
+  .block-label { font-size: 10px; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.06em; }
+  .block-tokens { font-size: 10px; color: #334155; margin-left: auto; }
+  .block-body { padding: 9px 12px; font-size: 12px; color: #94a3b8; line-height: 1.6; font-family: monospace; }
+  .block-footer { padding: 6px 12px; border-top: 1px solid #131929; display: flex; justify-content: flex-end; }
+  .btn-save { background: #4c1d95; color: #c4b5fd; font-size: 11px; padding: 4px 12px; border-radius: 4px; border: none; cursor: pointer; }
+
+  .test-area { padding: 14px 18px; }
+  .test-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .test-input { flex: 1; background: #080b14; border: 1px solid #1e2540; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 12px; font-family: monospace; }
+  .btn-send { background: #8b5cf6; color: #fff; font-size: 12px; padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; white-space: nowrap; }
+  .test-response { background: #080b14; border: 1px solid #131929; border-radius: 6px; padding: 12px; font-size: 12px; color: #a78bfa; font-family: monospace; line-height: 1.65; min-height: 80px; }
+
+  /* ─── LOGS TAB ─── */
+  .logs-layout { display: grid; grid-template-columns: 180px 1fr; gap: 14px; flex: 1; min-height: 0; }
+  .log-service-list { display: flex; flex-direction: column; gap: 6px; }
+  .log-svc-btn { background: #0f1420; border: 1px solid #1e2540; border-radius: 7px; padding: 10px 14px; cursor: pointer; text-align: left; color: #64748b; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .log-svc-btn.active { border-color: #8b5cf6; color: #e2e8f0; background: #12172a; }
+  .log-svc-btn .dot-sm { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
+  .log-panel { background: #060810; border: 1px solid #131929; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .log-panel-header { padding: 10px 16px; border-bottom: 1px solid #131929; display: flex; align-items: center; justify-content: space-between; background: #0d1020; flex-shrink: 0; }
+  .log-panel-title { font-size: 12px; font-weight: 600; color: #94a3b8; font-family: monospace; }
+  .log-live-badge { font-size: 10px; color: #4ade80; background: #0d2218; border: 1px solid #166534; padding: 2px 8px; border-radius: 10px; }
+  .log-stream { flex: 1; overflow-y: auto; padding: 12px 16px; font-family: monospace; font-size: 12px; line-height: 1.7; }
+  .ll { color: #334155; }
+  .ll.info  { color: #64748b; }
+  .ll.ok    { color: #4ade80; }
+  .ll.warn  { color: #fbbf24; }
+  .ll.err   { color: #f87171; }
+  .ll .ts   { color: #1e2d45; margin-right: 10px; }
+  .ll .svc  { color: #475569; margin-right: 8px; }
+  .log-filter-row { padding: 8px 16px; border-top: 1px solid #131929; background: #0d1020; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .log-filter-input { flex: 1; background: #080b14; border: 1px solid #1e2540; border-radius: 5px; padding: 5px 10px; color: #e2e8f0; font-size: 12px; font-family: monospace; }
+
+  /* SCROLLBARS */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e2540; border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <div class="logo">⬡ LettaCtrl</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('overview',this)">Overview</button>
+    <button class="nav-tab" onclick="showTab('agents',this)">Agents</button>
+    <button class="nav-tab" onclick="showTab('logs',this)">Logs</button>
+  </div>
+  <div class="nav-right">
+    <span class="status-pill" id="global-pill">● 4/4 active</span>
+  </div>
+</nav>
+
+<!-- ══════════════ OVERVIEW ══════════════ -->
+<div class="tab-panel active" id="tab-overview">
+  <div class="section-label">Service Health — live every 5s</div>
+  <div class="service-grid">
+
+    <div class="svc-card ok">
+      <div class="svc-header"><div class="svc-dot dot-green"></div><span class="svc-name">letta</span><span class="svc-port">:8283</span></div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="m-label">RAM</div><div class="m-val">412 MB</div></div>
+        <div class="metric"><div class="m-label">CPU</div><div class="m-val">0.3%</div></div>
+        <div class="metric"><div class="m-label">Uptime</div><div class="m-val">6h 14m</div></div>
+        <div class="metric"><div class="m-label">Health</div><div class="m-val ok">OK</div></div>
+      </div>
+      <div class="svc-log">
+        <div>Mar 17 09:08 uvicorn: Startup complete</div>
+        <div>Mar 17 09:15 POST /v1/agents/.../messages 200</div>
+        <div class="log-fresh">Mar 17 15:10 GET /v1/health 200</div>
+        <div class="log-fresh">Mar 17 15:10 POST /v1/agents/.../messages 200 (1.8s)</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <div class="svc-card ok">
+      <div class="svc-header"><div class="svc-dot dot-green"></div><span class="svc-name">ollama</span><span class="svc-port">:11434</span></div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="m-label">RAM</div><div class="m-val">318 MB</div></div>
+        <div class="metric"><div class="m-label">CPU</div><div class="m-val">0.1%</div></div>
+        <div class="metric"><div class="m-label">Uptime</div><div class="m-val">6h 14m</div></div>
+        <div class="metric"><div class="m-label">Model</div><div class="m-val ok">nomic</div></div>
+      </div>
+      <div class="svc-log">
+        <div>Mar 17 09:01 Loaded: nomic-embed-text (768d)</div>
+        <div>Mar 17 09:01 Listening 0.0.0.0:11434</div>
+        <div class="log-fresh">Mar 17 15:10 POST /api/embeddings 200 (11ms)</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <div class="svc-card ok">
+      <div class="svc-header"><div class="svc-dot dot-green"></div><span class="svc-name">better-ccflare</span><span class="svc-port">:8080</span></div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="m-label">RAM</div><div class="m-val">89 MB</div></div>
+        <div class="metric"><div class="m-label">CPU</div><div class="m-val">0.0%</div></div>
+        <div class="metric"><div class="m-label">Uptime</div><div class="m-val">6h 14m</div></div>
+        <div class="metric"><div class="m-label">Accounts</div><div class="m-val ok">2</div></div>
+      </div>
+      <div class="svc-log">
+        <div>Mar 17 09:01 account: personal (claude-oauth)</div>
+        <div>Mar 17 09:01 Listening 127.0.0.1:8080</div>
+        <div class="log-fresh">Mar 17 15:09 POST /v1/messages → 200 (1.2s)</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <div class="svc-card ok">
+      <div class="svc-header"><div class="svc-dot dot-green"></div><span class="svc-name">billing-proxy</span><span class="svc-port">:8081</span></div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="m-label">RAM</div><div class="m-val">11 MB</div></div>
+        <div class="metric"><div class="m-label">CPU</div><div class="m-val">0.0%</div></div>
+        <div class="metric"><div class="m-label">Uptime</div><div class="m-val">6h 12m</div></div>
+        <div class="metric"><div class="m-label">Fix #89</div><div class="m-val ok">on</div></div>
+      </div>
+      <div class="svc-log">
+        <div>Mar 17 09:03 Bun 0.0.0.0:8081 → 127.0.0.1:8080</div>
+        <div>Mar 17 09:03 Billing header injection: active</div>
+        <div class="log-fresh">Mar 17 15:09 POST /v1/messages injected → 200</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-label">Agents</div>
+  <div class="agents-strip">
+    <div class="agent-chip" onclick="showTab('agents', document.querySelectorAll('.nav-tab')[1])">
+      <div>
+        <div class="agent-item-name" style="font-weight:600;font-size:13px">Subconscious</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px">8 memory blocks · last active 6m ago</div>
+      </div>
+      <span class="chip-badge">claude-sonnet-4-6</span>
+    </div>
+    <div class="agent-chip" style="border-style:dashed;color:#334155;font-size:12px" onclick="showTab('agents', document.querySelectorAll('.nav-tab')[1])">
+      + New Agent
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ AGENTS ══════════════ -->
+<div class="tab-panel" id="tab-agents">
+  <div class="agents-layout" style="flex:1;min-height:0">
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Agents (1)</span>
+        <button class="btn-new">+ New</button>
+      </div>
+      <div class="agent-list-scroll">
+        <div class="agent-item selected">
+          <div class="agent-item-name">Subconscious</div>
+          <div class="agent-item-meta">claude-sonnet-4-6 · 8 blocks</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel agent-right">
+      <div class="agent-detail-header">
+        <span class="agent-detail-name">Subconscious</span>
+        <span class="model-badge">claude-sonnet-4-6</span>
+        <button class="btn-delete">✕ Delete</button>
+      </div>
+      <div class="detail-tabs">
+        <div class="dtab active" onclick="showDtab('memory',this)">Memory Blocks</div>
+        <div class="dtab" onclick="showDtab('test',this)">Test Message</div>
+        <div class="dtab" onclick="showDtab('info',this)">Info</div>
+      </div>
+
+      <div class="detail-body" id="dtab-memory">
+        <div class="memory-block">
+          <div class="block-hdr"><span class="block-label">directives</span><span class="block-tokens">0 / 2048 tokens</span></div>
+          <div class="block-body" contenteditable="true" style="outline:none;min-height:52px">You are a subconscious memory assistant for Claude Code. Your role is to observe coding sessions and extract key patterns, preferences, and project context to surface as guidance in future sessions.</div>
+          <div class="block-footer"><button class="btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-hdr"><span class="block-label">preferences</span><span class="block-tokens">0 / 1024 tokens</span></div>
+          <div class="block-body" contenteditable="true" style="outline:none;min-height:40px">Python 3.10+ with type hints. Conventional commits strictly enforced. Direct answers, no preambles. Feature branches mandatory.</div>
+          <div class="block-footer"><button class="btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-hdr"><span class="block-label">project_context</span><span class="block-tokens">0 / 2048 tokens</span></div>
+          <div class="block-body" contenteditable="true" style="outline:none;min-height:40px">Titan workspace — security automation at PwC India. Hetzner VPS + Oracle Cloud + GCP. Main script: titan-setup.sh.</div>
+          <div class="block-footer"><button class="btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-hdr"><span class="block-label">patterns</span><span class="block-tokens">0 / 1024 tokens</span></div>
+          <div class="block-body" style="color:#334155;font-style:italic">Empty — will populate after first session.</div>
+          <div class="block-footer"><button class="btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-hdr"><span class="block-label">guidance_queue</span><span class="block-tokens">0 / 1024 tokens</span></div>
+          <div class="block-body" style="color:#334155;font-style:italic">Empty</div>
+          <div class="block-footer"><button class="btn-save">Save</button></div>
+        </div>
+      </div>
+
+      <div class="detail-body" id="dtab-test" style="display:none">
+        <div class="test-area" style="padding:0">
+          <div style="margin-bottom:12px;font-size:12px;color:#475569">Send a message directly to this agent and see its response.</div>
+          <div class="test-row">
+            <input class="test-input" placeholder="hello, what do you remember about me?" />
+            <button class="btn-send">Send →</button>
+          </div>
+          <div class="test-response">Hello! Confirmed — I'm operational. I'm your subconscious memory layer for Claude Code sessions. Memory blocks loaded: directives, preferences, project_context, patterns, guidance_queue...</div>
+        </div>
+      </div>
+
+      <div class="detail-body" id="dtab-info" style="display:none">
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:12px">
+          <span style="color:#475569">Agent ID</span><span style="font-family:monospace;color:#8b5cf6">agent-263dd56d-...</span>
+          <span style="color:#475569">Model</span><span style="font-family:monospace">claude-sonnet-4-6</span>
+          <span style="color:#475569">Endpoint</span><span style="font-family:monospace">host.docker.internal:8081</span>
+          <span style="color:#475569">Embedding</span><span style="font-family:monospace">nomic-embed-text (768d)</span>
+          <span style="color:#475569">Embed endpoint</span><span style="font-family:monospace">host.docker.internal:11434</span>
+          <span style="color:#475569">Imported</span><span>2026-03-17 09:15 UTC</span>
+          <span style="color:#475569">Memory blocks</span><span>8</span>
+          <span style="color:#475569">Mode</span><span>whisper (read-only SDK)</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ LOGS ══════════════ -->
+<div class="tab-panel" id="tab-logs">
+  <div class="logs-layout" style="flex:1;min-height:0">
+
+    <div class="log-service-list">
+      <div class="log-svc-btn active" onclick="setLogSvc(this,'letta')"><span class="dot-sm"></span> letta</div>
+      <div class="log-svc-btn" onclick="setLogSvc(this,'ollama')"><span class="dot-sm"></span> ollama</div>
+      <div class="log-svc-btn" onclick="setLogSvc(this,'better-ccflare')"><span class="dot-sm"></span> better-ccflare</div>
+      <div class="log-svc-btn" onclick="setLogSvc(this,'billing-proxy')"><span class="dot-sm"></span> billing-proxy</div>
+    </div>
+
+    <div class="log-panel">
+      <div class="log-panel-header">
+        <span class="log-panel-title" id="log-title">journalctl --user -u letta -f</span>
+        <span class="log-live-badge">● live</span>
+      </div>
+      <div class="log-stream" id="log-stream">
+        <div class="ll"><span class="ts">09:08:01</span><span class="ok">letta[1234]: Startup complete</span></div>
+        <div class="ll"><span class="ts">09:08:02</span><span class="info">letta[1234]: uvicorn running on 0.0.0.0:8283</span></div>
+        <div class="ll"><span class="ts">09:15:38</span><span class="info">letta[1234]: POST /v1/agents 201 Created</span></div>
+        <div class="ll"><span class="ts">09:15:39</span><span class="info">letta[1234]: POST /v1/agents/.../messages 200 (2.1s)</span></div>
+        <div class="ll"><span class="ts">15:08:02</span><span class="info">letta[1234]: GET /v1/health 200</span></div>
+        <div class="ll"><span class="ts">15:09:25</span><span class="info">letta[1234]: POST /v1/agents/.../messages 200 (1.8s)</span></div>
+        <div class="ll"><span class="ts">15:09:28</span><span class="info">letta[1234]: Stream complete — 1 message</span></div>
+        <div class="ll"><span class="ts">15:10:01</span><span class="ok">letta[1234]: GET /v1/health 200</span></div>
+        <div class="ll"><span class="ts">15:10:05</span><span class="info">letta[1234]: GET /v1/agents 200</span></div>
+      </div>
+      <div class="log-filter-row">
+        <input class="log-filter-input" placeholder="filter logs... (e.g. POST, error, 500)" />
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function showTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+  function showDtab(name, btn) {
+    document.querySelectorAll('[id^="dtab-"]').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.dtab').forEach(t => t.classList.remove('active'));
+    document.getElementById('dtab-' + name).style.display = 'block';
+    btn.classList.add('active');
+  }
+  function setLogSvc(btn, svc) {
+    document.querySelectorAll('.log-svc-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('log-title').textContent = 'journalctl --user -u ' + svc + ' -f';
+  }
+</script>
+</body>
+</html>

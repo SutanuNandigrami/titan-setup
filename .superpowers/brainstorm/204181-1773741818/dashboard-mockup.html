@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LettaCtrl — Dashboard Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0d1a; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* NAV */
+  .topnav { background: #0f1420; border-bottom: 1px solid #1e2540; padding: 0 24px; display: flex; align-items: center; height: 52px; gap: 32px; position: sticky; top: 0; z-index: 100; }
+  .logo { color: #8b5cf6; font-weight: 700; font-size: 15px; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+  .logo-hex { font-size: 18px; }
+  .nav-tabs { display: flex; gap: 4px; }
+  .nav-tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; color: #64748b; font-size: 13px; font-weight: 500; transition: all 0.15s; border: none; background: none; }
+  .nav-tab:hover { color: #94a3b8; background: #1a1f35; }
+  .nav-tab.active { color: #e2e8f0; background: #1e2540; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .status-pill { background: #0d2218; border: 1px solid #166534; color: #4ade80; font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+
+  /* MAIN */
+  .main { padding: 24px; max-width: 1200px; }
+  .section-title { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+
+  /* SERVICE CARDS */
+  .service-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 28px; }
+  .svc-card { background: #0f1420; border: 1px solid #1e2540; border-radius: 10px; overflow: hidden; }
+  .svc-card.active { border-color: #1a3a2a; }
+  .svc-card.dead { border-color: #3a1a1a; }
+  .svc-header { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #131929; }
+  .svc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .svc-dot.green { background: #4ade80; box-shadow: 0 0 6px #4ade8088; }
+  .svc-dot.red { background: #f87171; box-shadow: 0 0 6px #f8717188; }
+  .svc-name { font-weight: 600; font-size: 13px; }
+  .svc-port { font-size: 11px; color: #475569; margin-left: auto; font-family: monospace; }
+  .svc-metrics { padding: 10px 16px; display: flex; gap: 20px; border-bottom: 1px solid #131929; }
+  .metric { display: flex; flex-direction: column; gap: 2px; }
+  .metric-label { font-size: 10px; color: #475569; text-transform: uppercase; }
+  .metric-val { font-size: 13px; font-weight: 600; font-family: monospace; color: #a78bfa; }
+  .svc-log { padding: 10px 16px; background: #080b14; font-family: monospace; font-size: 11px; color: #64748b; height: 100px; overflow-y: auto; line-height: 1.6; }
+  .svc-log .log-line { padding: 1px 0; }
+  .svc-log .log-line.new { color: #94a3b8; }
+  .svc-log .log-err { color: #f87171; }
+  .svc-actions { padding: 10px 16px; display: flex; gap: 8px; }
+  .btn { padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-restart { background: #1e2540; color: #94a3b8; }
+  .btn-restart:hover { background: #2a3258; color: #e2e8f0; }
+  .btn-stop { background: #2a1515; color: #f87171; }
+  .btn-stop:hover { background: #3a1a1a; }
+  .btn-start { background: #0d2218; color: #4ade80; }
+
+  /* AGENTS SECTION */
+  .agents-layout { display: grid; grid-template-columns: 280px 1fr; gap: 14px; }
+  .agent-list { background: #0f1420; border: 1px solid #1e2540; border-radius: 10px; overflow: hidden; }
+  .agent-list-header { padding: 12px 16px; border-bottom: 1px solid #131929; display: flex; align-items: center; justify-content: space-between; }
+  .agent-list-title { font-size: 12px; font-weight: 600; color: #94a3b8; }
+  .btn-new { background: #4c1d95; color: #c4b5fd; font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer; }
+  .agent-item { padding: 12px 16px; border-bottom: 1px solid #0d1020; cursor: pointer; transition: background 0.1s; }
+  .agent-item:hover { background: #131929; }
+  .agent-item.selected { background: #1a1f35; border-left: 2px solid #8b5cf6; }
+  .agent-item-name { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+  .agent-item-meta { font-size: 11px; color: #475569; margin-top: 2px; }
+  .agent-detail { background: #0f1420; border: 1px solid #1e2540; border-radius: 10px; overflow: hidden; }
+  .agent-detail-header { padding: 14px 18px; border-bottom: 1px solid #131929; display: flex; align-items: center; gap: 10px; }
+  .agent-detail-name { font-weight: 700; font-size: 14px; }
+  .agent-model-badge { background: #1e2540; color: #8b5cf6; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: monospace; }
+  .btn-delete { margin-left: auto; background: #2a1515; color: #f87171; font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer; }
+  .memory-blocks { padding: 14px 18px; }
+  .memory-block { background: #080b14; border: 1px solid #131929; border-radius: 7px; margin-bottom: 10px; overflow: hidden; }
+  .block-header { padding: 8px 12px; background: #0d1020; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #131929; }
+  .block-label { font-size: 11px; font-weight: 600; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.05em; }
+  .block-limit { font-size: 10px; color: #334155; margin-left: auto; }
+  .block-body { padding: 10px 12px; font-size: 12px; color: #94a3b8; line-height: 1.6; font-family: monospace; min-height: 40px; }
+  .block-body.editable { background: #0a0d1a; outline: none; cursor: text; }
+  .block-actions { padding: 8px 12px; border-top: 1px solid #131929; display: flex; justify-content: flex-end; gap: 6px; }
+  .btn-save { background: #4c1d95; color: #c4b5fd; }
+  .btn-save:hover { background: #5b21b6; }
+
+  /* TEST MESSAGE */
+  .test-msg-box { margin: 14px 18px; background: #080b14; border: 1px solid #131929; border-radius: 7px; overflow: hidden; }
+  .test-msg-header { padding: 8px 12px; background: #0d1020; font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; border-bottom: 1px solid #131929; }
+  .test-msg-input { padding: 10px 12px; display: flex; gap: 8px; }
+  .mock-input-field { flex: 1; background: #0f1420; border: 1px solid #1e2540; border-radius: 5px; padding: 7px 10px; color: #e2e8f0; font-size: 12px; font-family: monospace; }
+  .btn-send { background: #8b5cf6; color: #fff; font-size: 12px; padding: 7px 14px; border-radius: 5px; border: none; cursor: pointer; }
+  .test-response { margin: 0 12px 12px; background: #0a0d1a; border: 1px solid #1a1f35; border-radius: 5px; padding: 10px; font-size: 12px; color: #64748b; font-family: monospace; min-height: 36px; }
+  .test-response.has-response { color: #a78bfa; }
+
+  /* TABS for agents detail */
+  .detail-tabs { display: flex; gap: 2px; padding: 10px 18px 0; border-bottom: 1px solid #131929; }
+  .detail-tab { padding: 6px 14px; font-size: 12px; color: #475569; cursor: pointer; border-bottom: 2px solid transparent; }
+  .detail-tab.active { color: #a78bfa; border-bottom-color: #8b5cf6; }
+
+  .mockup-label { position: fixed; bottom: 16px; right: 16px; background: #1e2540; color: #475569; font-size: 11px; padding: 6px 12px; border-radius: 6px; border: 1px solid #2a3258; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <div class="logo"><span class="logo-hex">⬡</span> LettaCtrl</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active">Overview</button>
+    <button class="nav-tab">Agents</button>
+    <button class="nav-tab">Logs</button>
+  </div>
+  <div class="nav-right">
+    <span class="status-pill">● 4/4 services active</span>
+  </div>
+</nav>
+
+<!-- OVERVIEW TAB -->
+<div class="main" id="tab-overview">
+  <div class="section-title">Service Health</div>
+  <div class="service-grid">
+
+    <!-- Letta -->
+    <div class="svc-card active">
+      <div class="svc-header">
+        <div class="svc-dot green"></div>
+        <span class="svc-name">letta</span>
+        <span class="svc-port">:8283</span>
+      </div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="metric-label">Memory</div><div class="metric-val">412 MB</div></div>
+        <div class="metric"><div class="metric-label">CPU</div><div class="metric-val">0.3%</div></div>
+        <div class="metric"><div class="metric-label">Uptime</div><div class="metric-val">6h 14m</div></div>
+        <div class="metric"><div class="metric-label">Health</div><div class="metric-val" style="color:#4ade80">OK</div></div>
+      </div>
+      <div class="svc-log">
+        <div class="log-line">Mar 17 15:08 uvicorn: POST /v1/agents/.../messages 200</div>
+        <div class="log-line">Mar 17 15:09 uvicorn: GET /v1/health 200</div>
+        <div class="log-line new">Mar 17 15:10 uvicorn: POST /v1/agents/.../messages 200</div>
+        <div class="log-line new">Mar 17 15:10 uvicorn: GET /v1/agents 200</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <!-- Ollama -->
+    <div class="svc-card active">
+      <div class="svc-header">
+        <div class="svc-dot green"></div>
+        <span class="svc-name">ollama</span>
+        <span class="svc-port">:11434</span>
+      </div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="metric-label">Memory</div><div class="metric-val">318 MB</div></div>
+        <div class="metric"><div class="metric-label">CPU</div><div class="metric-val">0.1%</div></div>
+        <div class="metric"><div class="metric-label">Uptime</div><div class="metric-val">6h 14m</div></div>
+        <div class="metric"><div class="metric-label">Model</div><div class="metric-val" style="color:#4ade80">nomic</div></div>
+      </div>
+      <div class="svc-log">
+        <div class="log-line">Mar 17 09:15 Loaded model: nomic-embed-text</div>
+        <div class="log-line">Mar 17 09:15 Listening on 0.0.0.0:11434</div>
+        <div class="log-line new">Mar 17 15:10 POST /api/embeddings 200 (12ms)</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <!-- betterccflare -->
+    <div class="svc-card active">
+      <div class="svc-header">
+        <div class="svc-dot green"></div>
+        <span class="svc-name">better-ccflare</span>
+        <span class="svc-port">:8080</span>
+      </div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="metric-label">Memory</div><div class="metric-val">89 MB</div></div>
+        <div class="metric"><div class="metric-label">CPU</div><div class="metric-val">0.0%</div></div>
+        <div class="metric"><div class="metric-label">Uptime</div><div class="metric-val">6h 14m</div></div>
+        <div class="metric"><div class="metric-label">Accounts</div><div class="metric-val" style="color:#4ade80">2</div></div>
+      </div>
+      <div class="svc-log">
+        <div class="log-line">Mar 17 09:01 Loaded account: personal (claude-oauth)</div>
+        <div class="log-line">Mar 17 09:01 Listening on 127.0.0.1:8080</div>
+        <div class="log-line new">Mar 17 15:09 POST /v1/messages → 200 (1.2s)</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+    <!-- billing proxy -->
+    <div class="svc-card active">
+      <div class="svc-header">
+        <div class="svc-dot green"></div>
+        <span class="svc-name">ccflare-billing-proxy</span>
+        <span class="svc-port">:8081</span>
+      </div>
+      <div class="svc-metrics">
+        <div class="metric"><div class="metric-label">Memory</div><div class="metric-val">11 MB</div></div>
+        <div class="metric"><div class="metric-label">CPU</div><div class="metric-val">0.0%</div></div>
+        <div class="metric"><div class="metric-label">Uptime</div><div class="metric-val">6h 12m</div></div>
+        <div class="metric"><div class="metric-label">Fix #89</div><div class="metric-val" style="color:#4ade80">active</div></div>
+      </div>
+      <div class="svc-log">
+        <div class="log-line">Mar 17 09:03 Bun proxy 0.0.0.0:8081 → 127.0.0.1:8080</div>
+        <div class="log-line">Mar 17 09:03 Billing header injection: active</div>
+        <div class="log-line new">Mar 17 15:09 POST /v1/messages → injected → 200</div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-restart">↺ Restart</button>
+        <button class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AGENTS PREVIEW -->
+  <div class="section-title" style="margin-top:8px">Agents (preview — click Agents tab for full CRUD)</div>
+  <div class="agents-layout">
+    <div class="agent-list">
+      <div class="agent-list-header">
+        <span class="agent-list-title">1 agent</span>
+        <button class="btn-new">+ New</button>
+      </div>
+      <div class="agent-item selected">
+        <div class="agent-item-name">Subconscious</div>
+        <div class="agent-item-meta">claude-sonnet-4-6 · 8 memory blocks</div>
+      </div>
+    </div>
+    <div class="agent-detail">
+      <div class="agent-detail-header">
+        <span class="agent-detail-name">Subconscious</span>
+        <span class="agent-model-badge">claude-sonnet-4-6</span>
+        <button class="btn-delete">✕ Delete</button>
+      </div>
+      <div class="detail-tabs">
+        <div class="detail-tab active">Memory Blocks</div>
+        <div class="detail-tab">Test Message</div>
+        <div class="detail-tab">Info</div>
+      </div>
+      <div class="memory-blocks">
+        <div class="memory-block">
+          <div class="block-header">
+            <span class="block-label">directives</span>
+            <span class="block-limit">2048 tokens</span>
+          </div>
+          <div class="block-body editable" contenteditable="true">You are a subconscious memory assistant for Claude Code. Your role is to observe coding sessions and extract key patterns, preferences, and project context...</div>
+          <div class="block-actions"><button class="btn btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-header">
+            <span class="block-label">preferences</span>
+            <span class="block-limit">1024 tokens</span>
+          </div>
+          <div class="block-body">Python 3.10+ with type hints. Conventional commits. Direct answers, no preambles...</div>
+          <div class="block-actions"><button class="btn btn-save">Save</button></div>
+        </div>
+        <div class="memory-block">
+          <div class="block-header">
+            <span class="block-label">project_context</span>
+            <span class="block-limit">2048 tokens</span>
+          </div>
+          <div class="block-body">Titan workspace — security automation at PwC India. Hetzner VPS + Oracle Cloud + GCP...</div>
+          <div class="block-actions"><button class="btn btn-save">Save</button></div>
+        </div>
+        <div style="padding:4px 0;color:#334155;font-size:11px;text-align:center">+ 5 more blocks</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup-label">mockup — visual reference only</div>
+
+</body>
+</html>
