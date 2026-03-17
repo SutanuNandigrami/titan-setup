@@ -1,21 +1,39 @@
 # Titan Setup
 
-**One script. Fresh Ubuntu to fully armed Claude Code workstation.**
+**One script. Fresh Ubuntu → fully armed Claude Code workstation.**
 
-> **Note:** This repo has moved. The authoritative source is now [github.com/SutanuNandigrami/claude-titan-setup](https://github.com/SutanuNandigrami/claude-titan-setup). The old `titan-setup` repo is archived.
+> **Note:** The authoritative source is [github.com/SutanuNandigrami/claude-titan-setup](https://github.com/SutanuNandigrami/claude-titan-setup). The old `titan-setup` repo is archived.
+
+---
+
+## Table of Contents
+
+- [What Does This Do?](#what-does-this-do)
+- [Quick Install](#quick-install)
+- [After Install](#after-install)
+- [Prerequisites](#prerequisites)
+- [Why CLI Over MCP?](#why-cli-over-mcp)
+- [What Gets Installed](#what-gets-installed)
+- [Context Budget](#context-budget)
+- [For New Projects](#for-new-projects)
+- [Troubleshooting](#troubleshooting)
+- [Changelog](#full-changelog)
+- [Tool Reference](#detailed-tool-reference)
 
 ---
 
 ## What Does This Do?
 
-Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **155+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**. 
+Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **155+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
 
 In plain English:
 
-- **Installs everything you need** — Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers, plus 110+ other CLI utilities
-- **Sets up Claude Code** — configures `~/.claude/` with hooks, skills, commands, agents, and token optimization
-- **Adds smart safety** — permission rules, destructive command blocks, file guards, git protections
-- **Works offline** — runs idempotently (safe to re-run), doesn't require constant internet
+| What | How |
+|------|-----|
+| Installs 155+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
+| Configures Claude Code | Sets up `~/.claude/` with hooks, skills, commands, agents, and token optimization |
+| Adds smart safety | Permission rules, destructive command blocks, file guards, git protections |
+| Runs idempotently | Safe to re-run — existing tools are skipped, missing ones are installed |
 
 ---
 
@@ -44,27 +62,20 @@ cd claude-titan-setup && ./titan-setup.sh --name "Alice"
 bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --mode vps --tailscale-key tskey-...
 ```
 
-### Advanced options
+### All options
 
-```bash
-# Pin a specific Claude Code version
-./titan-setup.sh --cc-version 1.2.3
-
-# Disable Claude Code auto-updates
-./titan-setup.sh --no-autoupdate
-
-# Provide semgrep token (for security scanning integration)
-./titan-setup.sh --semgrep-token scu_... 
-
-# Skip semgrep (no prompt)
-./titan-setup.sh --no-semgrep
-
-# Preview without making changes
-./titan-setup.sh --dry-run
-
-# Verbose output to file
-./titan-setup.sh --verbose
-```
+| Flag | Description |
+|------|-------------|
+| `--name "Alice"` | Personalize your setup |
+| `--mode vps` | VPS/server hardened mode (requires `--tailscale-key`) |
+| `--tailscale-key KEY` | Tailscale auth key for VPS mode |
+| `--cc-version 1.2.3` | Pin a specific Claude Code version |
+| `--no-autoupdate` | Disable Claude Code auto-updates |
+| `--semgrep-token TOKEN` | Add Semgrep token for security scanning |
+| `--no-semgrep` | Skip Semgrep setup (no prompt) |
+| `--dry-run` | Preview what will happen without making changes |
+| `--verbose` | Log all output to `/tmp/titan-setup-<timestamp>.log` |
+| `--version` | Show Titan version |
 
 ---
 
@@ -80,19 +91,32 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    claude auth login
    ```
 
-3. **Install semgrep plugin (if you have a token):**
-   ```bash
-   claude plugin install semgrep
-   ```
-
-4. **Verify the setup:**
+3. **Verify the setup:**
    ```bash
    claude --version && claude doctor
+   ```
+
+4. **Install Semgrep plugin (if you have a token):**
+   ```bash
+   claude plugin install semgrep
    ```
 
 5. **Optional: sync shell history across machines:**
    ```bash
    atuin login
+   ```
+
+6. **Quick sanity check:**
+   ```bash
+   # Check tool counts
+   echo "Cargo: $(ls ~/.cargo/bin/ 2>/dev/null | wc -l) tools"
+   echo "Go:    $(ls ~/go/bin/ 2>/dev/null | wc -l) tools"
+   echo "UV:    $(uv tool list 2>/dev/null | wc -l) tools"
+
+   # Test key tools
+   for cmd in rg fd bat eza jq gh docker kubectl terraform; do
+     command -v "$cmd" &>/dev/null && echo "✓ $cmd" || echo "✗ $cmd missing"
+   done
    ```
 
 ---
@@ -112,7 +136,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 
 ## Why CLI Over MCP?
 
-Claude Code is powerful out of the box — but it wastes context before you type a word. Typical setups inject multiple MCP servers at startup:
+Claude Code is powerful out of the box — but typical setups waste context before you type a word. MCP servers inject tool schemas at startup:
 
 ```
 GitHub MCP:     ~8,000 tokens
@@ -153,8 +177,6 @@ Better recall:      Fewer turns consumed by overhead
 
 ## What Gets Installed
 
-Titan installs four categories of tools: system packages, package managers, **155+ CLI tools**, and Claude Code configuration. Here's what you get:
-
 ### System Packages (apt)
 
 Standard utilities: `jq`, `mtr`, `nmap`, `tmux`, `pandoc`, `direnv`, `entr`, `nikto`, `lynis`, `redis-tools`, `aria2`, `btop`, `miller`, `inotify-tools`, `expect`, `asciinema`, `lnav`, `imagemagick`, `universal-ctags`, `chafa` + build dependencies for Rust/Go crates.
@@ -178,7 +200,7 @@ Desktop only: `maim`, `xdotool`.
 
 **JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · playwright · vercel
 
-**Rust (cargo):** ripgrep · fd · sd · eza · bat · zoxide · xsv · htmlq · git-cliff · difftastic · ouch · hurl · jwt-cli · oha · rtk (Rust Token Killer, now built from source with Vertex AI null-fix)
+**Rust (cargo):** ripgrep · fd · sd · eza · bat · zoxide · xsv · htmlq · git-cliff · difftastic · ouch · hurl · jwt-cli · oha · rtk
 
 **Go:** lazygit · dive · glow · mkcert · task · nuclei · ffuf · usql · gitleaks · gum · act · shfmt · gron · httpx · subfinder · dnsx · katana · cosign · crane · dasel
 
@@ -192,22 +214,26 @@ Desktop only: `maim`, `xdotool`.
 - 20+ environment variables (zero token cost)
 - 14 lifecycle hooks (permission enforcement, audit logging, auto-lint)
 - 73 deny rules (blocks rm -rf, pip/npm install, commits to main, etc.)
-- Permissions: 8 allow rules for safe operations
+- 8 allow rules for safe operations
 - `opusplan` model (Opus in plan mode, Sonnet for execution)
 
 **~/.claude/ directory:**
-- `CLAUDE.md` — tool routing, workflow rules, auto memory protocol
-- **11 inline skills** (path-gated, load only for matching files) — cli-tools, security-scan, git-workflow, infra-deploy, etc.
-- **Community skills** — superpowers, modern-python, NotebookLM, VibeSec (selectively installed, path-gated)
-- **14 hook events** — PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc.
-- **6 conditional rules** — trigger on file type (Python, shell, terraform, docker, security)
-- **11 slash commands** — `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc.
-- **3 built-in agents** — researcher (Haiku), planner (Opus), reviewer (Sonnet)
-- **5 on-demand agent slots** — load from agent-stash library via `agt` CLI
+
+| Component | Count | Description |
+|-----------|-------|-------------|
+| Inline skills | 11 | Path-gated, load only for matching files |
+| Community skills | varies | superpowers, modern-python, NotebookLM, VibeSec |
+| Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
+| Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
+| Slash commands | 11 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
+| Built-in agents | 3 | researcher (Haiku), planner (Opus), reviewer (Sonnet) |
+| On-demand agent slots | 5 | Load from agent-stash library via `agt` CLI |
 
 ---
 
 ## Context Budget
+
+How much context Titan consumes at startup vs. a typical MCP setup:
 
 ```
 Component             Startup cost    Notes
@@ -304,7 +330,7 @@ If missing, re-run titan-setup (Rust phase will re-install).
 
 ### VPS install fails with "Permission denied" on sudoers
 
-Fixed in v3.17. On OCI, AWS, and Azure the initial SSH user (`ubuntu`, `ec2-user`) is not root. Earlier versions tried to write `/etc/sudoers.d/` directly. Re-run with the latest script:
+Fixed in v3.17. On OCI, AWS, and Azure the initial SSH user (`ubuntu`, `ec2-user`) is not root. Re-run with the latest script:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-titan-setup/main/titan-setup.sh) --mode vps
@@ -319,18 +345,38 @@ tmux attach -t titan-setup
 
 The script runs inside a named `titan-setup` session and survives SSH drops. Log: `/tmp/titan-setup-<timestamp>.log`.
 
+### Tool missing that should be installed
+
+Check if it's on the right PATH:
+```bash
+source ~/.bashrc
+echo $PATH
+```
+
+Then verify the tool install location:
+```bash
+ls ~/.cargo/bin/ | grep <tool>   # Rust tools
+ls ~/go/bin/ | grep <tool>       # Go tools
+uv tool list | grep <tool>       # Python tools
+```
+
+If still missing, re-run titan-setup — idempotent installs pick up whatever was skipped.
+
 ---
 
 ## Full Changelog
 
 All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 
-- **v3.17** — ARM64 fixes, VPS reliability, consistency audit
-- **v3.16** — tmux resilience, Vertex AI RTK fix, semgrep integration
-- **v3.15** — RTK token compression (60–90% reduction)
-- **v3.14** — modularization, VPS mode, agent slots
-- **v3.13** — token optimization (JSONL pruning)
-- **v3.6** — token savings (94–97% reduction)
+| Version | Highlights |
+|---------|-----------|
+| **v3.18** | GitHub Action security hardening — prompt injection prevention |
+| **v3.17** | ARM64 fixes, VPS reliability, consistency audit, `--version` flag |
+| **v3.16** | tmux resilience, Vertex AI RTK fix, Semgrep integration |
+| **v3.15** | RTK token compression (60–90% reduction), 156+ tools |
+| **v3.14** | Modularization, VPS mode, agent slots, path-gated skills |
+| **v3.13** | Token optimization (JSONL pruning, per-agent model routing) |
+| **v3.6** | Token savings (94–97% reduction vs. MCP) |
 
 ---
 
@@ -339,32 +385,12 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
 - 155+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
+- Slash commands (`/ship`, `/scan`, `/review`, etc.)
 - Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline)
 - Security tools and scanning patterns
 - Network and system monitoring
 - Container and Kubernetes tools
 - Best practices and workflows
-
----
-
-## Post-Install Verification
-
-```bash
-source ~/.bashrc
-
-# Check tool installation counts
-echo "Cargo: $(ls ~/.cargo/bin/ 2>/dev/null | wc -l) tools"
-echo "Go:    $(ls ~/go/bin/ 2>/dev/null | wc -l) tools"
-echo "UV:    $(uv tool list 2>/dev/null | wc -l) tools"
-
-# Claude Code status
-claude --version && echo "✓ Claude Code installed"
-
-# Test key tools
-for cmd in rg fd bat eza jq gh docker kubectl terraform; do
-  command -v "$cmd" &>/dev/null && echo "✓ $cmd" || echo "✗ $cmd missing"
-done
-```
 
 ---
 
