@@ -25,7 +25,7 @@ lint:
     fi
     @# Assembled script: full check (authoritative), errors only (warnings are pre-existing)
     shellcheck -x --severity=error titan-setup.sh
-    shellcheck -x bin/agt agent-team-reset.sh agent-team-teardown.sh \
+    shellcheck -x --severity=error bin/agt agent-team-reset.sh agent-team-teardown.sh \
       $(find dot-claude/hooks/ -name '*.sh' 2>/dev/null | sort)
 
 # Format all shell scripts
