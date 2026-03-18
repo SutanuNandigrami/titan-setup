@@ -1,12 +1,21 @@
 FROM ubuntu:24.04
+
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-    curl git bash ca-certificates sudo shellcheck jq \
+
+RUN apt-get update -qq && apt-get install -y \
+    bash \
+    shellcheck \
+    jq \
+    curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install just
 RUN curl -fsSL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
-RUN useradd -m -s /bin/bash titan && echo 'titan ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER titan
 WORKDIR /repo
+COPY . .
+
+RUN bash script/install-bats.sh
+
+CMD ["just", "check"]

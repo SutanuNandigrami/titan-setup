@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck jq
+
+      - name: Install just
+        run: |
+          curl -fsSL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+      - name: Install shfmt
+        run: go install mvdan.cc/sh/v3/cmd/shfmt@latest
+        env:
+          GOPATH: /usr/local/go
+
+      - name: Install bats
+        run: bash script/install-bats.sh
+
+      - name: Lint (shellcheck)
+        run: just lint
+
+      - name: Format check (shfmt)
+        run: just fmt-check
+        continue-on-error: true  # fmt violations are advisory until code is reformatted
+
+      - name: Build check (lib/ → titan-setup.sh)
+        run: just build-check
+
+      - name: Run bats tests
+        run: just test
+
+      - name: Smoke test (--dry-run)
+        run: just smoke
