@@ -1309,6 +1309,29 @@ tmux integration for Claude Code. Enhanced multiplexing and SSH resilience.
 
 ---
 
+## Claude Code Plugins (MCP)
+
+Titan installs curated plugins where MCP is genuinely better than the CLI equivalent. All disabled-by-default plugins that can be replaced by CLI tools are excluded.
+
+| Plugin | What It Does | Why MCP > CLI |
+|--------|-------------|---------------|
+| `superpowers` | Core skill framework — brainstorm, TDD, git-workflow, debugging, verification | Is the skill system itself; no CLI equivalent |
+| `context7` | Fetches current library docs mid-task from upstream sources | Live docs in context beats manual `xh`+URL copy-paste |
+| `playwright` | Interactive browser control — click, fill, screenshot, debug live pages | Claude drives browser in same turn; CLI is fire-and-forget |
+| `code-review` | PR review subagent + structured review skill | Convenient subagent workflow |
+| `skill-creator` | Create and edit skills interactively with guided flow | Skill authoring workflow |
+| `episodic-memory` | Semantic search over past Claude Code conversations | No CLI equivalent for cross-session memory |
+| `claude-subconscious` | Letta-based background memory agent; updates silently between turns | No CLI equivalent for ambient persistent memory |
+| `semgrep` | Inline SAST findings — Claude sees results and fixes code in same turn | Inline beats terminal loop; **requires `semgrep` CLI binary** (in UV_TOOLS) |
+
+### Plugin notes
+
+- `semgrep` plugin shells out to the `semgrep` binary — both CLI and plugin must be installed
+- `playwright` plugin runs `npx @playwright/mcp@latest` — does **not** use a bun-installed CLI; only chromium browser binaries in `~/.cache/ms-playwright/` are needed
+- Plugins disabled by default (CLI sufficient): `firecrawl`, `huggingface-skills`, `mintlify`, `feature-dev`, `hookify`, `serena`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`
+
+---
+
 ## Web & JavaScript
 
 #### gemini-cli (`gemini`)
@@ -1331,6 +1354,16 @@ Google NotebookLM from terminal — full API access. **Binary is `nlm`**. Instal
 
 > **Example prompt:** "Create a notebook and upload a document"
 
+#### huggingface_hub (`hf`)
+Hugging Face Hub CLI — download models, datasets, and spaces; manage repos and tokens. Install: `uv tool install huggingface_hub`.
+
+- Download model weights and dataset files: `hf download <repo-id>`
+- Upload files to the Hub: `hf upload <repo-id> <file>`
+- Manage cache: `hf cache scan` / `hf cache delete`
+- Authenticate: `hf auth login`
+
+> **Example prompt:** "Download the config.json from mistralai/Mistral-7B-v0.1"
+
 #### kilocode
 Kilo Code CLI. Code generation assistant.
 
@@ -1351,15 +1384,16 @@ Deploy to Vercel from CLI. Serverless functions and static sites.
 
 > **Example prompt:** "Deploy this project to Vercel"
 
-#### playwright
-Browser automation and E2E testing. Test web applications.
+#### playwright (MCP plugin)
+Interactive browser control via the `playwright` Claude Code plugin (`npx @playwright/mcp@latest`). Claude drives the browser live — clicking, filling forms, taking screenshots, and debugging in the same turn.
 
-- Create E2E tests
-- Browser automation
-- Screenshot testing
-- CI/CD integration
+- Navigate pages and interact with elements in real-time
+- Fill forms, click buttons, handle dialogs
+- Take screenshots and read page content
+- Debug live web applications interactively
+- **Note:** MCP plugin is self-contained (runs via npx). The `playwright` bun CLI is not installed — only the chromium browser binaries in `~/.cache/ms-playwright/` are required.
 
-> **Example prompt:** "Create an automated test for this web application"
+> **Example prompt:** "Open this URL, click the login button, fill in the credentials and screenshot the result"
 
 #### tldr
 Simplified community man pages. Quick command help.
