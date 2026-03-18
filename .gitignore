@@ -4,3 +4,4 @@ _handoff.md
 *.pem
 *.key
 .worktrees/
+vendor/
