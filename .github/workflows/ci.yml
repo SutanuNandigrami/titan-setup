@@ -22,9 +22,10 @@ jobs:
           curl -fsSL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
       - name: Install shfmt
-        run: go install mvdan.cc/sh/v3/cmd/shfmt@latest
-        env:
-          GOPATH: /usr/local/go
+        run: |
+          SHFMT_VERSION=$(curl -fsSL https://api.github.com/repos/mvdan/sh/releases/latest | jq -r .tag_name)
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64" -o /usr/local/bin/shfmt
+          chmod +x /usr/local/bin/shfmt
 
       - name: Install bats
         run: bash script/install-bats.sh

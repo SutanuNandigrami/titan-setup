@@ -49,6 +49,16 @@ fi
 # Go, some build tools, and mktemp -d with relative paths all call getcwd() and fail.
 cd "$HOME" || cd /tmp
 
+# ─── Ensure systemd user session works ───
+# exec sudo -u strips XDG_RUNTIME_DIR; without it all systemctl --user calls fail silently.
+# Also enable linger so user services survive logout and start at boot.
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
+if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
+  loginctl enable-linger "$USER" 2>/dev/null || sudo loginctl enable-linger "$USER" 2>/dev/null || true
+fi
+
 # ─── Disconnect resilience: re-exec inside tmux if not already there ───
 # Install takes 30-60 min; SSH drops must not kill it.
 if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
