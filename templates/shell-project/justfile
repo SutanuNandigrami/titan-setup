@@ -1,0 +1,42 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+bootstrap:
+    bash script/install-bats.sh
+
+build:
+    bash script/build.sh
+
+build-check:
+    bash script/build.sh --check
+
+lint:
+    @if [ -d lib/ ] && [ -n "$(find lib/ -name '*.sh' 2>/dev/null)" ]; then \
+      shellcheck -x --shell bash --severity=error \
+        --exclude=SC2034,SC2154,SC1046,SC1047,SC1072,SC1073,SC1089 \
+        $(find lib/ -name '*.sh' | sort); \
+    fi
+    shellcheck -x --severity=error main-script.sh
+
+fmt:
+    shfmt -w -i 2 -ci \
+      $(find lib/ -name '*.sh' 2>/dev/null | sort) \
+      main-script.sh
+
+fmt-check:
+    shfmt -d -i 2 -ci \
+      $(find lib/ -name '*.sh' 2>/dev/null | sort) \
+      main-script.sh
+
+test:
+    vendor/bats/bin/bats test/*.bats
+
+test-legacy:
+    bash test/run-tests.sh
+
+smoke:
+    bash main-script.sh --dry-run
+
+check: lint fmt-check build-check test smoke

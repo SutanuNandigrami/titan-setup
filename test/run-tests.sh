@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# run-tests.sh — Titan setup test suite
-# Runs inside or outside Docker; no internet required
+# run-tests.sh — Titan setup test suite (legacy runner)
+# Prefer `just test` (bats) when vendor/bats is available.
+# This script runs inside or outside Docker with no internet required.
 set -euo pipefail
 
 REPO="${TITAN_REPO_FILES:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null || echo /repo)}"
+
+# Delegate to bats if available
+if [[ -x "$REPO/vendor/bats/bin/bats" ]]; then
+  exec "$REPO/vendor/bats/bin/bats" "$REPO"/test/*.bats
+fi
 PASS=0; FAIL=0
 
 check() {

@@ -13,7 +13,7 @@ docker run --rm \
   -v "$REPO_ROOT:/repo:ro" \
   -e TITAN_REPO_FILES=/repo \
   "$IMAGE" \
-  bash /repo/test/run-tests.sh
+  bash -c "cd /repo && bash script/install-bats.sh && just test && just smoke"
 
 EXIT=$?
 docker rmi "$IMAGE" >/dev/null 2>&1 || true
