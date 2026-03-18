@@ -1,111 +1,156 @@
-#!/usr/bin/env bash
-# Claude Code statusline — 2-row, plain text, no ANSI
-#
-# Row 1:  Model  │  ⎇ branch +staged ~unstaged  │  vX.Y.Z  │  style:X
-# Row 2:  ctx N% [████░░░░]  │  $cost  │  Xhr Ym  │  cache:X in:X out:X total:X
+#!/bin/bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Claude Code Status Line — Final
+#  Requires: jq
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-set -euo pipefail
 input=$(cat)
 
-# ── Parse all fields in one jq call ───────────────────────────
-eval "$(echo "$input" | jq -r '
-  "MODEL="     + (.model.display_name                                         // "?" | @sh),
-  "STYLE="     + (.output_style.name                                          // "default" | @sh),
-  "VERSION="   + (.version                                                    // "" | @sh),
-  "COST="      + ((.cost.total_cost_usd                                       // 0) | tostring),
-  "DUR_MS="    + ((.cost.total_duration_ms                                    // 0) | tostring),
-  "LINES_A="   + ((.cost.total_lines_added                                    // 0) | tostring),
-  "LINES_D="   + ((.cost.total_lines_removed                                  // 0) | tostring),
-  "CTX_PCT="   + ((.context_window.used_percentage                            // 0) | tostring),
-  "CTX_SIZE="  + ((.context_window.context_window_size                        // 200000) | tostring),
-  "TOT_IN="    + ((.context_window.total_input_tokens                         // 0) | tostring),
-  "TOT_OUT="   + ((.context_window.total_output_tokens                        // 0) | tostring),
-  "CACHE_R="   + ((.context_window.current_usage.cache_read_input_tokens      // 0) | tostring),
-  "CACHE_C="   + ((.context_window.current_usage.cache_creation_input_tokens  // 0) | tostring),
-  "CUR_IN="    + ((.context_window.current_usage.input_tokens                 // 0) | tostring),
-  "CUR_OUT="   + ((.context_window.current_usage.output_tokens                // 0) | tostring),
-  "AGENT="     + (.agent.name                                                 // "" | @sh),
-  "WORKTREE="  + (.worktree.name                                              // "" | @sh)
-' 2>/dev/null || true)"
+# ── Parse fields (separate jq calls = safe with any path/value) ────
+MODEL=$(echo "$input"    | jq -r '.model.display_name // "?"')
+CUR_DIR=$(echo "$input"  | jq -r '.workspace.current_dir // "."')
+PCT=$(echo "$input"      | jq -r '.context_window.used_percentage // 0 | floor')
+CTX_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+TOT_IN=$(echo "$input"   | jq -r '.context_window.total_input_tokens // 0')
+TOT_OUT=$(echo "$input"  | jq -r '.context_window.total_output_tokens // 0')
+EXCEEDS=$(echo "$input"  | jq -r '.exceeds_200k_tokens // false')
+COST=$(echo "$input"     | jq -r '.cost.total_cost_usd // 0')
+DUR=$(echo "$input"      | jq -r '.cost.total_duration_ms // 0')
+ADDED=$(echo "$input"    | jq -r '.cost.total_lines_added // 0')
+REMOVED=$(echo "$input"  | jq -r '.cost.total_lines_removed // 0')
+SID=$(echo "$input"      | jq -r '.session_id // ""')
+VIM_MODE=$(echo "$input" | jq -r '.vim.mode // empty')
+AGENT=$(echo "$input"    | jq -r '.agent.name // empty')
+WT_NAME=$(echo "$input"  | jq -r '.worktree.name // empty')
+WT_ORIG=$(echo "$input"  | jq -r '.worktree.original_branch // empty')
 
-# No ANSI — plain text only (multi-line + ANSI causes rendering issues in CC)
+# ── Colors ─────────────────────────────────────────────────────────
+RS='\033[0m'
+B='\033[1m'; D='\033[2m'
+RED='\033[31m'; GRN='\033[32m'; YLW='\033[33m'
+BLU='\033[34m'; MAG='\033[35m'; CYN='\033[36m'; WHT='\033[97m'
 
-# ── Helpers ───────────────────────────────────────────────────
-fmt_tok() {
-    local n=${1:-0}
-    if   (( n >= 1000000 )); then awk "BEGIN{printf \"%.1fM\", $n/1000000}"
-    elif (( n >= 1000    )); then awk "BEGIN{printf \"%.1fk\", $n/1000}"
-    else printf "%d" "$n"; fi
-}
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  LINE 1 — IDENTITY: model · dir · git · badges
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ── Derived ───────────────────────────────────────────────────
-CTX_INT=$(awk "BEGIN{printf \"%d\", ${CTX_PCT:-0}}")
-COST_FMT=$(awk "BEGIN{printf \"\$%.2f\", ${COST:-0}}")
-CACHED=$(( ${CACHE_R:-0} + ${CACHE_C:-0} ))
-TOTAL=$(( ${TOT_IN:-0} + ${TOT_OUT:-0} ))
+# Short session tag (first 4 chars) — helps distinguish parallel sessions
+STAG=""
+[ -n "$SID" ] && STAG="${D}${SID:0:4}${RS} "
 
-# Duration: Xhr Ym or Ym
-MINS=$(( ${DUR_MS:-0} / 60000 ))
-HOURS=$(( MINS / 60 ))
-(( HOURS > 0 )) && DUR="${HOURS}hr $((MINS % 60))m" || DUR="${MINS}m"
+L1="${STAG}${B}${CYN}${MODEL}${RS} 📁 ${WHT}${CUR_DIR##*/}${RS}"
 
-# Context bar (20 wide)
-BAR_W=20
-FILLED=$(( CTX_INT * BAR_W / 100 ))
-EMPTY=$(( BAR_W - FILLED ))
-BAR=""
-(( FILLED > 0 )) && { printf -v _F "%${FILLED}s"; BAR="${_F// /█}"; }
-(( EMPTY  > 0 )) && { printf -v _E "%${EMPTY}s";  BAR="${BAR}${_E// /░}"; }
-
-# Context urgency marker (plain text — no ANSI)
-(( CTX_INT >= 90 )) && CTX_WARN="!!! " || { (( CTX_INT >= 70 )) && CTX_WARN="! " || CTX_WARN=""; }
-
-# ── Git (cached 5s to avoid per-turn overhead) ────────────────
-GCACHE="/tmp/cc-sl-git.cache"
-CAGE=$(( $(date +%s) - $(stat -c %Y "$GCACHE" 2>/dev/null || echo 0) ))
-if [[ ! -f "$GCACHE" ]] || (( CAGE > 5 )); then
-    if git rev-parse --git-dir >/dev/null 2>&1; then
-        GB=$(git branch --show-current 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "HEAD")
-        ST=$(git diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
-        UT=$(git diff --numstat 2>/dev/null | wc -l | tr -d ' ')
-        printf '%s|%s|%s\n' "$GB" "$ST" "$UT" > "$GCACHE"
-    else
-        printf 'no git|0|0\n' > "$GCACHE"
-    fi
+# ── Git (5s cache, keyed on full dir hash) ─────────────────────────
+DIR_HASH=$(printf '%s' "$CUR_DIR" | cksum | cut -d' ' -f1)
+CACHE="/tmp/cc-sl-${DIR_HASH}"
+NOW=$(date +%s)
+STALE=1
+if [ -f "$CACHE" ]; then
+  CMTIME=$(stat -c %Y "$CACHE" 2>/dev/null || stat -f %m "$CACHE" 2>/dev/null || echo 0)
+  [ $(( NOW - CMTIME )) -le 5 ] && STALE=0
 fi
-IFS='|' read -r GB ST UT < "$GCACHE" || true
 
-# Git suffix: +staged ~unstaged
-GIT_SUFFIX=""
-(( ${ST:-0} > 0 )) && GIT_SUFFIX="${GIT_SUFFIX} +${ST}"
-(( ${UT:-0} > 0 )) && GIT_SUFFIX="${GIT_SUFFIX} ~${UT}"
+if [ "$STALE" -eq 1 ]; then
+  if git -C "$CUR_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    _BR=$(git -C "$CUR_DIR" branch --show-current 2>/dev/null)
+    _ST=$(git -C "$CUR_DIR" diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
+    _MO=$(git -C "$CUR_DIR" diff --numstat 2>/dev/null | wc -l | tr -d ' ')
+    _RM=$(git -C "$CUR_DIR" remote get-url origin 2>/dev/null \
+          | sed 's|git@github.com:|https://github.com/|;s|\.git$||')
+    printf '%s\n' "${_BR}|${_ST}|${_MO}|${_RM}" > "$CACHE"
+  else
+    printf '%s\n' "|||" > "$CACHE"
+  fi
+fi
+IFS='|' read -r GBR GST GMO GRM < "$CACHE"
 
-# Optional agent / worktree badges
-BADGES=""
-[[ -n "${AGENT:-}"    ]] && BADGES="${BADGES} │ agent:${AGENT}"
-[[ -n "${WORKTREE:-}" ]] && BADGES="${BADGES} │ wt:${WORKTREE}"
+if [ -n "$GBR" ]; then
+  # Clickable branch name via OSC 8 (if remote exists)
+  if [ -n "$GRM" ]; then
+    printf -v BDISP '%b' "\e]8;;${GRM}\a${GBR}\e]8;;\a"
+  else
+    BDISP="$GBR"
+  fi
+  L1="${L1} ${CYN}🌿 ${BDISP}${RS}"
+  [ "$GST" -gt 0 ] && L1="${L1} ${GRN}●${GST}${RS}"
+  [ "$GMO" -gt 0 ] && L1="${L1}${YLW}~${GMO}${RS}"
+fi
 
-# Lines changed (omit if zero)
-LINES_SEG=""
-(( ${LINES_A:-0} + ${LINES_D:-0} > 0 )) && LINES_SEG=" │ +${LINES_A}/-${LINES_D} lines"
+# ── Conditional badges (only when active) ──────────────────────────
+if [ -n "$WT_NAME" ]; then
+  WT_LBL="⎇${WT_NAME}"
+  [ -n "$WT_ORIG" ] && WT_LBL="${WT_LBL}←${WT_ORIG}"
+  L1="${L1}  ${BLU}${WT_LBL}${RS}"
+fi
+[ -n "$AGENT" ]    && L1="${L1}  ${MAG}🤖${AGENT}${RS}"
+[ -n "$VIM_MODE" ] && L1="${L1}  ${D}[${VIM_MODE}]${RS}"
 
-# ── Row 1: identity + git ─────────────────────────────────────
-printf '%s │ ⎇ %s%s │ v%s │ style:%s%s\n' \
-    "$MODEL" \
-    "$GB" "$GIT_SUFFIX" \
-    "$VERSION" \
-    "$STYLE" \
-    "$BADGES"
+printf '%b\n' "$L1"
 
-# ── Row 2: context + cost + tokens ────────────────────────────
-printf '%sctx %d%% [%s] │ %s │ %s%s │ cache:%s  in:%s  out:%s  total:%s\n' \
-    "$CTX_WARN" \
-    "$CTX_INT" \
-    "$BAR" \
-    "$COST_FMT" \
-    "$DUR" \
-    "$LINES_SEG" \
-    "$(fmt_tok "$CACHED")" \
-    "$(fmt_tok "$CUR_IN")" \
-    "$(fmt_tok "$CUR_OUT")" \
-    "$(fmt_tok "$TOTAL")"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  LINE 2 — HEALTH: context bar+tokens · cost · reset timer · changes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── Context bar (color by threshold) ───────────────────────────────
+if   [ "$PCT" -ge 90 ]; then BC="$RED"
+elif [ "$PCT" -ge 70 ]; then BC="$YLW"
+else                          BC="$GRN"; fi
+
+BW=12
+FL=$(( PCT * BW / 100 )); EM=$(( BW - FL ))
+BAR=""
+[ "$FL" -gt 0 ] && printf -v _f "%${FL}s" && BAR="${_f// /█}"
+[ "$EM" -gt 0 ] && printf -v _e "%${EM}s" && BAR="${BAR}${_e// /░}"
+
+# Token count in K (from current_usage via used_percentage * context_size)
+USED_TOKENS=$(( CTX_SIZE * PCT / 100 ))
+if [ "$USED_TOKENS" -ge 1000000 ]; then
+  TOK_LABEL=$(printf '%.1fM' "$(echo "scale=1; $USED_TOKENS / 1000000" | bc 2>/dev/null || echo 0)")
+elif [ "$USED_TOKENS" -ge 1000 ]; then
+  TOK_LABEL="$(( USED_TOKENS / 1000 ))K"
+else
+  TOK_LABEL="${USED_TOKENS}"
+fi
+
+# Context size label for extended models
+CTX_TAG=""
+[ "$CTX_SIZE" -ge 1000000 ] && CTX_TAG="${D}/1M${RS}"
+
+# Exceeds 200K warning
+WARN=""
+[ "$EXCEEDS" = "true" ] && WARN=" ${RED}${B}⚠>200K${RS}"
+
+L2="${BC}▕${BAR}▏${RS} ${B}${PCT}%${RS} ${D}${TOK_LABEL}${CTX_TAG}${RS}${WARN}"
+
+# ── Cost ───────────────────────────────────────────────────────────
+CINT=$(printf '%.0f' "$COST" 2>/dev/null || echo 0)
+if [ "${CINT:-0}" -ge 1 ]; then
+  CFMT=$(printf '$%.2f' "$COST")
+else
+  CFMT=$(printf '$%.3f' "$COST")
+fi
+L2="${L2}  ${D}·${RS}  💰${YLW}${B}${CFMT}${RS}"
+
+# ── 5h reset countdown ────────────────────────────────────────────
+REM=$(( 18000000 - DUR ))
+[ "$REM" -lt 0 ] && REM=0
+RH=$(( REM / 3600000 ))
+RM=$(( (REM % 3600000) / 60000 ))
+RSC=$(( (REM % 60000) / 1000 ))
+
+if   [ "$RH" -eq 0 ] && [ "$RM" -lt 30 ]; then TC="$RED"
+elif [ "$RH" -eq 0 ];                      then TC="$YLW"
+else                                             TC="$GRN"; fi
+
+# Hours+min when >60m, min+sec when ≤60m
+if [ "$RH" -gt 0 ]; then TF="${RH}h${RM}m"
+else                      TF="${RM}m${RSC}s"; fi
+
+L2="${L2}  ${D}·${RS}  🔄${TC}${TF}${RS}"
+
+# ── Code changes (only if non-zero) ───────────────────────────────
+if [ "$ADDED" -gt 0 ] || [ "$REMOVED" -gt 0 ]; then
+  L2="${L2}  ${D}·${RS}  ${GRN}+${ADDED}${RS}${RED}−${REMOVED}${RS}"
+fi
+
+printf '%b\n' "$L2"
