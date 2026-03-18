@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Claude Code statusline — 2-row, readable, minimal color
+# Claude Code statusline — 2-row, plain text, no ANSI
 #
 # Row 1:  Model  │  ⎇ branch +staged ~unstaged  │  vX.Y.Z  │  style:X
 # Row 2:  ctx N% [████░░░░]  │  $cost  │  Xhr Ym  │  cache:X in:X out:X total:X
-#
-# Color only where it signals urgency: ctx ≥70% yellow, ≥90% red.
 
 set -euo pipefail
 input=$(cat)
@@ -30,8 +28,7 @@ eval "$(echo "$input" | jq -r '
   "WORKTREE="  + (.worktree.name                                              // "" | @sh)
 ' 2>/dev/null || true)"
 
-# ── ANSI — only bold/dim/threshold colors ─────────────────────
-B=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; YLW=$'\033[33m'; RST=$'\033[0m'
+# No ANSI — plain text only (multi-line + ANSI causes rendering issues in CC)
 
 # ── Helpers ───────────────────────────────────────────────────
 fmt_tok() {
@@ -60,8 +57,8 @@ BAR=""
 (( FILLED > 0 )) && { printf -v _F "%${FILLED}s"; BAR="${_F// /█}"; }
 (( EMPTY  > 0 )) && { printf -v _E "%${EMPTY}s";  BAR="${BAR}${_E// /░}"; }
 
-# Context urgency color
-(( CTX_INT >= 90 )) && CTX_COL=$RED || { (( CTX_INT >= 70 )) && CTX_COL=$YLW || CTX_COL=""; }
+# Context urgency marker (plain text — no ANSI)
+(( CTX_INT >= 90 )) && CTX_WARN="!!! " || { (( CTX_INT >= 70 )) && CTX_WARN="! " || CTX_WARN=""; }
 
 # ── Git (cached 5s to avoid per-turn overhead) ────────────────
 GCACHE="/tmp/cc-sl-git.cache"
@@ -85,25 +82,25 @@ GIT_SUFFIX=""
 
 # Optional agent / worktree badges
 BADGES=""
-[[ -n "${AGENT:-}"    ]] && BADGES="${BADGES} │ ${DIM}agent${RST}:${AGENT}"
-[[ -n "${WORKTREE:-}" ]] && BADGES="${BADGES} │ ${DIM}wt${RST}:${WORKTREE}"
+[[ -n "${AGENT:-}"    ]] && BADGES="${BADGES} │ agent:${AGENT}"
+[[ -n "${WORKTREE:-}" ]] && BADGES="${BADGES} │ wt:${WORKTREE}"
 
 # Lines changed (omit if zero)
 LINES_SEG=""
 (( ${LINES_A:-0} + ${LINES_D:-0} > 0 )) && LINES_SEG=" │ +${LINES_A}/-${LINES_D} lines"
 
 # ── Row 1: identity + git ─────────────────────────────────────
-printf '%s%s%s │ ⎇ %s%s │ v%s │ %sstyle:%s%s%s\n' \
-    "$B" "$MODEL" "$RST" \
+printf '%s │ ⎇ %s%s │ v%s │ style:%s%s\n' \
+    "$MODEL" \
     "$GB" "$GIT_SUFFIX" \
     "$VERSION" \
-    "$DIM" "$STYLE" "$RST" \
+    "$STYLE" \
     "$BADGES"
 
 # ── Row 2: context + cost + tokens ────────────────────────────
-printf '%sctx %s%d%%%s [%s] │ %s │ %s%s │ cache:%s  in:%s  out:%s  total:%s\n' \
-    "" \
-    "$CTX_COL" "$CTX_INT" "$RST" \
+printf '%sctx %d%% [%s] │ %s │ %s%s │ cache:%s  in:%s  out:%s  total:%s\n' \
+    "$CTX_WARN" \
+    "$CTX_INT" \
     "$BAR" \
     "$COST_FMT" \
     "$DUR" \
