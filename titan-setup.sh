@@ -775,6 +775,7 @@ UV_TOOLS=(
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
   "cookiecutter"    # cookiecutter — project scaffolding from templates
   "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
+  "huggingface_hub"     # hf — Hugging Face Hub CLI (download/upload models, datasets, spaces)
 )
 
 for tool in "${UV_TOOLS[@]}"; do
@@ -2056,12 +2057,12 @@ echo "  Installing official and community plugins..."
 # claude auth login is broken over SSH (Enter doesn't register — upstream bug)
 # Skip inline auth; plugins are installed below only if already authenticated.
 # After setup: run 'claude auth login' from a fresh terminal prompt (not inside
-# a script), then re-run plugin installs with: claude plugin install hookify
+# a script), then re-run plugin installs with: claude plugin install code-review
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
   warn "Claude not authenticated — plugins will be skipped"
   echo "  After setup, run 'claude auth login' then:"
   echo "    claude plugin marketplace add anthropic/claude-plugins-official"
-  echo "    claude plugin install hookify code-review skill-creator"
+  echo "    claude plugin install code-review skill-creator superpowers context7 playwright"
   echo "    claude plugin marketplace add obra/superpowers-marketplace"
   echo "    claude plugin install episodic-memory"
 fi
@@ -2076,9 +2077,15 @@ else
     && ok "official marketplace" || ok "official marketplace (exists)"
 
   # Install plugins from official marketplace
-  claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
+  # hookify removed — hook management via direct settings.json editing is sufficient
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
   claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
+  # superpowers — core skill framework (brainstorm, TDD, git-workflow, debugging); cannot be replaced
+  claude plugin install superpowers 2>/dev/null && ok "superpowers" || warn "superpowers"
+  # context7 — fetches live library docs mid-task; MCP wins over manual xh+URL lookup
+  claude plugin install context7 2>/dev/null && ok "context7" || warn "context7"
+  # playwright — interactive browser control via npx @playwright/mcp@latest (self-contained, no CLI needed)
+  claude plugin install playwright 2>/dev/null && ok "playwright" || warn "playwright"
 
   # semgrep plugin — only if token was provided
   if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
@@ -3172,9 +3179,6 @@ LETTA_CTRL_SVC
   _patch_plugin_skill "skill-creator@claude-plugins-official" \
     "skills/skill-creator/SKILL.md" \
     '["**/.claude/**", "**/skills/**", "**/SKILL.md", "**/CLAUDE.md"]'
-  _patch_plugin_skill "hookify@claude-plugins-official" \
-    "skills/writing-rules/SKILL.md" \
-    '["**/.claude/**", "**/hooks/**", "**/rules/**", "**/hookify*"]'
   _patch_plugin_skill "episodic-memory@superpowers-marketplace" \
     "skills/remembering-conversations/SKILL.md" \
     '["**/memory/**", "**/.claude/memory/**", "**/handoff*", "**/_scratchpad*"]'
