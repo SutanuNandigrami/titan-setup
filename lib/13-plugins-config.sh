@@ -94,3 +94,6 @@
     fi
   fi
 
+fi
+# ── end claude auth guard (opened in 12-plugins-install.sh) ──
+

@@ -1,3 +1,6 @@
+# Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
+# This prevents skill-creator/hookify/episodic-memory from loading on every turn (93% token reduction)
+if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill() {
     local plugin_key="$1" subpath="$2" paths_value="$3"
     local install_path
@@ -41,5 +44,4 @@
     fi
   fi
 fi
-
 
