@@ -128,7 +128,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    ```bash
    claude plugin list
    ```
-   Titan installs: `hookify` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `semgrep` (if token provided)
+   Titan installs: `hookify` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `cozempic` · `semgrep` (if token provided)
 
 5. **Quick sanity check:**
    ```bash
@@ -220,7 +220,7 @@ Desktop only: `maim`, `xdotool`.
 
 ### 155+ CLI Tools
 
-**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf) · cozempic · ccusage · sherlock
+**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
 
 **JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · mermaid-cli · playwright · kilocode · vercel
 
@@ -247,7 +247,7 @@ Desktop only: `maim`, `xdotool`.
 |-----------|-------|-------------|
 | Inline skills | 11 | Path-gated, load only for matching files |
 | Community skills | varies | superpowers, modern-python, NotebookLM, VibeSec |
-| Plugins (MCP) | 4–6 | hookify, code-review, skill-creator, episodic-memory, claude-subconscious (if Letta), semgrep (if token) |
+| Plugins (MCP) | 5–7 | hookify, code-review, skill-creator, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
 | Slash commands | 11 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
