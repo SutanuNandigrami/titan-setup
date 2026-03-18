@@ -5,3 +5,9 @@ _handoff.md
 *.key
 .worktrees/
 vendor/
+
+# Superpowers runtime artifacts
+.superpowers/**/.server-info
+.superpowers/**/.server.log
+.superpowers/**/.server.pid
+.superpowers/**/.server-stopped
