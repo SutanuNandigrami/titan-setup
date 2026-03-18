@@ -1088,7 +1088,9 @@ c = c.replace(
 f.write_text(c)
 PYEOF
       mkdir -p "$HOME/.bun/bin"
-      if run_q bun install --cwd "$_BCF_SRC" && run_q bun --cwd "$_BCF_SRC/apps/cli" run build; then
+      # NOTE: cd is required — `bun --cwd` does not propagate CWD to shell subprocesses
+      # in the build script, which uses relative paths like ../../packages/
+      if run_q bun install --cwd "$_BCF_SRC" && (cd "$_BCF_SRC/apps/cli" && run_q bun run build); then
         _BCF_DIST="$_BCF_SRC/apps/cli/dist/better-ccflare"
         if [[ -f "$_BCF_DIST" ]]; then
           mkdir -p "$HOME/.bun/bin" "$HOME/.local/bin"
