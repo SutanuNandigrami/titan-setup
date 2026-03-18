@@ -161,7 +161,7 @@ function handleLogs(svcName) {
 // ── Router ────────────────────────────────────────────────────────────────────
 Bun.serve({
   port: PORT,
-  hostname: "0.0.0.0",
+  hostname: "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -235,5 +235,5 @@ Bun.serve({
   },
 });
 
-console.log(`letta-ctrl 0.0.0.0:${PORT} → ${LETTA_URL}`);
+console.log(`letta-ctrl 127.0.0.1:${PORT} → ${LETTA_URL}`);
 

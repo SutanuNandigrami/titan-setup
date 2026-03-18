@@ -110,7 +110,7 @@ After=default.target
 [Service]
 Type=simple
 ExecStartPre=-${_DOCKER_BIN} rm -f letta-server
-ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p ${LETTA_PORT}:8283 --add-host=host.docker.internal:host-gateway -v %h/.letta/.persist/pgdata:/var/lib/postgresql/data --env-file %h/.config/letta/docker.env letta/letta:latest
+ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p 127.0.0.1:${LETTA_PORT}:8283 --add-host=host.docker.internal:host-gateway -v %h/.letta/.persist/pgdata:/var/lib/postgresql/data --env-file %h/.config/letta/docker.env letta/letta:latest
 ExecStop=${_DOCKER_BIN} stop letta-server
 Restart=on-failure
 RestartSec=15
@@ -198,16 +198,29 @@ PYEOF
           install -m 0755 "$_BCF_DIST" "$HOME/.local/bin/better-ccflare"
           ok "better-ccflare (built from source + NULL constraint patches applied)"
         else
-          warn "better-ccflare build succeeded but binary not found at $_BCF_DIST — falling back to npm"
-          run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+          warn "better-ccflare build succeeded but binary not found at $_BCF_DIST"
+          if [[ "$ARCH_GO" == "arm64" ]]; then
+            warn "  arm64: no pre-built npm binary available — skipping"
+          else
+            run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+          fi
         fi
       else
-        warn "better-ccflare build failed — falling back to npm binary (kilo/zai/minimax may have issues)"
-        run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+        warn "better-ccflare build failed"
+        if [[ "$ARCH_GO" == "arm64" ]]; then
+          warn "  arm64: npm fallback binary is x86-64 only — skipping"
+          warn "  Fix: bun install --cwd <bcf-src> && bun --cwd <bcf-src>/apps/cli run build"
+        else
+          run_q bun install -g better-ccflare || warn "better-ccflare npm install also failed"
+        fi
       fi
     else
-      warn "better-ccflare repo clone failed — falling back to npm binary"
-      run_q bun install -g better-ccflare || warn "better-ccflare install failed"
+      warn "better-ccflare repo clone failed"
+      if [[ "$ARCH_GO" == "arm64" ]]; then
+        warn "  arm64: npm fallback binary is x86-64 only — must build from source"
+      else
+        run_q bun install -g better-ccflare || warn "better-ccflare install failed"
+      fi
     fi
   else
     ok "better-ccflare (exists)"
