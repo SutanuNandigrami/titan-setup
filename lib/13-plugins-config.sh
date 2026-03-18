@@ -19,6 +19,14 @@
     && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 
+  # cozempic plugin — context diagnose/treat MCP tools (diagnose_current, treat_session)
+  # CLI (uv) provides the primary interface; plugin adds MCP tools for in-session diagnostics
+  if ! $COZEMPIC_SKIP; then
+    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null \
+      && ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
+    claude plugin install cozempic 2>/dev/null && ok "cozempic plugin" || warn "cozempic plugin"
+  fi
+
   # claude-subconscious — Letta-based persistent cross-session memory agent
   if ! $LETTA_SKIP; then
     claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null \

@@ -95,6 +95,75 @@ jq '.env.NTFY_TOPIC = "" | .env.NTFY_URL = "https://ntfy.sh"' \
   && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
 ok "settings.json (ntfy env vars added — set NTFY_TOPIC to enable push alerts)"
 
+# ─── cozempic — context bloat cleaner (global hooks) ───
+# Injects hooks directly into ~/.claude/settings.json — NOT via `cozempic init`,
+# which writes to cwd/.claude/settings.json (project-scoped = wrong for a global installer).
+# Each hook is session/cwd-scoped at runtime: guard gets --session $SESSION_ID from hook
+# input; checkpoint uses cwd which CC sets to the project dir when firing hooks.
+# No project mixing — fully safe as global hooks.
+# Must run AFTER settings.json is fully written (install -Dm644 above would erase hooks).
+if ! $COZEMPIC_SKIP && command -v cozempic &>/dev/null; then
+  python3 - "$CLAUDE_DIR/settings.json" <<'PYEOF'
+import json, sys
+f = sys.argv[1]
+with open(f) as fh:
+    cfg = json.load(fh)
+
+GUARD = (
+    'INPUT=$(cat); '
+    'SESSION_ID=$(echo "$INPUT" | python3 -c '
+    '"import sys,json; print(json.load(sys.stdin).get(\'session_id\',\'\'))" 2>/dev/null); '
+    'CTX_WIN=$(echo "$INPUT" | python3 -c '
+    '"import sys,json; d=json.load(sys.stdin); '
+    'print(d.get(\'context_window\',{}).get(\'context_window_size\',\'\'))" 2>/dev/null); '
+    'cozempic guard --daemon '
+    '${SESSION_ID:+--session $SESSION_ID} '
+    '${CTX_WIN:+--context-window $CTX_WIN} '
+    '2>/dev/null || true'
+)
+CKPT = 'cozempic checkpoint 2>/dev/null || true'
+
+hooks = cfg.setdefault('hooks', {})
+
+def has_cmd(arr, kw):
+    return any(any(kw in c.get('command','') for c in h.get('hooks',[])) for h in arr if isinstance(h,dict))
+
+def add_hook(arr, matcher, cmd):
+    arr.append({'matcher': matcher, 'hooks': [{'type': 'command', 'command': cmd}]})
+
+ss = hooks.setdefault('SessionStart', [])
+if not has_cmd(ss, 'cozempic guard'):
+    add_hook(ss, '', GUARD)
+
+for ev in ('PreCompact', 'Stop'):
+    arr = hooks.setdefault(ev, [])
+    if not has_cmd(arr, 'cozempic checkpoint'):
+        add_hook(arr, '', CKPT)
+
+ptu = hooks.setdefault('PostToolUse', [])
+for m in ('Task', 'TaskCreate|TaskUpdate'):
+    if not any(isinstance(h,dict) and h.get('matcher')==m and has_cmd([h],'cozempic checkpoint') for h in ptu):
+        add_hook(ptu, m, CKPT)
+
+with open(f, 'w') as fh:
+    json.dump(cfg, fh, indent=2)
+    fh.write('\n')
+PYEOF
+  [[ $? -eq 0 ]] \
+    && ok "cozempic: hooks wired globally in ~/.claude/settings.json" \
+    || warn "cozempic: hook injection failed — run manually from a project dir: cozempic init"
+
+  # Install /cozempic slash command from cozempic's own venv (avoids cozempic init's cwd problem)
+  _COZEMPIC_PY="$(dirname "$(command -v cozempic)")/python3"
+  if [[ -x "$_COZEMPIC_PY" ]]; then
+    _SLASH=$("$_COZEMPIC_PY" -c \
+      "import importlib.resources as r; print(r.files('cozempic.data').joinpath('cozempic_slash_command.md'))" \
+      2>/dev/null)
+    [[ -n "$_SLASH" ]] && install -Dm644 "$_SLASH" "$CLAUDE_DIR/commands/cozempic.md" \
+      && ok "cozempic: /cozempic slash command installed"
+  fi
+fi
+
 # ─── ccstatusline config ───
 install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
   && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"

@@ -15,6 +15,7 @@ UV_TOOLS=(
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
   "cookiecutter"    # cookiecutter — project scaffolding from templates
   "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
+  "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
 )
 
 for tool in "${UV_TOOLS[@]}"; do
