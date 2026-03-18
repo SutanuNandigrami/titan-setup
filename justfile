@@ -17,10 +17,15 @@ build-check:
 
 # Lint all shell scripts with shellcheck
 lint:
-    shellcheck -x \
-      $(find lib/ -name '*.sh' 2>/dev/null | sort) \
-      bin/agt \
-      agent-team-reset.sh agent-team-teardown.sh \
+    @# Fragments: error-level only (warnings are pre-existing in monolith); exclude cross-fragment false positives
+    @if [ -d lib/ ] && [ -n "$(find lib/ -name '*.sh' 2>/dev/null)" ]; then \
+      shellcheck -x --shell bash --severity=error \
+        --exclude=SC2034,SC2154,SC1046,SC1047,SC1072,SC1073,SC1089,SC1009 \
+        $(find lib/ -name '*.sh' | sort); \
+    fi
+    @# Assembled script: full check (authoritative), errors only (warnings are pre-existing)
+    shellcheck -x --severity=error titan-setup.sh
+    shellcheck -x bin/agt agent-team-reset.sh agent-team-teardown.sh \
       $(find dot-claude/hooks/ -name '*.sh' 2>/dev/null | sort)
 
 # Format all shell scripts

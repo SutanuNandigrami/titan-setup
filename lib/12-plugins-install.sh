@@ -1,0 +1,35 @@
+# ─── Phase 5b — Claude Code Plugins ───
+section "Phase 5b — Claude Code Plugins"
+echo "  Installing official and community plugins..."
+
+# claude auth login is broken over SSH (Enter doesn't register — upstream bug)
+# Skip inline auth; plugins are installed below only if already authenticated.
+# After setup: run 'claude auth login' from a fresh terminal prompt (not inside
+# a script), then re-run plugin installs with: claude plugin install hookify
+if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+  warn "Claude not authenticated — plugins will be skipped"
+  echo "  After setup, run 'claude auth login' then:"
+  echo "    claude plugin marketplace add anthropic/claude-plugins-official"
+  echo "    claude plugin install hookify code-review skill-creator"
+  echo "    claude plugin marketplace add obra/superpowers-marketplace"
+  echo "    claude plugin install episodic-memory"
+fi
+
+if ! command -v claude &>/dev/null; then
+  warn "Claude CLI not found — skipping plugins"
+elif ! claude auth status &>/dev/null 2>&1; then
+  warn "Claude not authenticated — skipping plugins (run 'claude auth login' then re-run)"
+else
+  # Register official marketplace if not already registered
+  claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null \
+    && ok "official marketplace" || ok "official marketplace (exists)"
+
+  # Install plugins from official marketplace
+  claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
+  claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
+  claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
+
+  # semgrep plugin — only if token was provided
+  if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
+    if claude plugin install semgrep 2>/dev/null; then
+      ok "semgrep plugin"
