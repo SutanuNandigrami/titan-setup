@@ -22,6 +22,7 @@ LETTA_PASSWORD=""
 OLLAMA_SKIP=false
 LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
+COZEMPIC_SKIP=false
 
 usage() {
   cat <<USAGE
@@ -53,6 +54,7 @@ Options:
   --no-ollama              Skip Ollama install (use OPENAI_API_KEY for embeddings instead)
   --letta-ctrl-skip        Skip LettaCtrl GUI (default: install if Letta is installed)
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
+  --no-cozempic            Skip cozempic install (context bloat cleaner)
 
   --version                Show script version
   -h, --help               Show this help message
@@ -92,6 +94,7 @@ while [[ $# -gt 0 ]]; do
     --no-ollama)       OLLAMA_SKIP=true; shift ;;
     --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
     --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
+    --no-cozempic)     COZEMPIC_SKIP=true; shift ;;
     --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;

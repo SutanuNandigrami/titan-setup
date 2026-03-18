@@ -95,6 +95,16 @@ jq '.env.NTFY_TOPIC = "" | .env.NTFY_URL = "https://ntfy.sh"' \
   && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
 ok "settings.json (ntfy env vars added — set NTFY_TOPIC to enable push alerts)"
 
+# ─── cozempic — context bloat cleaner ───
+# Wires 4 hooks idempotently: SessionStart guard daemon, PostToolUse checkpoint,
+# PreCompact checkpoint, Stop checkpoint. Also installs /cozempic slash command.
+# Must run AFTER settings.json is fully written (overwrite at install -Dm644 above would erase hooks).
+if ! $COZEMPIC_SKIP && command -v cozempic &>/dev/null && command -v claude &>/dev/null; then
+  cozempic init &>/dev/null \
+    && ok "cozempic: hooks wired (PreCompact + SessionStart guards active)" \
+    || warn "cozempic init failed — run manually: cozempic init"
+fi
+
 # ─── ccstatusline config ───
 install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
   && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
