@@ -245,7 +245,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.
     _VPS_TMUX_ENV=()
-    [[ -n "${TMUX:-}" || "${TITAN_TMUX:-}" == "1" ]] && _VPS_TMUX_ENV=(TITAN_TMUX=1)
+    [[ -n "${TMUX:-}" || "${TITAN_TMUX:-}" == "1" ]] && _VPS_TMUX_ENV+=(TITAN_TMUX=1)
+    # Propagate local repo override so the re-executed script uses the same REPO_FILES
+    [[ -n "${TITAN_REPO_FILES:-}" ]] && _VPS_TMUX_ENV+=("TITAN_REPO_FILES=${TITAN_REPO_FILES}")
     exec sudo -u "$CLAUDE_USER" "${_VPS_TMUX_ENV[@]+"${_VPS_TMUX_ENV[@]}"}" bash "$0" "${_VPS_REEXEC_ARGS[@]}"
   fi
 fi
