@@ -2382,14 +2382,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
 fi
 
-# ── VPS: lock SSH to Tailscale (silently — summary follows) ────────────────
+# ── VPS: allow SSH on Tailscale + capture compliance (non-destructive) ─────
+# Public port 22 deletion and sshd restart happen LAST (after all output)
+# so the current SSH session stays alive through the entire install.
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   sudo ufw allow in on tailscale0 to any port 22 proto tcp
-  sudo ufw delete allow 22/tcp || true
-  sudo ufw delete allow OpenSSH 2>/dev/null || true
-  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-  # Capture compliance output BEFORE sshd restart (restart runs last, after all output)
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 elif [[ "$INSTALL_MODE" == "vps" ]]; then
   warn "SSH lockdown skipped — Tailscale not connected. Run tailscale up manually, then:"
@@ -2474,9 +2471,14 @@ echo -e "
     ${RED}NEVER USE   → pip install, npm install -g, sudo pip${NC}
 "
 
-# ── VPS: restart sshd last — rebinds socket to Tailscale IP only ───────────
-# Must be after all output is printed; will drop this session if connected
-# via public IP (expected — reconnect via Tailscale)
+# ── VPS: lock SSH to Tailscale — ABSOLUTE LAST action ──────────────────────
+# Deletes public port 22 rule and restarts sshd here — AFTER all output —
+# so the install session stays alive throughout. This will drop the public
+# SSH connection; reconnect via Tailscale: ssh CLAUDE_USER@TS_HOSTNAME
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
+  sudo ufw delete allow 22/tcp || true
+  sudo ufw delete allow OpenSSH 2>/dev/null || true
+  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
   sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
 fi
