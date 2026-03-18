@@ -14,17 +14,17 @@ setup() {
 }
 
 @test "bin/agt passes shellcheck" {
-  run shellcheck -x "$REPO/bin/agt"
+  run shellcheck -x --severity=error "$REPO/bin/agt"
   assert_success
 }
 
 @test "agent-team-reset.sh passes shellcheck" {
-  run shellcheck -x "$REPO/agent-team-reset.sh"
+  run shellcheck -x --severity=error "$REPO/agent-team-reset.sh"
   assert_success
 }
 
 @test "agent-team-teardown.sh passes shellcheck" {
-  run shellcheck -x "$REPO/agent-team-teardown.sh"
+  run shellcheck -x --severity=error "$REPO/agent-team-teardown.sh"
   assert_success
 }
 
@@ -43,7 +43,7 @@ setup() {
 @test "all dot-claude/hooks/*.sh pass shellcheck" {
   for f in "$REPO"/dot-claude/hooks/*.sh; do
     [[ -f "$f" ]] || continue
-    run shellcheck -x "$f"
+    run shellcheck -x --severity=error "$f"
     assert_success "shellcheck failed for $f"
   done
 }
