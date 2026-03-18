@@ -101,6 +101,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    claude plugin install semgrep
    ```
 
+5. **Verify installed plugins:**
+   ```bash
+   claude plugin list
+   ```
+   Titan installs: `superpowers` · `context7` · `playwright` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` · `semgrep` (if token provided)
+
 6. **Quick sanity check:**
    ```bash
    # Check tool counts
@@ -191,9 +197,9 @@ Desktop only: `maim`, `xdotool`.
 
 ### ~100+ CLI Tools
 
-**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm
+**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf)
 
-**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · playwright · vercel
+**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · vercel
 
 **Rust (cargo):** ripgrep · fd · sd · eza · bat · xsv · htmlq · git-absorb · git-delta · difftastic · typos-cli · xh · ouch · hurl · jwt-cli · oha · rtk
 
@@ -218,6 +224,7 @@ Desktop only: `maim`, `xdotool`.
 |-----------|-------|-------------|
 | Inline skills | 11 | Path-gated, load only for matching files |
 | Community skills | varies | superpowers, modern-python, NotebookLM, VibeSec |
+| Plugins (MCP) | 7–8 | superpowers, context7, playwright, code-review, skill-creator, episodic-memory, claude-subconscious, semgrep (optional) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
 | Slash commands | 11 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
@@ -305,8 +312,12 @@ claude auth login
 
 Then install plugins:
 ```bash
+claude plugin marketplace add anthropic/claude-plugins-official
+claude plugin install code-review skill-creator superpowers context7 playwright
+claude plugin marketplace add obra/superpowers-marketplace
+claude plugin install episodic-memory
+# semgrep — only if you have a token from semgrep.dev
 claude plugin install semgrep
-claude plugin install code-review
 ```
 
 ### RTK not working
