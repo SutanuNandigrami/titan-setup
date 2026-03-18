@@ -1,6 +1,6 @@
 # Titan Workstation User Guide
 
-Welcome to your Claude Code workstation — ~100+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
+Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
 
 ## Table of Contents
 
@@ -1315,20 +1315,51 @@ Titan installs curated plugins where MCP is genuinely better than the CLI equiva
 
 | Plugin | What It Does | Why MCP > CLI |
 |--------|-------------|---------------|
-| `superpowers` | Core skill framework — brainstorm, TDD, git-workflow, debugging, verification | Is the skill system itself; no CLI equivalent |
-| `context7` | Fetches current library docs mid-task from upstream sources | Live docs in context beats manual `xh`+URL copy-paste |
-| `playwright` | Interactive browser control — click, fill, screenshot, debug live pages | Claude drives browser in same turn; CLI is fire-and-forget |
+| `hookify` | Visual hook configuration and management | GUI-based hook editing beats manual JSON |
 | `code-review` | PR review subagent + structured review skill | Convenient subagent workflow |
 | `skill-creator` | Create and edit skills interactively with guided flow | Skill authoring workflow |
 | `episodic-memory` | Semantic search over past Claude Code conversations | No CLI equivalent for cross-session memory |
-| `claude-subconscious` | Letta-based background memory agent; updates silently between turns | No CLI equivalent for ambient persistent memory |
-| `semgrep` | Inline SAST findings — Claude sees results and fixes code in same turn | Inline beats terminal loop; **requires `semgrep` CLI binary** (in UV_TOOLS) |
+| `claude-subconscious` | Letta-based background memory agent; updates silently between turns (requires Letta) | No CLI equivalent for ambient persistent memory |
+| `semgrep` | Inline SAST findings — Claude sees results and fixes code in same turn (requires token) | Inline beats terminal loop; **requires `semgrep` CLI binary** (in UV_TOOLS) |
 
 ### Plugin notes
 
 - `semgrep` plugin shells out to the `semgrep` binary — both CLI and plugin must be installed
-- `playwright` plugin runs `npx @playwright/mcp@latest` — does **not** use a bun-installed CLI; only chromium browser binaries in `~/.cache/ms-playwright/` are needed
-- Plugins disabled by default (CLI sufficient): `firecrawl`, `huggingface-skills`, `mintlify`, `feature-dev`, `hookify`, `serena`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`
+- `claude-subconscious` requires the Letta server to be running — skip with `--letta-skip`
+- `superpowers`, `context7`, and `playwright` are **not** installed as plugins — superpowers skills are installed directly into `~/.claude/skills/`, and playwright is installed as a bun CLI tool
+
+---
+
+## LettaCtrl GUI
+
+LettaCtrl is a web dashboard for managing Letta agents and memory blocks. It runs as a Bun-powered HTTP server on port 8284.
+
+### Accessing LettaCtrl
+
+- **Local:** `http://localhost:8284`
+- **VPS (via Tailscale):** `https://<hostname>:8284`
+
+### What you can do
+
+- View and manage Letta agents
+- Inspect and edit memory blocks
+- Monitor agent activity
+- Create new agents with custom configurations
+
+### Service management
+
+```bash
+# Check status
+systemctl --user status letta-ctrl
+
+# Restart
+systemctl --user restart letta-ctrl
+
+# Logs
+journalctl --user -u letta-ctrl -f
+```
+
+Authentication uses the Letta API key from `~/.config/letta/credentials`.
 
 ---
 
@@ -1374,7 +1405,6 @@ Context bloat cleaner for Claude Code sessions. Diagnoses exact token consumptio
 - Start background guard daemon: `cozempic daemon start`
 
 > **Example prompt:** "Diagnose how much token bloat is in my current session, then treat it"
-
 #### kilocode
 Kilo Code CLI. Code generation assistant.
 
@@ -1395,16 +1425,16 @@ Deploy to Vercel from CLI. Serverless functions and static sites.
 
 > **Example prompt:** "Deploy this project to Vercel"
 
-#### playwright (MCP plugin)
-Interactive browser control via the `playwright` Claude Code plugin (`npx @playwright/mcp@latest`). Claude drives the browser live — clicking, filling forms, taking screenshots, and debugging in the same turn.
+#### playwright
+Browser automation and E2E testing framework. Installed as a bun CLI tool with chromium browser binaries.
 
-- Navigate pages and interact with elements in real-time
+- Navigate pages and interact with elements
 - Fill forms, click buttons, handle dialogs
 - Take screenshots and read page content
-- Debug live web applications interactively
-- **Note:** MCP plugin is self-contained (runs via npx). The `playwright` bun CLI is not installed — only the chromium browser binaries in `~/.cache/ms-playwright/` are required.
+- E2E testing with `playwright test`
+- Chromium binaries installed at `~/.cache/ms-playwright/`
 
-> **Example prompt:** "Open this URL, click the login button, fill in the credentials and screenshot the result"
+> **Example prompt:** "Run playwright tests for the login flow"
 
 #### tldr
 Simplified community man pages. Quick command help.

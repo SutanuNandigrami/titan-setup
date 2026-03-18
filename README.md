@@ -14,9 +14,12 @@
 - [Prerequisites](#prerequisites)
 - [Why CLI Over MCP?](#why-cli-over-mcp)
 - [What Gets Installed](#what-gets-installed)
+- [Letta / Subconscious Memory](#letta--subconscious-memory)
+- [VPS Mode](#vps-mode)
 - [Context Budget](#context-budget)
 - [For New Projects](#for-new-projects)
 - [Troubleshooting](#troubleshooting)
+- [Developer Workflow](#developer-workflow)
 - [Changelog](#full-changelog)
 - [Tool Reference](#detailed-tool-reference)
 
@@ -24,13 +27,13 @@
 
 ## What Does This Do?
 
-Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **~100+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
+Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **155+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
 
 In plain English:
 
 | What | How |
 |------|-----|
-| Installs ~100+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
+| Installs 155+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
 | Configures Claude Code | Sets up `~/.claude/` with hooks, skills, commands, agents, and token optimization |
 | Adds smart safety | Permission rules, destructive command blocks, file guards, git protections |
 | Runs idempotently | Safe to re-run — existing tools are skipped, missing ones are installed |
@@ -64,19 +67,43 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 
 ### All options
 
+**Core:**
+
 | Flag | Description |
 |------|-------------|
 | `--name "Alice"` | Personalize your setup |
-| `--mode vps` | VPS/server hardened mode (requires `--tailscale-key`) |
-| `--tailscale-key KEY` | Tailscale auth key for VPS mode |
-| `--cc-version 1.2.3` | Pin a specific Claude Code version |
+| `--mode desktop\|vps` | Installation profile (prompted interactively if omitted) |
+| `--cc-version VERSION` | Pin a specific Claude Code version |
 | `--no-autoupdate` | Disable Claude Code auto-updates |
 | `--semgrep-token TOKEN` | Add Semgrep token for security scanning |
 | `--no-semgrep` | Skip Semgrep setup (no prompt) |
 | `--no-cozempic` | Skip cozempic context cleaner install |
 | `--dry-run` | Preview what will happen without making changes |
-| `--verbose` | Log all output to `/tmp/titan-setup-<timestamp>.log` |
+| `-v`, `--verbose` | Log all output to `/tmp/titan-setup-<timestamp>.log` |
 | `--version` | Show Titan version |
+
+**VPS:**
+
+| Flag | Description |
+|------|-------------|
+| `--tailscale-key KEY` | Tailscale auth key (required for VPS mode) |
+| `--claude-user USER` | Non-root user for Claude Code (created if absent) |
+
+**Services:**
+
+| Flag | Description |
+|------|-------------|
+| `--ccflare-skip` | Skip better-ccflare proxy install |
+| `--ccflare-port PORT` | better-ccflare port (default: 8080) |
+| `--ccflare-host HOST` | better-ccflare bind address (default: 127.0.0.1) |
+| `--semgrep-token TOKEN` | Semgrep App Token (enables semgrep plugin) |
+| `--no-semgrep` | Skip Semgrep setup entirely |
+| `--letta-skip` | Skip Letta server + claude-subconscious plugin |
+| `--letta-port PORT` | Letta server port (default: 8283) |
+| `--letta-password PASS` | Letta server password (auto-generated if omitted) |
+| `--no-ollama` | Skip Ollama LLM server |
+| `--letta-ctrl-skip` | Skip LettaCtrl web GUI |
+| `--letta-ctrl-port PORT` | LettaCtrl port (default: 8284) |
 
 ---
 
@@ -97,18 +124,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    claude --version && claude doctor
    ```
 
-4. **Install Semgrep plugin (if you have a token):**
-   ```bash
-   claude plugin install semgrep
-   ```
-
-5. **Verify installed plugins:**
+4. **Verify installed plugins:**
    ```bash
    claude plugin list
    ```
-   Titan installs: `superpowers` · `context7` · `playwright` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` · `semgrep` (if token provided)
+   Titan installs: `hookify` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `semgrep` (if token provided)
 
-6. **Quick sanity check:**
+5. **Quick sanity check:**
    ```bash
    # Check tool counts
    echo "Cargo: $(ls ~/.cargo/bin/ 2>/dev/null | wc -l) tools"
@@ -163,7 +185,7 @@ Every common MCP server has a free, fast CLI equivalent that costs **zero contex
 | Fetch MCP | `xh` | 0 |
 | File search | `rg` + `fd` | 0 |
 
-Instead of injecting 55K tokens of schemas, Titan installs ~100+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
+Instead of injecting 55K tokens of schemas, Titan installs 155+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
 
 ### The Result
 
@@ -171,7 +193,7 @@ Instead of injecting 55K tokens of schemas, Titan installs ~100+ CLI tools and t
 Typical MCP setup:  55–134K tokens at startup
 Titan setup:        ~4–7K tokens
 Savings:            94–97%
-More tools:         ~100+ vs ~20
+More tools:         155+ vs ~20
 Better recall:      Fewer turns consumed by overhead
 ```
 
@@ -196,19 +218,19 @@ Desktop only: `maim`, `xdotool`.
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
 | **Docker** | Container runtime |
 
-### ~100+ CLI Tools
+### 155+ CLI Tools
 
-**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf) · cozempic
+**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf) · cozempic · ccusage · sherlock
 
-**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · vercel
+**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · mermaid-cli · playwright · kilocode · vercel
 
-**Rust (cargo):** ripgrep · fd · sd · eza · bat · xsv · htmlq · git-absorb · git-delta · difftastic · typos-cli · xh · ouch · hurl · jwt-cli · oha · rtk
+**Rust (cargo):** ripgrep · fd · sd · eza · dust · bat · xsv · htmlq · git-absorb · git-delta · difftastic · typos-cli · websocat · bore-cli · procs · hyperfine · pueue · watchexec · just · choose · xh · ouch · hurl · jwt-cli · oha · rtk · nushell · recall · parry · claude-tmux
 
-**Go:** dive · stern · glow · mkcert · task · nuclei · ffuf · usql · gitleaks · act · shfmt · gron · httpx · subfinder · dnsx · katana · scc
+**Go:** dive · stern · glow · mkcert · task · nuclei · ffuf · usql · grpcurl · actionlint · osv-scanner · hcloud · sops · doggo · gitleaks · act · shfmt · gron · httpx · subfinder · dnsx · katana · scc · age · ctop · claude-esp · claude-squad
 
-**Binary:** kubectl · helm · terraform · hadolint · duckdb · trivy · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy
+**Binary:** kubectl · helm · gcloud · terraform · packer · tflint · infracost · hadolint · duckdb · trivy · mc · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy
 
-**Docker services:** n8n (workflow automation, localhost:5678)
+**Docker services:** n8n (workflow automation, localhost:5678) · Letta (persistent memory, localhost:8283)
 
 ### Claude Code Configuration
 
@@ -225,12 +247,116 @@ Desktop only: `maim`, `xdotool`.
 |-----------|-------|-------------|
 | Inline skills | 11 | Path-gated, load only for matching files |
 | Community skills | varies | superpowers, modern-python, NotebookLM, VibeSec |
-| Plugins (MCP) | 7–8 | superpowers, context7, playwright, code-review, skill-creator, episodic-memory, claude-subconscious, semgrep (optional) |
+| Plugins (MCP) | 4–6 | hookify, code-review, skill-creator, episodic-memory, claude-subconscious (if Letta), semgrep (if token) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
 | Slash commands | 11 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
 | Built-in agents | 3 | researcher (Haiku), planner (Opus), reviewer (Sonnet) |
 | On-demand agent slots | 5 | Load from agent-stash library via `agt` CLI |
+
+---
+
+## Letta / Subconscious Memory
+
+Titan optionally installs [Letta](https://github.com/letta-ai/letta) — a persistent memory server that gives Claude long-term memory across sessions. The `claude-subconscious` plugin silently updates memory blocks between turns without interrupting your workflow.
+
+### Architecture
+
+```
+Claude Code ←→ claude-subconscious plugin
+                    ↓
+              Letta server (Docker, port 8283)
+                    ↓ embeddings
+              Ollama (nomic-embed-text, port 11434)
+                    ↓ LLM calls
+              better-ccflare (port 8080) → billing proxy (port 8081)
+```
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Ollama | 11434 | Local embedding model (`nomic-embed-text`) |
+| Letta | 8283 | Memory server (Docker, bundles Postgres+pgvector) |
+| better-ccflare | 8080 | Claude load balancer proxy |
+| Billing proxy | 8081 | Header injection for OAuth accounts (fixes issue #89) |
+| LettaCtrl | 8284 | Web GUI for managing agents and memory blocks |
+
+All services run as systemd user units and start at boot (`loginctl enable-linger`).
+
+### Credentials
+
+Stored at `~/.config/letta/credentials` (auto-generated on first run):
+- `LETTA_SERVER_PASSWORD` — API key for Letta server
+- `LETTA_BASE_URL` — http://127.0.0.1:8283
+
+### LettaCtrl GUI
+
+Web dashboard for managing Letta agents and memory blocks. Access at `http://localhost:8284` (or via Tailscale HTTPS on VPS). Uses the Letta API key from credentials file.
+
+### Skipping Letta
+
+```bash
+# Skip everything Letta-related
+./titan-setup.sh --letta-skip
+
+# Skip only Ollama (use OpenAI embeddings instead)
+./titan-setup.sh --no-ollama
+
+# Skip only the GUI
+./titan-setup.sh --letta-ctrl-skip
+```
+
+---
+
+## VPS Mode
+
+VPS mode (`--mode vps`) adds server hardening, Tailscale networking, and service exposure on top of the standard workstation install.
+
+### Security Hardening
+
+| Layer | What |
+|-------|------|
+| SSH | Password auth disabled, root login disabled, MaxAuthTries 3 |
+| fail2ban | SSH brute-force protection (5 retries → 1h ban) |
+| auditd | Privilege escalation monitoring, passwd/sudoers watch |
+| unattended-upgrades | Security patches auto-applied (no auto-reboot) |
+| Repo supply chain guard | Allowlisted APT sources, insecure HTTP repos disabled |
+| Root lock | `passwd -l root` — root account locked |
+
+### Tailscale Integration
+
+Tailscale provides network-level isolation via WireGuard. After install:
+- SSH is restricted to the Tailscale IP only (`ListenAddress` in sshd_config)
+- UFW is intentionally **not** enabled (conflicts with Tailscale routing)
+- Services are exposed on Tailscale HTTPS via `tailscale serve`
+
+### Exposed Services (VPS)
+
+| Service | Tailscale URL |
+|---------|--------------|
+| n8n | `https://<hostname>:5678` |
+| better-ccflare | `https://<hostname>:8080` |
+| Letta | `https://<hostname>:8283` |
+| LettaCtrl | `https://<hostname>:8284` |
+
+### Compliance Check
+
+A compliance check script runs at boot +5min and every 6h via systemd timer. Manually run:
+
+```bash
+sudo /usr/local/bin/compliance_check.sh
+```
+
+Checks: SSH hardening, fail2ban, auditd, unattended-upgrades, APT repo allowlist, root lock, Tailscale connectivity.
+
+### tmux Resilience
+
+The install runs inside a named `titan-setup` tmux session. If SSH drops:
+
+```bash
+tmux attach -t titan-setup
+```
 
 ---
 
@@ -314,7 +440,7 @@ claude auth login
 Then install plugins:
 ```bash
 claude plugin marketplace add anthropic/claude-plugins-official
-claude plugin install code-review skill-creator superpowers context7 playwright
+claude plugin install hookify code-review skill-creator
 claude plugin marketplace add obra/superpowers-marketplace
 claude plugin install episodic-memory
 # semgrep — only if you have a token from semgrep.dev
@@ -352,6 +478,19 @@ tmux attach -t titan-setup
 
 The script runs inside a named `titan-setup` session and survives SSH drops. Log: `/tmp/titan-setup-<timestamp>.log`.
 
+### Letta not starting
+
+Check the systemd service:
+```bash
+systemctl --user status letta
+journalctl --user -u letta -f
+```
+
+Postgres init can take 30–60s on first run. If the container keeps restarting, check Docker logs:
+```bash
+docker logs letta-server
+```
+
 ### Tool missing that should be installed
 
 Check if it's on the right PATH:
@@ -368,6 +507,53 @@ uv tool list | grep <tool>       # Python tools
 ```
 
 If still missing, re-run titan-setup — idempotent installs pick up whatever was skipped.
+
+---
+
+## Developer Workflow
+
+Titan is built from modular shell fragments assembled at build time. **Never edit `titan-setup.sh` directly** — it is generated.
+
+### Source of Truth
+
+```
+lib/
+├── 00-header.sh          # Version, banner, colors
+├── 01-common.sh          # Helper functions (ok, warn, fail, run_q, section)
+├── 02-cli.sh             # CLI option parsing and usage()
+├── 03-vps-reexec.sh      # VPS user creation and re-exec
+├── 04-vps-harden.sh      # SSH, fail2ban, auditd, compliance
+├── 05-prerequisites.sh   # apt packages, build deps
+├── 06-package-managers.sh # Rust, uv, bun, Go, mise, Docker
+├── 07-tools-python-js.sh # Python/JS tools, n8n, playwright
+├── 08-tools-letta.sh     # Ollama, Letta, better-ccflare, billing proxy
+├── 09-tools-rust-go.sh   # Cargo crates, Go tools, binary installs
+├── 10-claude-code.sh     # Claude Code install + config
+├── 11-deploy-config.sh   # Deploy ~/.claude/ files from dot-claude/
+├── 12-plugins-install.sh # Plugin marketplace + installs
+├── 13-plugins-config.sh  # Plugin post-install config (subconscious, etc.)
+├── 14-plugins-letta-ctrl.sh # LettaCtrl GUI install
+├── 15-plugins-cleanup.sh # Plugin cache cleanup
+├── 16-shell-integration.sh # PATH exports, bashrc integration
+└── 17-finalize.sh        # Summary, compliance check, tmux cleanup
+```
+
+### Build & Test
+
+```bash
+just build       # Assemble lib/*.sh → titan-setup.sh
+just test        # Run 71 bats tests
+just lint        # shellcheck on all fragments
+just smoke       # Quick syntax check
+just check       # lint + test (CI runs this on every PR)
+```
+
+### Contributing
+
+1. Edit the relevant `lib/*.sh` fragment
+2. Run `just build` to regenerate `titan-setup.sh`
+3. Run `just check` to lint + test
+4. Commit both the fragment and the generated `titan-setup.sh`
 
 ---
 
@@ -390,7 +576,7 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 ## Detailed Tool Reference
 
 See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
-- ~100+ CLI tools (what they do, example prompts)
+- 155+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
 - Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline)
