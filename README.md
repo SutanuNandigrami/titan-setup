@@ -73,6 +73,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | `--no-autoupdate` | Disable Claude Code auto-updates |
 | `--semgrep-token TOKEN` | Add Semgrep token for security scanning |
 | `--no-semgrep` | Skip Semgrep setup (no prompt) |
+| `--no-cozempic` | Skip cozempic context cleaner install |
 | `--dry-run` | Preview what will happen without making changes |
 | `--verbose` | Log all output to `/tmp/titan-setup-<timestamp>.log` |
 | `--version` | Show Titan version |
@@ -197,7 +198,7 @@ Desktop only: `maim`, `xdotool`.
 
 ### ~100+ CLI Tools
 
-**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf)
+**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · huggingface_hub (hf) · cozempic
 
 **JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · vercel
 

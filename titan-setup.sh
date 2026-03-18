@@ -76,6 +76,7 @@ LETTA_PASSWORD=""
 OLLAMA_SKIP=false
 LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
+COZEMPIC_SKIP=false
 
 usage() {
   cat <<USAGE
@@ -107,6 +108,7 @@ Options:
   --no-ollama              Skip Ollama install (use OPENAI_API_KEY for embeddings instead)
   --letta-ctrl-skip        Skip LettaCtrl GUI (default: install if Letta is installed)
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
+  --no-cozempic            Skip cozempic install (context bloat cleaner)
 
   --version                Show script version
   -h, --help               Show this help message
@@ -146,6 +148,7 @@ while [[ $# -gt 0 ]]; do
     --no-ollama)       OLLAMA_SKIP=true; shift ;;
     --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
     --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
+    --no-cozempic)     COZEMPIC_SKIP=true; shift ;;
     --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
@@ -241,6 +244,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $OLLAMA_SKIP                   && _VPS_REEXEC_ARGS+=(--no-ollama)
     $LETTA_CTRL_SKIP                   && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
+    $COZEMPIC_SKIP                     && _VPS_REEXEC_ARGS+=(--no-cozempic)
     # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.
@@ -787,6 +791,7 @@ UV_TOOLS=(
   "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
   "cookiecutter"    # cookiecutter — project scaffolding from templates
   "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
+  "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
 )
 
 for tool in "${UV_TOOLS[@]}"; do
@@ -1780,6 +1785,16 @@ jq '.env.NTFY_TOPIC = "" | .env.NTFY_URL = "https://ntfy.sh"' \
   && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
 ok "settings.json (ntfy env vars added — set NTFY_TOPIC to enable push alerts)"
 
+# ─── cozempic — context bloat cleaner ───
+# Wires 4 hooks idempotently: SessionStart guard daemon, PostToolUse checkpoint,
+# PreCompact checkpoint, Stop checkpoint. Also installs /cozempic slash command.
+# Must run AFTER settings.json is fully written (overwrite at install -Dm644 above would erase hooks).
+if ! $COZEMPIC_SKIP && command -v cozempic &>/dev/null && command -v claude &>/dev/null; then
+  cozempic init &>/dev/null \
+    && ok "cozempic: hooks wired (PreCompact + SessionStart guards active)" \
+    || warn "cozempic init failed — run manually: cozempic init"
+fi
+
 # ─── ccstatusline config ───
 install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
   && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
@@ -2134,6 +2149,14 @@ else
     && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 
+  # cozempic plugin — context diagnose/treat MCP tools (diagnose_current, treat_session)
+  # CLI (uv) provides the primary interface; plugin adds MCP tools for in-session diagnostics
+  if ! $COZEMPIC_SKIP; then
+    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null \
+      && ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
+    claude plugin install cozempic 2>/dev/null && ok "cozempic plugin" || warn "cozempic plugin"
+  fi
+
   # claude-subconscious — Letta-based persistent cross-session memory agent
   if ! $LETTA_SKIP; then
     claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null \
@@ -2290,6 +2313,15 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill "episodic-memory@superpowers-marketplace" \
     "skills/remembering-conversations/SKILL.md" \
     '["**/memory/**", "**/.claude/memory/**", "**/handoff*", "**/_scratchpad*"]'
+  # cozempic SKILL.md — detect key dynamically (format: cozempic@<marketplace-owner>)
+  if ! $COZEMPIC_SKIP; then
+    _COZEMPIC_KEY=$(jq -r '.plugins | keys[] | select(startswith("cozempic"))' \
+      "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null | head -1)
+    [[ -n "$_COZEMPIC_KEY" ]] && \
+      _patch_plugin_skill "$_COZEMPIC_KEY" \
+        "skills/cozempic/SKILL.md" \
+        '["**/.claude/**", "**/*.jsonl", "**/cozempic*"]'
+  fi
 
   # Cleanup: remove non-installed plugin dirs from marketplace cache to prevent SKILL.md bloat
   # Each marketplace add can bring many plugin dirs; only keep what's actually installed

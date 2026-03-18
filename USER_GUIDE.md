@@ -1364,6 +1364,17 @@ Hugging Face Hub CLI — download models, datasets, and spaces; manage repos and
 
 > **Example prompt:** "Download the config.json from mistralai/Mistral-7B-v0.1"
 
+#### cozempic
+Context bloat cleaner for Claude Code sessions. Diagnoses exact token consumption in session JSONL files and surgically removes noise (progress ticks, repeated thinking blocks, stale reads). Install: `uv tool install cozempic`.
+
+- Diagnose current session bloat: `cozempic diagnose`
+- Remove bloat interactively: `cozempic treat`
+- Wire hooks and slash command: `cozempic init` (run once after setup)
+- In-session treatment via MCP: `/cozempic treat`
+- Start background guard daemon: `cozempic daemon start`
+
+> **Example prompt:** "Diagnose how much token bloat is in my current session, then treat it"
+
 #### kilocode
 Kilo Code CLI. Code generation assistant.
 
