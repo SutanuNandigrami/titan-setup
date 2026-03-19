@@ -13,6 +13,7 @@ lib/
 ├── 04-vps-harden.sh      # SSH, fail2ban, auditd, compliance
 ├── 05-prerequisites.sh   # apt packages, build deps
 ├── 06-package-managers.sh # Rust, uv, bun, Go, mise, Docker
+├── 06b-repo-files.sh     # Clone titan repo early for REPO_FILES
 ├── 07-tools-python-js.sh # Python/JS tools, n8n, playwright
 ├── 08-tools-letta.sh     # Ollama, Letta, better-ccflare, billing proxy
 ├── 09-tools-rust-go.sh   # Cargo crates, Go tools, binary installs
@@ -25,6 +26,7 @@ lib/
 ├── 16-shell-integration.sh # PATH exports, bashrc integration
 └── 17-finalize.sh        # Summary, compliance check, tmux cleanup
 ```
+*(19 fragments total)*
 
 ## Build & Test
 

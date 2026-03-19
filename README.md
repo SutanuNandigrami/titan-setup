@@ -249,10 +249,10 @@ Desktop only: `maim`, `xdotool`.
 | Skills | 15 | Trimmed, self-contained (vibesec, cli-tools, modern-python, security-scan, etc.) |
 | Plugins (MCP) | 6–8 | hookify, code-review, skill-creator, playwright, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
-| Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
+| Conditional rules | 7 | Trigger on file type (Python, shell, terraform, docker, security, skill-authoring, memory) |
 | Slash commands | 12 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
 | Built-in agents | 3 | researcher (Haiku), planner (Opus), reviewer (Sonnet) |
-| On-demand agent slots | 5 | Load from agent-stash library via `agt` CLI |
+| On-demand agent slots | 10 | Load from agent-stash library via `agt` CLI |
 | Auto-patcher | 1 | `cc-patch-thinking` — shows thinking blocks inline, auto-patches after CC updates |
 
 ---
@@ -482,7 +482,7 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | [obra/superpowers](https://github.com/obra/superpowers) | TDD, debugging, brainstorming, verification, and planning skills + marketplace |
 | [trailofbits/skills](https://github.com/trailofbits/skills) | Modern Python tooling skill (uv, ruff, ty) |
 | [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill) | Secure web application development skill |
-| [SutanuNandigrami/agent-stash](https://github.com/SutanuNandigrami/agent-stash) | 30 ready-made agents for on-demand slot loading |
+| [SutanuNandigrami/agent-stash](https://github.com/SutanuNandigrami/agent-stash) | 185 ready-made agents for on-demand slot loading |
 | *hookify* (official plugin) | Visual hook configuration and management |
 | *code-review* (official plugin) | PR review subagent with structured review |
 | *skill-creator* (official plugin) | Interactive skill authoring |
