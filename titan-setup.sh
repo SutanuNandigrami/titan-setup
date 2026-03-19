@@ -320,11 +320,22 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
   fi
 fi
 
-# ─── Log file for quiet mode ───
-LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+# ─── Log file ───
+# Inside tmux: the wrapper already tees ALL output. Find the most recent tmux log.
+# Outside tmux (TITAN_TMUX=1 or direct): create new log + exec tee to capture everything.
+if [[ -n "${TMUX:-}" ]]; then
+  # Wrapper tees to /tmp/titan-setup-YYYYMMDD-HHMMSS.log — find latest one
+  LOG_FILE=$(ls -1t /tmp/titan-setup-*.log 2>/dev/null | head -1)
+  if [[ -z "$LOG_FILE" ]]; then
+    LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+  fi
+else
+  LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
+  echo "# titan-setup log — $(date)" > "$LOG_FILE"
+  exec > >(tee -a "$LOG_FILE") 2>&1
+fi
 # run_q: run a command, routing output to log file unless --verbose
 run_q() { if $VERBOSE; then "$@"; else "$@" >> "$LOG_FILE" 2>&1; fi; }
-echo "# titan-setup log — $(date)" > "$LOG_FILE"
 
 # ─── Temp directory for downloads ───
 WORKDIR=$(mktemp -d)
@@ -821,7 +832,7 @@ for tool in "${UV_TOOLS[@]}"; do
     ok "$tool (already installed)"
   else
     echo -n "  Installing $tool..."
-    if uv tool install "$tool" &>/dev/null; then
+    if uv tool install --force "$tool" &>/dev/null; then
       echo -e " ${GREEN}✓${NC}"
     else
       echo -e " ${YELLOW}⚠ failed (try: uv tool install $tool)${NC}"
