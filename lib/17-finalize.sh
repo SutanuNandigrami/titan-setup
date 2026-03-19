@@ -35,16 +35,21 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   # installs trigger dpkg postinst hooks that restart sshd, which would
   # pick up the hardened config and lock out password-based SSH before
   # Tailscale provides alternative access (--ssh flag above).
-  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
-  for _dropin in /etc/ssh/sshd_config.d/*.conf; do
-    [[ -f "$_dropin" ]] || continue
-    sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
-    sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
-  done
-  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardened (password auth off, root login disabled, MaxAuthTries 3)"
+  if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
+    sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
+    for _dropin in /etc/ssh/sshd_config.d/*.conf; do
+      [[ -f "$_dropin" ]] || continue
+      sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
+      sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
+    done
+    sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+    ok "SSH hardened (password auth off, root login disabled, MaxAuthTries 3)"
+  else
+    warn "SSH hardening SKIPPED — Tailscale not connected (would lock out all access)"
+    warn "  Run tailscale up first, then: sudo titan-setup.sh --mode vps (re-run is safe)"
+  fi
 
   if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
     # Get MagicDNS hostname for service URLs
