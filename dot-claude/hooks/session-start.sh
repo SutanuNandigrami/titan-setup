@@ -61,6 +61,16 @@ if [[ -f "$MANIFEST" ]] && [[ -s "$MANIFEST" ]]; then
   done < "$MANIFEST"
 fi
 
+# ─── Auto-patch CC thinking display (survives CC updates via hash check) ───
+if command -v cc-patch-thinking >/dev/null 2>&1; then
+  cc-patch-thinking --check 2>/dev/null
+  case $? in
+    0) ;; # already patched
+    1) cc-patch-thinking 2>&1 | while read -r line; do echo "[Patch] $line" >&2; done ;;
+    2) echo "[Patch] cc-patch-thinking: unknown CC version — may need patcher update" >&2 ;;
+  esac
+fi
+
 _ntfy "Claude Code started" "Session started on $(hostname)" "low"
 
 exit 0

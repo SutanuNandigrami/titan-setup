@@ -243,6 +243,10 @@ ok "hook: session-end.sh"
 install -Dm755 "$REPO_FILES/dot-claude/hooks/session-start.sh" "$CLAUDE_DIR/hooks/session-start.sh"
 ok "hook: session-start.sh"
 
+# ─── CC Thinking Patcher (auto-patches after CC updates) ───
+install -Dm755 "$REPO_FILES/dot-claude/bin/cc-patch-thinking" "$HOME/.local/bin/cc-patch-thinking"
+ok "bin: cc-patch-thinking"
+
 # UserPromptSubmit: inject memory only when recall-intent keywords detected (zero tokens otherwise)
 install -Dm755 "$REPO_FILES/dot-claude/hooks/prompt-memory-inject.sh" "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
 ok "hook: prompt-memory-inject.sh"
