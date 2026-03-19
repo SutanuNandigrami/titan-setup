@@ -1,6 +1,6 @@
 # Titan Workstation User Guide
 
-Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
+Welcome to your Claude Code workstation — 125+ CLI tools, 12 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
 
 ## Table of Contents
 
@@ -84,7 +84,7 @@ claude
 
 ## Slash Commands
 
-Titan installs 11 slash commands that automate common workflows. Type these directly in Claude Code:
+Titan installs 12 slash commands that automate common workflows. Type these directly in Claude Code:
 
 | Command | What it does |
 |---------|-------------|
