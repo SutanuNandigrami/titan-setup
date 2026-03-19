@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Patch Claude Code binary to show thinking blocks inline.
+
+Version-resilient: uses regex patterns that match the structure,
+not specific minified variable names. Works across CC versions by
+detecting the case"thinking" guard pattern and forcing
+isTranscriptMode to true.
+
+Usage:
+  cc-patch-thinking              # Apply patch
+  cc-patch-thinking --dry-run    # Preview changes
+  cc-patch-thinking --restore    # Restore from backup
+  cc-patch-thinking --check      # Check if patch needed (exit 0=patched, 1=needs patch, 2=error)
+
+Designed to be called from a SessionStart hook for auto-patching after CC updates.
+"""
+import hashlib
+import os
+import re
+import shutil
+import sys
+from pathlib import Path
+
+HASH_FILE = Path.home() / ".claude" / ".cc-thinking-patch-hash"
+BACKUP_SUFFIX = ".thinking-patch-backup"
+
+
+def find_cc_binary() -> Path | None:
+    """Find the active Claude Code binary."""
+    claude_bin = shutil.which("claude")
+    if not claude_bin:
+        return None
+
+    real = Path(claude_bin).resolve()
+
+    # If it's a version binary under ~/.local/share/claude/versions/
+    if "versions" in str(real):
+        return real
+
+    # If it points to a cli.js (npm install)
+    versions_dir = Path.home() / ".local" / "share" / "claude" / "versions"
+    if versions_dir.exists():
+        # Find latest version binary
+        binaries = sorted(versions_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+        if binaries:
+            return binaries[-1]
+
+    # Check for cli.js (npm-based installs)
+    for candidate in [
+        Path.home() / ".claude" / "local" / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js",
+        Path.home() / ".config" / "claude" / "local" / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js",
+    ]:
+        if candidate.exists():
+            return candidate
+
+    return real if real.exists() else None
+
+
+def file_hash(path: Path) -> str:
+    """SHA256 of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def find_thinking_patterns(data: bytes) -> list[re.Match]:
+    """Find thinking case patterns across CC versions (byte-level)."""
+    # CC 2.1.x pattern (with hideInTranscript)
+    pattern = re.compile(
+        rb'(case"thinking":\{)'
+        rb'(if\(!\w+&&!\w+\)return null;)'
+        rb'(.*?isTranscriptMode:)'
+        rb'(\w+)'
+        rb'(,verbose:\w+,hideInTranscript:\w+\})'
+    )
+    matches = list(pattern.finditer(data))
+    if matches:
+        return matches
+
+    # CC 2.0.x pattern (no hideInTranscript, different structure)
+    pattern = re.compile(
+        rb'(case"thinking":)'
+        rb'(if\(!\w+&&!\w+\)return null;)'
+        rb'(.*?isTranscriptMode:)'
+        rb'(\w+)'
+        rb'(,verbose:\w+\}\);)'
+    )
+    return list(pattern.finditer(data))
+
+
+def is_already_patched(data: bytes) -> bool:
+    """Check if the binary is already patched."""
+    return bool(re.search(
+        rb'case"thinking":\{;+.*?isTranscriptMode:!0',
+        data
+    ))
+
+
+def patch(binary_path: Path, dry_run: bool = False) -> bool:
+    """Apply the thinking visibility patch."""
+    with open(binary_path, "rb") as f:
+        data = f.read()
+
+    if is_already_patched(data):
+        print("Already patched", file=sys.stderr)
+        return True
+
+    matches = find_thinking_patterns(data)
+    if not matches:
+        print("No thinking patterns found — CC version may need a patcher update", file=sys.stderr)
+        return False
+
+    if dry_run:
+        for m in matches:
+            print(f"Would patch at offset {m.start()}: remove guard '{m.group(2).decode()}', force isTranscriptMode:!0", file=sys.stderr)
+        return True
+
+    # Create backup
+    backup = binary_path.with_suffix(binary_path.suffix + BACKUP_SUFFIX)
+    if not backup.exists():
+        shutil.copy2(binary_path, backup)
+
+    new_data = bytearray(data)
+    patched = 0
+
+    for m in matches:
+        guard = m.group(2)
+        var = m.group(4)
+
+        # Pad to maintain exact byte length
+        pad_len = len(guard) + len(var) - 2  # 2 = len(b"!0")
+        noop = b";" * pad_len
+
+        original = m.group(0)
+        replacement = m.group(1) + noop + m.group(3) + b"!0" + m.group(5)
+
+        if len(original) != len(replacement):
+            print(f"Length mismatch at {m.start()}, skipping", file=sys.stderr)
+            continue
+
+        start = m.start()
+        new_data[start:start + len(replacement)] = replacement
+        patched += 1
+
+    if patched > 0:
+        with open(binary_path, "wb") as f:
+            f.write(new_data)
+
+        # Store hash of the patched binary
+        new_hash = file_hash(binary_path)
+        HASH_FILE.write_text(new_hash)
+
+        print(f"Patched {patched} location(s)", file=sys.stderr)
+        return True
+
+    return False
+
+
+def restore(binary_path: Path) -> bool:
+    """Restore from backup."""
+    backup = binary_path.with_suffix(binary_path.suffix + BACKUP_SUFFIX)
+    if not backup.exists():
+        print("No backup found", file=sys.stderr)
+        return False
+
+    shutil.copy2(backup, binary_path)
+    HASH_FILE.unlink(missing_ok=True)
+    print("Restored from backup", file=sys.stderr)
+    return True
+
+
+def check(binary_path: Path) -> int:
+    """Check if patch is needed. Returns 0=patched, 1=needs patch, 2=error."""
+    current_hash = file_hash(binary_path)
+    stored_hash = HASH_FILE.read_text().strip() if HASH_FILE.exists() else ""
+
+    if current_hash == stored_hash:
+        return 0  # Already patched (hash matches)
+
+    with open(binary_path, "rb") as f:
+        data = f.read()
+
+    if is_already_patched(data):
+        # Patched but hash not stored — update hash
+        HASH_FILE.write_text(current_hash)
+        return 0
+
+    if find_thinking_patterns(data):
+        return 1  # Needs patching
+
+    return 2  # Can't patch (unknown version)
+
+
+def main() -> int:
+    args = set(sys.argv[1:])
+
+    if {"-h", "--help"} & args:
+        print(__doc__)
+        return 0
+
+    binary = find_cc_binary()
+    if not binary:
+        print("Claude Code binary not found", file=sys.stderr)
+        return 2
+
+    if "--restore" in args:
+        return 0 if restore(binary) else 1
+
+    if "--check" in args:
+        return check(binary)
+
+    if "--dry-run" in args:
+        return 0 if patch(binary, dry_run=True) else 1
+
+    return 0 if patch(binary) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -65,7 +65,7 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   jq --arg url "http://127.0.0.1:${LETTA_PORT}" \
      --arg key "$_LETTA_PASS" \
      --arg model "anthropic/claude-sonnet-4-6" \
-     --arg mode "whisper" \
+     --arg mode "full" \
      --arg tools "read-only" \
      '.env.LETTA_BASE_URL = $url |
       .env.LETTA_API_KEY = $key |
@@ -106,7 +106,7 @@ GUARD = (
     'CTX_WIN=$(echo "$INPUT" | python3 -c '
     '"import sys,json; d=json.load(sys.stdin); '
     'print(d.get(\'context_window\',{}).get(\'context_window_size\',\'\'))" 2>/dev/null); '
-    'cozempic guard --daemon '
+    'cozempic guard --daemon --system-overhead-tokens 35000 '
     '${SESSION_ID:+--session $SESSION_ID} '
     '${CTX_WIN:+--context-window $CTX_WIN} '
     '2>/dev/null || true'
@@ -232,6 +232,10 @@ ok "hook: session-end.sh"
 
 install -Dm755 "$REPO_FILES/dot-claude/hooks/session-start.sh" "$CLAUDE_DIR/hooks/session-start.sh"
 ok "hook: session-start.sh"
+
+# ─── CC Thinking Patcher (auto-patches after CC updates) ───
+install -Dm755 "$REPO_FILES/dot-claude/bin/cc-patch-thinking" "$HOME/.local/bin/cc-patch-thinking"
+ok "bin: cc-patch-thinking"
 
 # UserPromptSubmit: inject memory only when recall-intent keywords detected (zero tokens otherwise)
 install -Dm755 "$REPO_FILES/dot-claude/hooks/prompt-memory-inject.sh" "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
