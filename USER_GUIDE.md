@@ -1287,15 +1287,17 @@ Titan installs curated plugins where MCP is genuinely better than the CLI equiva
 | `hookify` | Visual hook configuration and management | GUI-based hook editing beats manual JSON |
 | `code-review` | PR review subagent + structured review skill | Convenient subagent workflow |
 | `skill-creator` | Create and edit skills interactively with guided flow | Skill authoring workflow |
+| `playwright` | Microsoft's browser automation MCP — 22 tools for navigate, click, snapshot, fill, screenshot, etc. | Ref-based accessibility tree targeting is deterministic; deferred loading (~300 tokens startup) |
 | `episodic-memory` | Semantic search over past Claude Code conversations | No CLI equivalent for cross-session memory |
 | `claude-subconscious` | Letta-based background memory agent; updates silently between turns (requires Letta) | No CLI equivalent for ambient persistent memory |
 | `semgrep` | Inline SAST findings — Claude sees results and fixes code in same turn (requires token) | Inline beats terminal loop; **requires `semgrep` CLI binary** (in UV_TOOLS) |
 
 ### Plugin notes
 
+- `playwright` MCP plugin provides AI-driven browser automation (navigate, click, fill, snapshot); the playwright CLI (installed via bun) provides E2E testing (`playwright test`, codegen, traces) — both are installed, serving different purposes
 - `semgrep` plugin shells out to the `semgrep` binary — both CLI and plugin must be installed
 - `claude-subconscious` requires the Letta server to be running — skip with `--letta-skip`
-- `superpowers`, `context7`, and `playwright` are **not** installed as plugins — superpowers skills are installed directly into `~/.claude/skills/`, and playwright is installed as a bun CLI tool
+- `superpowers` and `context7` are **not** installed as plugins — superpowers skills are installed directly into `~/.claude/skills/`
 
 ---
 
@@ -1397,15 +1399,16 @@ Deploy to Vercel from CLI. Serverless functions and static sites.
 > **Example prompt:** "Deploy this project to Vercel"
 
 #### playwright
-Browser automation and E2E testing framework. Installed as a bun CLI tool with chromium browser binaries.
+Browser automation and E2E testing framework. Installed **two ways**: bun CLI tool (E2E testing) + MCP plugin (AI-driven automation).
 
+- **MCP plugin** (`@playwright/mcp`): 22 deferred tools — `browser_navigate`, `browser_click`, `browser_snapshot`, `browser_fill_form`, `browser_take_screenshot`, etc. Claude calls these directly as native tools (no bash needed). Uses ref-based accessibility tree for deterministic element targeting.
+- **CLI** (`bun install -g playwright`): `playwright test`, `playwright codegen`, `playwright show-trace` for traditional E2E testing
 - Navigate pages and interact with elements
 - Fill forms, click buttons, handle dialogs
-- Take screenshots and read page content
-- E2E testing with `playwright test`
+- Take screenshots, PDFs, and accessibility snapshots
 - Chromium binaries installed at `~/.cache/ms-playwright/`
 
-> **Example prompt:** "Run playwright tests for the login flow"
+> **Example prompt:** "Navigate to example.com, take a snapshot, and click the login button"
 
 #### tldr
 Simplified community man pages. Quick command help.
