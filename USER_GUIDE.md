@@ -1,6 +1,6 @@
 # Titan Workstation User Guide
 
-Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
+Welcome to your Claude Code workstation — 125+ CLI tools, 12 slash commands, 3 built-in agents, and smart safety hooks all configured and ready to use.
 
 ## Table of Contents
 
@@ -8,7 +8,6 @@ Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3
 - [Quick Start](#quick-start)
 - [Slash Commands](#slash-commands)
 - [Search & Navigation](#search--navigation)
-- [File Operations](#file-operations)
 - [Data Processing](#data-processing)
 - [HTTP & APIs](#http--apis)
 - [Git & Version Control](#git--version-control)
@@ -20,12 +19,9 @@ Welcome to your Claude Code workstation — 155+ CLI tools, 11 slash commands, 3
 - [Secrets & Certificates](#secrets--certificates)
 - [Code Quality & Formatting](#code-quality--formatting)
 - [DevOps & Automation](#devops--automation)
-- [Container Registry](#container-registry)
 - [Databases](#databases)
 - [Terminal UI & Utilities](#terminal-ui--utilities)
-- [Code Stats & Analysis](#code-stats--analysis)
 - [Documentation & Generation](#documentation--generation)
-- [Python Development](#python-development)
 - [Claude Code Ecosystem](#claude-code-ecosystem)
 - [Web & JavaScript](#web--javascript)
 - [Shell Enhancement](#shell-enhancement)
@@ -84,7 +80,7 @@ claude
 
 ## Slash Commands
 
-Titan installs 11 slash commands that automate common workflows. Type these directly in Claude Code:
+Titan installs 12 slash commands that automate common workflows. Type these directly in Claude Code:
 
 | Command | What it does |
 |---------|-------------|
@@ -281,16 +277,6 @@ Friendly field selection tool. Like `cut` and `awk` but more intuitive.
 - Negative indexing (count from end)
 
 > **Example prompt:** "Extract the third and fifth columns from this CSV file"
-
-#### pandoc
-Universal document converter. Convert between markdown, PDF, DOCX, HTML, etc.
-
-- Convert markdown to PDF or DOCX
-- Extract text from PDFs or Word docs
-- Generate presentations from markdown
-- Apply custom templates
-
-> **Example prompt:** "Convert this markdown file to a PDF"
 
 ---
 
@@ -621,6 +607,10 @@ Cloudflare tunnel client. Create secure tunnels to internal services.
 
 > **Example prompt:** "Create a Cloudflare tunnel to expose this internal service"
 
+---
+
+## Process & System
+
 #### btop
 Beautiful TUI system resource monitor for CPU, RAM, disk, and network.
 
@@ -947,16 +937,6 @@ Dockerfile linter. Best practices and security checks.
 
 > **Example prompt:** "Check this Dockerfile for issues"
 
-#### actionlint
-GitHub Actions workflow linter. Validate and improve workflows.
-
-- Check workflow syntax
-- Validate step inputs
-- Security checks
-- Best practice enforcement
-
-> **Example prompt:** "Check this GitHub Actions workflow for issues"
-
 #### typos-cli
 Fast typo fixer for source code. Catches misspellings.
 
@@ -1041,9 +1021,19 @@ Record and share terminal sessions. Create terminal demos and tutorials.
 
 > **Example prompt:** "Record a terminal session showing how to use this tool"
 
+#### cookiecutter
+Scaffold new projects from templates. Quick project setup.
+
+- Create projects from templates
+- Template variables
+- Interactive setup
+- Version management
+
+> **Example prompt:** "Create a new Python project from a template"
+
 ---
 
-## Container Registry
+## Databases
 
 #### pgcli
 Postgres CLI with autocomplete and syntax highlighting.
@@ -1192,40 +1182,6 @@ Convert between document formats. Markdown to PDF, DOCX, HTML, etc.
 - Batch processing
 
 > **Example prompt:** "Convert this markdown to a PDF document"
-
----
-
-## Python Development
-
-#### cookiecutter
-Scaffold new projects from templates. Quick project setup.
-
-- Create projects from templates
-- Template variables
-- Interactive setup
-- Version management
-
-> **Example prompt:** "Create a new Python project from a template"
-
-#### ruff
-Python linter and formatter. Lint, format, and fix code.
-
-- Lint Python code
-- Format with black style
-- Auto-fix issues
-- Sort imports
-
-> **Example prompt:** "Check this Python code for issues"
-
-#### mitmproxy
-HTTP debugging proxy. Intercept and inspect Python app traffic.
-
-- Debug HTTP requests
-- Modify traffic
-- Record sessions
-- Test external APIs
-
-> **Example prompt:** "Intercept HTTP traffic from this Python application"
 
 ---
 

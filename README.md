@@ -19,7 +19,7 @@
 - [Context Budget](#context-budget)
 - [For New Projects](#for-new-projects)
 - [Troubleshooting](#troubleshooting)
-- [Developer Workflow](#developer-workflow)
+- [Contributing](#contributing)
 - [Changelog](#full-changelog)
 - [Tool Reference](#detailed-tool-reference)
 
@@ -27,13 +27,13 @@
 
 ## What Does This Do?
 
-Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **155+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
+Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **125+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
 
 In plain English:
 
 | What | How |
 |------|-----|
-| Installs 155+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
+| Installs 125+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
 | Configures Claude Code | Sets up `~/.claude/` with hooks, skills, commands, agents, and token optimization |
 | Adds smart safety | Permission rules, destructive command blocks, file guards, git protections |
 | Runs idempotently | Safe to re-run — existing tools are skipped, missing ones are installed |
@@ -185,7 +185,7 @@ Every common MCP server has a free, fast CLI equivalent that costs **zero contex
 | Fetch MCP | `xh` | 0 |
 | File search | `rg` + `fd` | 0 |
 
-Instead of injecting 55K tokens of schemas, Titan installs 155+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
+Instead of injecting 55K tokens of schemas, Titan installs 125+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
 
 ### The Result
 
@@ -193,7 +193,7 @@ Instead of injecting 55K tokens of schemas, Titan installs 155+ CLI tools and te
 Typical MCP setup:  55–134K tokens at startup
 Titan setup:        ~4–7K tokens
 Savings:            94–97%
-More tools:         155+ vs ~20
+More tools:         125+ vs ~20
 Better recall:      Fewer turns consumed by overhead
 ```
 
@@ -218,7 +218,7 @@ Desktop only: `maim`, `xdotool`.
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
 | **Docker** | Container runtime |
 
-### 155+ CLI Tools
+### 125+ CLI Tools
 
 **Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
 
@@ -245,12 +245,11 @@ Desktop only: `maim`, `xdotool`.
 
 | Component | Count | Description |
 |-----------|-------|-------------|
-| Inline skills | 11 | Path-gated, load only for matching files |
-| Community skills | varies | superpowers, modern-python, NotebookLM, VibeSec |
+| Skills | 15 | Trimmed, self-contained (vibesec, cli-tools, modern-python, security-scan, etc.) |
 | Plugins (MCP) | 5–7 | hookify, code-review, skill-creator, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
-| Slash commands | 11 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
+| Slash commands | 12 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
 | Built-in agents | 3 | researcher (Haiku), planner (Opus), reviewer (Sonnet) |
 | On-demand agent slots | 5 | Load from agent-stash library via `agt` CLI |
 
@@ -258,53 +257,21 @@ Desktop only: `maim`, `xdotool`.
 
 ## Letta / Subconscious Memory
 
-Titan optionally installs [Letta](https://github.com/letta-ai/letta) — a persistent memory server that gives Claude long-term memory across sessions. The `claude-subconscious` plugin silently updates memory blocks between turns without interrupting your workflow.
+Titan optionally installs [Letta](https://github.com/letta-ai/letta) — a persistent memory server that gives Claude long-term memory across sessions via the `claude-subconscious` plugin.
 
-### Architecture
-
-```
-Claude Code ←→ claude-subconscious plugin
-                    ↓
-              Letta server (Docker, port 8283)
-                    ↓ embeddings
-              Ollama (nomic-embed-text, port 11434)
-                    ↓ LLM calls
-              better-ccflare (port 8080) → billing proxy (port 8081)
-```
-
-### Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| Ollama | 11434 | Local embedding model (`nomic-embed-text`) |
+| Service | Port | Purpose |
+|---------|------|---------|
 | Letta | 8283 | Memory server (Docker, bundles Postgres+pgvector) |
+| Ollama | 11434 | Local embeddings (`nomic-embed-text`) |
 | better-ccflare | 8080 | Claude load balancer proxy |
-| Billing proxy | 8081 | Header injection for OAuth accounts (fixes issue #89) |
-| LettaCtrl | 8284 | Web GUI for managing agents and memory blocks |
+| LettaCtrl | 8284 | Web GUI for agents and memory blocks |
 
-All services run as systemd user units and start at boot (`loginctl enable-linger`).
-
-### Credentials
-
-Stored at `~/.config/letta/credentials` (auto-generated on first run):
-- `LETTA_SERVER_PASSWORD` — API key for Letta server
-- `LETTA_BASE_URL` — http://127.0.0.1:8283
-
-### LettaCtrl GUI
-
-Web dashboard for managing Letta agents and memory blocks. Access at `http://localhost:8284` (or via Tailscale HTTPS on VPS). Uses the Letta API key from credentials file.
-
-### Skipping Letta
+All services run as systemd user units. Credentials are auto-generated at `~/.config/letta/credentials`.
 
 ```bash
-# Skip everything Letta-related
-./titan-setup.sh --letta-skip
-
-# Skip only Ollama (use OpenAI embeddings instead)
-./titan-setup.sh --no-ollama
-
-# Skip only the GUI
-./titan-setup.sh --letta-ctrl-skip
+./titan-setup.sh --letta-skip       # Skip Letta entirely
+./titan-setup.sh --no-ollama        # Skip Ollama only
+./titan-setup.sh --letta-ctrl-skip  # Skip GUI only
 ```
 
 ---
@@ -313,50 +280,13 @@ Web dashboard for managing Letta agents and memory blocks. Access at `http://loc
 
 VPS mode (`--mode vps`) adds server hardening, Tailscale networking, and service exposure on top of the standard workstation install.
 
-### Security Hardening
+**Hardening:** SSH password auth disabled, fail2ban, auditd, unattended-upgrades, APT repo allowlist, root account locked.
 
-| Layer | What |
-|-------|------|
-| SSH | Password auth disabled, root login disabled, MaxAuthTries 3 |
-| fail2ban | SSH brute-force protection (5 retries → 1h ban) |
-| auditd | Privilege escalation monitoring, passwd/sudoers watch |
-| unattended-upgrades | Security patches auto-applied (no auto-reboot) |
-| Repo supply chain guard | Allowlisted APT sources, insecure HTTP repos disabled |
-| Root lock | `passwd -l root` — root account locked |
+**Networking:** Tailscale (WireGuard) provides network-level isolation. SSH restricted to Tailscale IP. Services exposed via `tailscale serve` on HTTPS.
 
-### Tailscale Integration
+**Compliance:** Automated checks run at boot +5min and every 6h (`sudo /usr/local/bin/compliance_check.sh`).
 
-Tailscale provides network-level isolation via WireGuard. After install:
-- SSH is restricted to the Tailscale IP only (`ListenAddress` in sshd_config)
-- UFW is intentionally **not** enabled (conflicts with Tailscale routing)
-- Services are exposed on Tailscale HTTPS via `tailscale serve`
-
-### Exposed Services (VPS)
-
-| Service | Tailscale URL |
-|---------|--------------|
-| n8n | `https://<hostname>:5678` |
-| better-ccflare | `https://<hostname>:8080` |
-| Letta | `https://<hostname>:8283` |
-| LettaCtrl | `https://<hostname>:8284` |
-
-### Compliance Check
-
-A compliance check script runs at boot +5min and every 6h via systemd timer. Manually run:
-
-```bash
-sudo /usr/local/bin/compliance_check.sh
-```
-
-Checks: SSH hardening, fail2ban, auditd, unattended-upgrades, APT repo allowlist, root lock, Tailscale connectivity.
-
-### tmux Resilience
-
-The install runs inside a named `titan-setup` tmux session. If SSH drops:
-
-```bash
-tmux attach -t titan-setup
-```
+**SSH resilience:** Install runs in a `titan-setup` tmux session. Reconnect after drop: `tmux attach -t titan-setup`.
 
 ---
 
@@ -371,7 +301,7 @@ System prompt         ~15K tokens     Built-in (unavoidable, includes tool defs)
 CLAUDE.md (global)    ~800 tokens     Loaded every session
 CLAUDE.md (project)   ~800 tokens     If present in project root
 MEMORY.md             ~200 tokens     First 200 lines of auto memory
-Skill descriptions    ~2–5K tokens    19 skills (path-gated, lazy full content)
+Skill descriptions    ~2–3K tokens    15 skills (trimmed, self-contained)
 Conditional rules     ~500 tokens     Only when matching file types are open
 Slash commands        0 tokens        Loaded only on /command invocation
 Built-in agents       ~200 tokens     Descriptions only
@@ -510,50 +440,9 @@ If still missing, re-run titan-setup — idempotent installs pick up whatever wa
 
 ---
 
-## Developer Workflow
+## Contributing
 
-Titan is built from modular shell fragments assembled at build time. **Never edit `titan-setup.sh` directly** — it is generated.
-
-### Source of Truth
-
-```
-lib/
-├── 00-header.sh          # Version, banner, colors
-├── 01-common.sh          # Helper functions (ok, warn, fail, run_q, section)
-├── 02-cli.sh             # CLI option parsing and usage()
-├── 03-vps-reexec.sh      # VPS user creation and re-exec
-├── 04-vps-harden.sh      # SSH, fail2ban, auditd, compliance
-├── 05-prerequisites.sh   # apt packages, build deps
-├── 06-package-managers.sh # Rust, uv, bun, Go, mise, Docker
-├── 07-tools-python-js.sh # Python/JS tools, n8n, playwright
-├── 08-tools-letta.sh     # Ollama, Letta, better-ccflare, billing proxy
-├── 09-tools-rust-go.sh   # Cargo crates, Go tools, binary installs
-├── 10-claude-code.sh     # Claude Code install + config
-├── 11-deploy-config.sh   # Deploy ~/.claude/ files from dot-claude/
-├── 12-plugins-install.sh # Plugin marketplace + installs
-├── 13-plugins-config.sh  # Plugin post-install config (subconscious, etc.)
-├── 14-plugins-letta-ctrl.sh # LettaCtrl GUI install
-├── 15-plugins-cleanup.sh # Plugin cache cleanup
-├── 16-shell-integration.sh # PATH exports, bashrc integration
-└── 17-finalize.sh        # Summary, compliance check, tmux cleanup
-```
-
-### Build & Test
-
-```bash
-just build       # Assemble lib/*.sh → titan-setup.sh
-just test        # Run 71 bats tests
-just lint        # shellcheck on all fragments
-just smoke       # Quick syntax check
-just check       # lint + test (CI runs this on every PR)
-```
-
-### Contributing
-
-1. Edit the relevant `lib/*.sh` fragment
-2. Run `just build` to regenerate `titan-setup.sh`
-3. Run `just check` to lint + test
-4. Commit both the fragment and the generated `titan-setup.sh`
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development workflow.
 
 ---
 
@@ -566,7 +455,7 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 | **v3.18** | GitHub Action security hardening — prompt injection prevention |
 | **v3.17** | ARM64 fixes, VPS reliability, consistency audit, `--version` flag |
 | **v3.16** | tmux resilience, Vertex AI RTK fix, Semgrep integration |
-| **v3.15** | RTK token compression (60–90% reduction), 156+ tools |
+| **v3.15** | RTK token compression (60–90% reduction), 125+ tools |
 | **v3.14** | Modularization, VPS mode, agent slots, path-gated skills |
 | **v3.13** | Token optimization (JSONL pruning, per-agent model routing) |
 | **v3.6** | Token savings (94–97% reduction vs. MCP) |
@@ -576,7 +465,7 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 ## Detailed Tool Reference
 
 See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
-- 155+ CLI tools (what they do, example prompts)
+- 125+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
 - Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline)
