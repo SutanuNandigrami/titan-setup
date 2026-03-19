@@ -354,22 +354,13 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
-  # ── SSH hardening (config only — reload deferred to finalize) ─────────
-  # Write hardened config NOW but do NOT reload sshd yet.
-  # Reloading here locks out password-based SSH before Tailscale provides
-  # alternative access. The sshd reload happens in lib/17-finalize.sh
-  # after Tailscale SSH is confirmed working.
-  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
-  for _dropin in /etc/ssh/sshd_config.d/*.conf; do
-    [[ -f "$_dropin" ]] || continue
-    sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
-    sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
-  done
-  # NOTE: sshd reload intentionally NOT done here — deferred to lib/17-finalize.sh
-  ok "SSH config written (password auth off, root login disabled, MaxAuthTries 3)"
-  ok "  sshd reload deferred until Tailscale SSH is verified"
+  # ── SSH hardening — DEFERRED to lib/17-finalize.sh ───────────────────
+  # Config changes AND reload are both deferred until after Tailscale SSH
+  # provides alternative access. Writing config here is unsafe because apt
+  # package installs (openssh-server upgrades, fail2ban) trigger dpkg
+  # postinst hooks that restart sshd, which picks up the hardened config
+  # and locks out password-based SSH before Tailscale is ready.
+  ok "SSH hardening deferred until Tailscale is verified (lib/17-finalize.sh)"
 
   # ── UFW — NOT used (Tailscale handles network isolation) ─────────────
   # UFW conflicts with Tailscale routing. Tailscale provides network-level
@@ -2464,11 +2455,21 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 
   # ── Apply deferred SSH hardening ────────────────────────────────────
-  # Config was written in lib/04-vps-harden.sh but sshd reload was deferred
-  # until Tailscale SSH provides alternative access (--ssh flag above).
-  # Now that Tailscale is up, reload sshd to enforce password auth disable.
+  # Both config changes AND reload are deferred from lib/04-vps-harden.sh
+  # to here. Writing sshd_config earlier is unsafe because apt package
+  # installs trigger dpkg postinst hooks that restart sshd, which would
+  # pick up the hardened config and lock out password-based SSH before
+  # Tailscale provides alternative access (--ssh flag above).
+  sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
+  for _dropin in /etc/ssh/sshd_config.d/*.conf; do
+    [[ -f "$_dropin" ]] || continue
+    sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
+    sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
+  done
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardening applied (sshd reloaded — password auth now enforced)"
+  ok "SSH hardened (password auth off, root login disabled, MaxAuthTries 3)"
 
   if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
     # Get MagicDNS hostname for service URLs
