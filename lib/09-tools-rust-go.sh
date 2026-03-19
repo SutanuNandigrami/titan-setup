@@ -201,60 +201,66 @@ _go_binary_install() {
 
 mkdir -p "$HOME/go/bin"
 
+# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
+_gh_latest_tag() {
+  local url
+  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
+  basename "$url" 2>/dev/null
+}
+
 # nuclei (357 deps, ~7 min compile) — binary download
-_NUCLEI_VER=$(curl -sf https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name // empty' || true)
-if [[ -n "$_NUCLEI_VER" ]]; then
+_NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
+if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
-    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_AMD}.zip" \
-    || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
-else
-  command -v nuclei &>/dev/null && ok "nuclei (exists)" || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei" || warn "nuclei"; }
+    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" \
+    || true
 fi
+command -v nuclei &>/dev/null && ok "nuclei (exists)" \
+  || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
-_GITLEAKS_VER=$(curl -sf https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r '.tag_name // empty' || true)
-if [[ -n "$_GITLEAKS_VER" ]]; then
-  # gitleaks uses x64/arm64 naming, not x86_64/aarch64
+_GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
+if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
+  # gitleaks uses x64/arm64 naming
   _GL_ARCH="x64"; [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
   _go_binary_install "gitleaks" \
-    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz"
+    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" \
+    || true
 fi
-# Fallback to go install if binary download failed
-command -v gitleaks &>/dev/null || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks" || warn "gitleaks"; }
+command -v gitleaks &>/dev/null && ok "gitleaks (exists)" \
+  || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
-# sops (89 deps) — binary download
-_SOPS_VER=$(curl -sf https://api.github.com/repos/getsops/sops/releases/latest | jq -r '.tag_name // empty' || true)
-if [[ -n "$_SOPS_VER" ]]; then
-  if command -v sops &>/dev/null; then ok "sops (exists)"
-  else
-    echo -n "  sops (binary)..."
-    if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
-      chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
-    else echo -e " ${YELLOW}⚠${NC}"; fi
-  fi
+# sops (89 deps) — standalone binary download
+_SOPS_VER=$(_gh_latest_tag "getsops/sops")
+if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
+  echo -n "  sops (binary)..."
+  if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
+    chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
+  else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v sops &>/dev/null || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops" || warn "sops"; }
+command -v sops &>/dev/null && ok "sops (exists)" \
+  || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
-# osv-scanner (51 deps) — binary download
-_OSV_VER=$(curl -sf https://api.github.com/repos/google/osv-scanner/releases/latest | jq -r '.tag_name // empty' || true)
-if [[ -n "$_OSV_VER" ]]; then
-  # osv-scanner releases are standalone binaries, not archives
-  if ! command -v osv-scanner &>/dev/null; then
-    echo -n "  osv-scanner (binary)..."
-    if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
-      chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
-    else echo -e " ${YELLOW}⚠${NC}"; fi
-  fi
+# osv-scanner (51 deps) — standalone binary download
+_OSV_VER=$(_gh_latest_tag "google/osv-scanner")
+if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
+  echo -n "  osv-scanner (binary)..."
+  if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
+    chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
+  else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v osv-scanner &>/dev/null || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner" || warn "osv-scanner"; }
+command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" \
+  || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
-_ACT_VER=$(curl -sf https://api.github.com/repos/nektos/act/releases/latest | jq -r '.tag_name // empty' || true)
-if [[ -n "$_ACT_VER" ]]; then
+_ACT_VER=$(_gh_latest_tag "nektos/act")
+if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
-    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz"
+    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" \
+    || true
 fi
-command -v act &>/dev/null || { run_q go install "github.com/nektos/act@latest" && ok "act" || warn "act"; }
+command -v act &>/dev/null && ok "act (exists)" \
+  || { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
 
 # ── Parallel go install for remaining tools ──────────────────────────────────
 # These are lighter tools — run them all in parallel with background jobs.
