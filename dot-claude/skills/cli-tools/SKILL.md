@@ -1,6 +1,7 @@
 ---
 name: cli-tools
 description: Reference for 100+ installed CLI tools. Use when working with any CLI tool, searching files, processing data, managing containers, infrastructure, security scanning, or system monitoring.
+paths: ["**/*"]
 ---
 
 # CLI Tool Arsenal
