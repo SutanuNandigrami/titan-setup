@@ -16,17 +16,7 @@ fi
 mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/docker-security,skills/vibesec,skills/trailofbits-modern-python,skills/notebooklm-skills,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
 mkdir -p "$HOME/.config/agt"
 
-# ─── Repo files (static content loaded from git repo) ────────────────────────
-REPO_FILES="${TITAN_REPO_FILES:-}"
-if [[ -z "$REPO_FILES" ]]; then
-  _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
-  ok "Fetching repo files..."
-  git clone --depth=1 --quiet \
-    https://github.com/SutanuNandigrami/claude-titan-setup.git \
-    "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
-  REPO_FILES="$_REPO_TMPDIR"
-  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
-fi
+# REPO_FILES already set by lib/06b-repo-files.sh (cloned early for tool patches)
 
 # ─── CLAUDE.md ───
 install -Dm644 "$REPO_FILES/dot-claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"

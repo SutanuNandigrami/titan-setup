@@ -90,7 +90,8 @@ elif ! command -v docker &>/dev/null; then
 else
   # Pull Letta Docker image (bundles Postgres+pgvector)
   _DOCKER_BIN=$(command -v docker)
-  if run_q docker pull letta/letta:latest; then
+  # Use sudo — docker group membership from lib/06 hasn't taken effect in this shell
+  if run_q sudo docker pull letta/letta:latest; then
     ok "letta/letta:latest image"
   else
     warn "letta docker pull failed — check: docker pull letta/letta:latest"

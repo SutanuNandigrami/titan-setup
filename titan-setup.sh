@@ -657,6 +657,18 @@ git config --global pull.rebase true 2>/dev/null || true
 ok "Git defaults set (main branch, rebase pull)"
 
 
+# ─── Repo files (static content loaded from git repo) ────────────────────────
+# Cloned early so tools like RTK can use patches from the repo during Phase 3.
+REPO_FILES="${TITAN_REPO_FILES:-}"
+if [[ -z "$REPO_FILES" ]]; then
+  _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
+  ok "Fetching repo files..."
+  git clone --depth=1 --quiet \
+    https://github.com/SutanuNandigrami/claude-titan-setup.git \
+    "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
+  REPO_FILES="$_REPO_TMPDIR"
+  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
+fi
 section "Phase 2/6 — Package Managers"
 
 # ─── Rust / Cargo ───
@@ -1002,7 +1014,8 @@ elif ! command -v docker &>/dev/null; then
 else
   # Pull Letta Docker image (bundles Postgres+pgvector)
   _DOCKER_BIN=$(command -v docker)
-  if run_q docker pull letta/letta:latest; then
+  # Use sudo — docker group membership from lib/06 hasn't taken effect in this shell
+  if run_q sudo docker pull letta/letta:latest; then
     ok "letta/letta:latest image"
   else
     warn "letta docker pull failed — check: docker pull letta/letta:latest"
@@ -1705,17 +1718,7 @@ fi
 mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/docker-security,skills/vibesec,skills/trailofbits-modern-python,skills/notebooklm-skills,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
 mkdir -p "$HOME/.config/agt"
 
-# ─── Repo files (static content loaded from git repo) ────────────────────────
-REPO_FILES="${TITAN_REPO_FILES:-}"
-if [[ -z "$REPO_FILES" ]]; then
-  _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
-  ok "Fetching repo files..."
-  git clone --depth=1 --quiet \
-    https://github.com/SutanuNandigrami/claude-titan-setup.git \
-    "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
-  REPO_FILES="$_REPO_TMPDIR"
-  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
-fi
+# REPO_FILES already set by lib/06b-repo-files.sh (cloned early for tool patches)
 
 # ─── CLAUDE.md ───
 install -Dm644 "$REPO_FILES/dot-claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
