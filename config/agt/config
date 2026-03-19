@@ -2,4 +2,4 @@
 # shellcheck shell=bash
 STASH_DIR="$HOME/.claude/agent-stash"
 export AUTO_UNLOAD=false
-SLOT_COUNT=5
+SLOT_COUNT=10
