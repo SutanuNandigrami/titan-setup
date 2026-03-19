@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart hook — load previous session state and run maintenance
-set -euo pipefail
+# NOTE: no set -e — hooks like cc-patch-thinking exit non-zero legitimately
+set -uo pipefail
 
 # ─── ntfy push notification helper ───
 _ntfy() {
