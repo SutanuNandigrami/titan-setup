@@ -126,15 +126,32 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else ok "spotify_player (exists)"; fi
 fi
 
-# nushell — structured data shell (large compile; binstall saves ~10 min)
+# nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet nu; then
-    echo -e " ${GREEN}✓${NC}"
-  elif run_q cargo install nu --locked; then
-    echo -e " ${GREEN}✓ (compiled)${NC}"
-  else
-    echo -e " ${YELLOW}⚠ build failed — try: cargo binstall nu${NC}"
+  _NU_VER=$(curl -sf https://api.github.com/repos/nushell/nushell/releases/latest | jq -r '.tag_name // empty' || true)
+  _NU_INSTALLED=false
+  if [[ -n "$_NU_VER" ]]; then
+    _NU_URL="https://github.com/nushell/nushell/releases/download/${_NU_VER}/nu-${_NU_VER}-${ARCH_RUST}-unknown-linux-musl.tar.gz"
+    if curl -fsSL "$_NU_URL" -o "$WORKDIR/nu.tar.gz" 2>>"$LOG_FILE"; then
+      tar -xzf "$WORKDIR/nu.tar.gz" -C "$WORKDIR" 2>>"$LOG_FILE"
+      _NU_BIN=$(find "$WORKDIR" -maxdepth 2 -name "nu" -type f -perm -111 2>/dev/null | head -1)
+      if [[ -n "$_NU_BIN" ]]; then
+        install -m 0755 "$_NU_BIN" "$HOME/.cargo/bin/nu"
+        echo -e " ${GREEN}✓${NC}"
+        _NU_INSTALLED=true
+      fi
+    fi
+  fi
+  if ! $_NU_INSTALLED; then
+    # Fallback: binstall → source compile
+    if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet nu; then
+      echo -e " ${GREEN}✓ (binstall)${NC}"
+    elif run_q cargo install nu --locked; then
+      echo -e " ${GREEN}✓ (compiled)${NC}"
+    else
+      echo -e " ${YELLOW}⚠ build failed${NC}"
+    fi
   fi
 else ok "nu (exists)"; fi
 
