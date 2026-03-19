@@ -2336,12 +2336,12 @@ echo "  Installing official and community plugins..."
 # claude auth login is broken over SSH (Enter doesn't register — upstream bug)
 # Skip inline auth; plugins are installed below only if already authenticated.
 # After setup: run 'claude auth login' from a fresh terminal prompt (not inside
-# a script), then re-run plugin installs with: claude plugin install hookify
+# a script), then re-run plugin installs with: claude plugin install code-review
 if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
   warn "Claude not authenticated — plugins will be skipped"
   echo "  After setup, run 'claude auth login' then:"
   echo "    claude plugin marketplace add anthropic/claude-plugins-official"
-  echo "    claude plugin install hookify code-review skill-creator"
+  echo "    claude plugin install code-review skill-creator"
   echo "    claude plugin marketplace add obra/superpowers-marketplace"
   echo "    claude plugin install episodic-memory"
 fi
@@ -2356,7 +2356,6 @@ else
     && ok "official marketplace" || ok "official marketplace (exists)"
 
   # Install plugins from official marketplace
-  claude plugin install hookify 2>/dev/null && ok "hookify" || warn "hookify"
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
   claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
 
@@ -2544,7 +2543,7 @@ LETTA_CTRL_SVC
 fi
 
 # Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
-# This prevents skill-creator/hookify/episodic-memory from loading on every turn (93% token reduction)
+# This prevents skill-creator/episodic-memory from loading on every turn (93% token reduction)
 if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill() {
     local plugin_key="$1" subpath="$2" paths_value="$3"
@@ -2561,9 +2560,6 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill "skill-creator@claude-plugins-official" \
     "skills/skill-creator/SKILL.md" \
     '["**/.claude/**", "**/skills/**", "**/SKILL.md", "**/CLAUDE.md"]'
-  _patch_plugin_skill "hookify@claude-plugins-official" \
-    "skills/writing-rules/SKILL.md" \
-    '["**/.claude/**", "**/hooks/**", "**/rules/**", "**/hookify*"]'
   _patch_plugin_skill "episodic-memory@superpowers-marketplace" \
     "skills/remembering-conversations/SKILL.md" \
     '["**/memory/**", "**/.claude/memory/**", "**/handoff*", "**/_scratchpad*"]'
