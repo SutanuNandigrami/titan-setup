@@ -2200,7 +2200,6 @@ else
       # Remove semgrep's UserPromptSubmit hook — injects ~500 tokens of static
       # "Secure-by-Default Libraries" text on EVERY prompt. Wasteful and errors out.
       # Keep PostToolUse (scan on edit) and SessionStart (one-time defaults).
-      local _sg_hooks
       _sg_hooks=$(find "$HOME/.claude/plugins/cache" -path "*/semgrep/*/hooks/hooks.json" 2>/dev/null | head -1)
       if [[ -n "$_sg_hooks" ]] && jq -e '.hooks.UserPromptSubmit' "$_sg_hooks" &>/dev/null; then
         jq 'del(.hooks.UserPromptSubmit)' "$_sg_hooks" > "${_sg_hooks}.tmp" \
