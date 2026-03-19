@@ -1263,6 +1263,19 @@ tmux integration for Claude Code. Enhanced multiplexing and SSH resilience.
 
 > **Example prompt:** "Integrate Claude with my tmux setup"
 
+#### cc-patch-thinking
+Shows Claude Code thinking blocks inline in the transcript. Automatically patches the CC binary after updates.
+
+- Auto-runs on SessionStart — detects CC version changes via SHA256 hash comparison
+- Version-resilient: byte-level regex matches `case"thinking"` structure, not minified variable names
+- Maintains binary integrity: pads replacements with no-op semicolons (exact byte length preserved)
+- `cc-patch-thinking --check` — check if patch needed (exit 0=patched, 1=needs patch, 2=unknown version)
+- `cc-patch-thinking --dry-run` — preview changes without modifying
+- `cc-patch-thinking --restore` — restore from backup
+- Backup saved at `<binary>.thinking-patch-backup`, hash tracked at `~/.claude/.cc-thinking-patch-hash`
+
+> **Example prompt:** "Check if the thinking patch is applied" → runs `cc-patch-thinking --check`
+
 ---
 
 ## Claude Code Plugins (MCP)
@@ -1358,7 +1371,9 @@ Context bloat cleaner for Claude Code sessions. Diagnoses exact token consumptio
 - Remove bloat interactively: `cozempic treat`
 - Wire hooks and slash command: `cozempic init` (run once after setup)
 - In-session treatment via MCP: `/cozempic treat`
-- Start background guard daemon: `cozempic daemon start`
+- Guard daemon auto-starts on SessionStart with `--system-overhead-tokens 35000` (accounts for plugins, skills, and hooks overhead)
+- Guard modes: `cozempic guard --daemon` (background), `cozempic guard` (foreground)
+- Checkpoints fire on PreCompact, Stop, and PostToolUse (Task events)
 
 > **Example prompt:** "Diagnose how much token bloat is in my current session, then treat it"
 #### kilocode

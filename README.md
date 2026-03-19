@@ -19,6 +19,7 @@
 - [Context Budget](#context-budget)
 - [For New Projects](#for-new-projects)
 - [Troubleshooting](#troubleshooting)
+- [Integrations](#integrations)
 - [Contributing](#contributing)
 - [Changelog](#full-changelog)
 - [Tool Reference](#detailed-tool-reference)
@@ -252,6 +253,7 @@ Desktop only: `maim`, `xdotool`.
 | Slash commands | 12 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
 | Built-in agents | 3 | researcher (Haiku), planner (Opus), reviewer (Sonnet) |
 | On-demand agent slots | 5 | Load from agent-stash library via `agt` CLI |
+| Auto-patcher | 1 | `cc-patch-thinking` — shows thinking blocks inline, auto-patches after CC updates |
 
 ---
 
@@ -440,6 +442,83 @@ If still missing, re-run titan-setup — idempotent installs pick up whatever wa
 
 ---
 
+## Integrations
+
+Titan pulls from and integrates with these open-source projects:
+
+### Claude Code Ecosystem
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [rtk-ai/rtk](https://github.com/rtk-ai/rtk) | Token compression proxy — 60-90% savings on CLI output |
+| [tombii/better-ccflare](https://github.com/tombii/better-ccflare) | Claude account load balancer and proxy |
+| [smtg-ai/claude-squad](https://github.com/smtg-ai/claude-squad) | Multi-instance Claude Code management in tmux |
+| [nielsgroen/claude-tmux](https://github.com/nielsgroen/claude-tmux) | tmux session persistence for Claude Code |
+| [phiat/claude-esp](https://github.com/phiat/claude-esp) | Claude Code ESP integration |
+| [vaporif/parry](https://github.com/vaporif/parry) | Claude Code prompt injection defense |
+| [zippoxer/recall](https://github.com/zippoxer/recall) | Cross-session memory recall |
+| [ldayton/Dippy](https://github.com/ldayton/Dippy) | Claude Code companion tool |
+
+### Memory & AI Services
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [letta-ai/letta](https://github.com/letta-ai/letta) | Persistent memory server (Docker) — long-term memory across sessions |
+| [ollama/ollama](https://github.com/ollama/ollama) | Local embeddings (`nomic-embed-text`) for Letta vector search |
+
+### Skills & Plugins
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [obra/superpowers](https://github.com/obra/superpowers) | TDD, debugging, brainstorming, and planning skills |
+| [trailofbits/skills](https://github.com/trailofbits/skills) | Modern Python tooling skill |
+| [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill) | Secure web application development skill |
+| [SutanuNandigrami/agent-stash](https://github.com/SutanuNandigrami/agent-stash) | 30 ready-made agents for on-demand slot loading |
+
+### Security & Recon
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei) | Vulnerability scanning with templates |
+| [projectdiscovery/subfinder](https://github.com/projectdiscovery/subfinder) | Subdomain discovery |
+| [projectdiscovery/httpx](https://github.com/projectdiscovery/httpx) | HTTP probing and analysis |
+| [projectdiscovery/katana](https://github.com/projectdiscovery/katana) | Web crawling and spidering |
+| [projectdiscovery/dnsx](https://github.com/projectdiscovery/dnsx) | DNS resolution and brute-forcing |
+| [zricethezav/gitleaks](https://github.com/zricethezav/gitleaks) | Secret scanning in git history |
+| [google/osv-scanner](https://github.com/google/osv-scanner) | Dependency vulnerability scanning |
+| [ffuf/ffuf](https://github.com/ffuf/ffuf) | Web fuzzer |
+
+### Infrastructure & DevOps
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [smallstep/cli](https://github.com/smallstep/cli) | Certificate management (`step`) |
+| [getsops/sops](https://github.com/getsops/sops) | Encrypted secrets management |
+| [nektos/act](https://github.com/nektos/act) | Run GitHub Actions locally |
+| [rhysd/actionlint](https://github.com/rhysd/actionlint) | GitHub Actions workflow linting |
+| [hetznercloud/cli](https://github.com/hetznercloud/cli) | Hetzner Cloud management (`hcloud`) |
+| [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared) | Cloudflare Tunnel client |
+| [hadolint/hadolint](https://github.com/hadolint/hadolint) | Dockerfile linting |
+| [wagoodman/dive](https://github.com/wagoodman/dive) | Docker image layer analysis |
+| [bcicen/ctop](https://github.com/bcicen/ctop) | Container metrics and monitoring |
+| [stern/stern](https://github.com/stern/stern) | Multi-pod Kubernetes log tailing |
+
+### Data & CLI Utilities
+
+| Project | What Titan Uses It For |
+|---------|----------------------|
+| [duckdb/duckdb](https://github.com/duckdb/duckdb) | SQL on files (CSV, Parquet, JSON) |
+| [xo/usql](https://github.com/xo/usql) | Universal SQL client (Postgres, MySQL, SQLite, etc.) |
+| [fullstorydev/grpcurl](https://github.com/fullstorydev/grpcurl) | gRPC endpoint testing |
+| [charmbracelet/glow](https://github.com/charmbracelet/glow) | Markdown rendering in terminal |
+| [mr-karan/doggo](https://github.com/mr-karan/doggo) | DNS lookup utility |
+| [tomnomnom/gron](https://github.com/tomnomnom/gron) | Greppable JSON |
+| [boyter/scc](https://github.com/boyter/scc) | Code statistics and line counting |
+| [koalaman/shellcheck](https://github.com/koalaman/shellcheck) | Shell script linting |
+| [go-task/task](https://github.com/go-task/task) | Task runner (Makefile alternative) |
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development workflow.
@@ -468,7 +547,7 @@ See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
 - 125+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
-- Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline)
+- Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline, cc-patch-thinking)
 - Security tools and scanning patterns
 - Network and system monitoring
 - Container and Kubernetes tools
