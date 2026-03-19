@@ -339,7 +339,7 @@ Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=default.target
+WantedBy=better-ccflare.service
 SVCEOF
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable ccflare-docker-proxy 2>/dev/null || true
