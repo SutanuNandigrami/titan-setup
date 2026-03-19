@@ -482,7 +482,7 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | [obra/superpowers](https://github.com/obra/superpowers) | TDD, debugging, brainstorming, verification, and planning skills + marketplace |
 | [trailofbits/skills](https://github.com/trailofbits/skills) | Modern Python tooling skill (uv, ruff, ty) |
 | [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill) | Secure web application development skill |
-| [SutanuNandigrami/agent-stash](https://github.com/SutanuNandigrami/agent-stash) | 185 ready-made agents for on-demand slot loading |
+| [SutanuNandigrami/agent-stash](https://github.com/SutanuNandigrami/agent-stash) | 43 curated agents for on-demand slot loading |
 | *hookify* (official plugin) | Visual hook configuration and management |
 | *code-review* (official plugin) | PR review subagent with structured review |
 | *skill-creator* (official plugin) | Interactive skill authoring |
