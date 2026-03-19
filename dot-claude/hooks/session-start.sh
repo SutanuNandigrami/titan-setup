@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook — load previous session state and run maintenance
-# NOTE: no set -e — hooks like cc-patch-thinking exit non-zero legitimately
-set -uo pipefail
+set -euo pipefail
 
 # ─── ntfy push notification helper ───
 _ntfy() {
@@ -64,8 +63,9 @@ fi
 
 # ─── Auto-patch CC thinking display (survives CC updates via hash check) ───
 if command -v cc-patch-thinking >/dev/null 2>&1; then
-  cc-patch-thinking --check 2>/dev/null
-  case $? in
+  _patch_rc=0
+  cc-patch-thinking --check 2>/dev/null || _patch_rc=$?
+  case  in
     0) ;; # already patched
     1) cc-patch-thinking 2>&1 | while read -r line; do echo "[Patch] $line" >&2; done ;;
     2) echo "[Patch] cc-patch-thinking: unknown CC version — may need patcher update" >&2 ;;
