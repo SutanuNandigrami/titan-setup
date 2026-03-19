@@ -286,7 +286,9 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     _TMUX_WRAPPER=$(mktemp /tmp/titan-tmux-XXXXXX.sh)
     {
       printf 'TITAN_TMUX=1 bash %q' "$0"
-      printf ' %q' "${_ORIG_ARGS[@]+"${_ORIG_ARGS[@]}"}"
+      if [[ ${#_ORIG_ARGS[@]} -gt 0 ]]; then
+        printf ' %q' "${_ORIG_ARGS[@]}"
+      fi
       # Carry forward interactively-resolved values not present in _ORIG_ARGS
       if [[ -n "${TAILSCALE_KEY:-}" ]]; then
         printf ' --tailscale-key %q' "$TAILSCALE_KEY"
