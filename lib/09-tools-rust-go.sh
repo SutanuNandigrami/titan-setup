@@ -365,7 +365,7 @@ else ok "step-cli (exists)"; fi
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
-    sudo apt install -y libpcre3-dev 2>/dev/null
+    sudo apt install -y libpcre3-dev libev4 2>/dev/null
     echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
       && ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi

@@ -76,7 +76,10 @@ if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   if command -v playwright &>/dev/null; then
     # install-deps uses apt-get; titan has NOPASSWD sudo so playwright's internal sudo call works
     sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >> "$LOG_FILE" 2>&1 || true
-    run_q playwright install chromium && ok "playwright chromium" \
+    # mise shims may not be on PATH in non-interactive context; ensure node is findable
+    _PW_PATH="$PATH"
+    command -v node &>/dev/null || _PW_PATH="$HOME/.local/share/mise/shims:$_PW_PATH"
+    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" \
       || warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
