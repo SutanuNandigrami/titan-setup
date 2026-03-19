@@ -1468,33 +1468,33 @@ _go_binary_install() {
 mkdir -p "$HOME/go/bin"
 
 # nuclei (357 deps, ~7 min compile) — binary download
-_NUCLEI_VER=$(curl -sf https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name // empty')
+_NUCLEI_VER=$(curl -sf https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name // empty' || true)
 if [[ -n "$_NUCLEI_VER" ]]; then
   _go_binary_install "nuclei" \
-    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_AMD}64.zip" \
-    || _go_binary_install "nuclei" \
     "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_AMD}.zip" \
-    || run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)"
+    || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 else
   command -v nuclei &>/dev/null && ok "nuclei (exists)" || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei" || warn "nuclei"; }
 fi
 
 # gitleaks (64 deps) — binary download
-_GITLEAKS_VER=$(curl -sf https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r '.tag_name // empty')
+_GITLEAKS_VER=$(curl -sf https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r '.tag_name // empty' || true)
 if [[ -n "$_GITLEAKS_VER" ]]; then
+  # gitleaks uses x64/arm64 naming, not x86_64/aarch64
+  _GL_ARCH="x64"; [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
   _go_binary_install "gitleaks" \
-    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${ARCH_FULL}.tar.gz"
+    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz"
 fi
 # Fallback to go install if binary download failed
 command -v gitleaks &>/dev/null || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks" || warn "gitleaks"; }
 
 # sops (89 deps) — binary download
-_SOPS_VER=$(curl -sf https://api.github.com/repos/getsops/sops/releases/latest | jq -r '.tag_name // empty')
+_SOPS_VER=$(curl -sf https://api.github.com/repos/getsops/sops/releases/latest | jq -r '.tag_name // empty' || true)
 if [[ -n "$_SOPS_VER" ]]; then
   if command -v sops &>/dev/null; then ok "sops (exists)"
   else
     echo -n "  sops (binary)..."
-    if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_AMD}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
+    if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
       chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
     else echo -e " ${YELLOW}⚠${NC}"; fi
   fi
@@ -1502,15 +1502,12 @@ fi
 command -v sops &>/dev/null || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops" || warn "sops"; }
 
 # osv-scanner (51 deps) — binary download
-_OSV_VER=$(curl -sf https://api.github.com/repos/google/osv-scanner/releases/latest | jq -r '.tag_name // empty')
+_OSV_VER=$(curl -sf https://api.github.com/repos/google/osv-scanner/releases/latest | jq -r '.tag_name // empty' || true)
 if [[ -n "$_OSV_VER" ]]; then
-  _go_binary_install "osv-scanner" \
-    "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_AMD}64" 2>/dev/null \
-    || true
   # osv-scanner releases are standalone binaries, not archives
-  if ! command -v osv-scanner &>/dev/null && [[ -n "$_OSV_VER" ]]; then
+  if ! command -v osv-scanner &>/dev/null; then
     echo -n "  osv-scanner (binary)..."
-    if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_AMD}64" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
+    if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
       chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
     else echo -e " ${YELLOW}⚠${NC}"; fi
   fi
@@ -1518,7 +1515,7 @@ fi
 command -v osv-scanner &>/dev/null || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
-_ACT_VER=$(curl -sf https://api.github.com/repos/nektos/act/releases/latest | jq -r '.tag_name // empty')
+_ACT_VER=$(curl -sf https://api.github.com/repos/nektos/act/releases/latest | jq -r '.tag_name // empty' || true)
 if [[ -n "$_ACT_VER" ]]; then
   _go_binary_install "act" \
     "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz"
