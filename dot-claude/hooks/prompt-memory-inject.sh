@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keyword-triggered memory injection — stdout injected as context ONLY on keyword match
 # Zero token cost on every non-matching prompt
-set -euo pipefail
+# NOTE: no set -euo pipefail — grep exit codes must not kill the hook
 
 PROMPT=$(jq -r '.prompt // empty' 2>/dev/null || echo "")
 
@@ -14,7 +14,7 @@ fi
 MEMDIR="$HOME/.claude/projects"
 MAINMEM=$(find "$MEMDIR" -path "*/memory/MEMORY.md" 2>/dev/null | sort | tail -1)
 
-if [[ -f "$MAINMEM" ]]; then
+if [[ -f "${MAINMEM:-}" ]]; then
   TOPICDIR=$(dirname "$MAINMEM")
   printf '=== Project Memory ===\n'
   cat "$MAINMEM"

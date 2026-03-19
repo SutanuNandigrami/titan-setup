@@ -23,7 +23,7 @@ for tool in "${UV_TOOLS[@]}"; do
     ok "$tool (already installed)"
   else
     echo -n "  Installing $tool..."
-    if uv tool install "$tool" &>/dev/null; then
+    if uv tool install --force "$tool" &>/dev/null; then
       echo -e " ${GREEN}✓${NC}"
     else
       echo -e " ${YELLOW}⚠ failed (try: uv tool install $tool)${NC}"

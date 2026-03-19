@@ -1,5 +1,5 @@
 # Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
-# This prevents skill-creator/hookify/episodic-memory from loading on every turn (93% token reduction)
+# This prevents skill-creator/episodic-memory from loading on every turn (93% token reduction)
 if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill() {
     local plugin_key="$1" subpath="$2" paths_value="$3"
@@ -16,9 +16,6 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   _patch_plugin_skill "skill-creator@claude-plugins-official" \
     "skills/skill-creator/SKILL.md" \
     '["**/.claude/**", "**/skills/**", "**/SKILL.md", "**/CLAUDE.md"]'
-  _patch_plugin_skill "hookify@claude-plugins-official" \
-    "skills/writing-rules/SKILL.md" \
-    '["**/.claude/**", "**/hooks/**", "**/rules/**", "**/hookify*"]'
   _patch_plugin_skill "episodic-memory@superpowers-marketplace" \
     "skills/remembering-conversations/SKILL.md" \
     '["**/memory/**", "**/.claude/memory/**", "**/handoff*", "**/_scratchpad*"]'
