@@ -290,6 +290,15 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
         printf ' %q' "${_ORIG_ARGS[@]}"
       fi
       # Carry forward interactively-resolved values not present in _ORIG_ARGS
+      printf ' --name %q' "$ENGINEER_NAME"
+      printf ' --mode %q' "$INSTALL_MODE"
+      printf ' --cc-asked'
+      if [[ -n "$CC_VERSION" ]]; then
+        printf ' --cc-version %q' "$CC_VERSION"
+      fi
+      if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
+        printf ' --no-autoupdate'
+      fi
       if [[ -n "${TAILSCALE_KEY:-}" ]]; then
         printf ' --tailscale-key %q' "$TAILSCALE_KEY"
       fi
