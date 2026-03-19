@@ -34,17 +34,16 @@ CARGO_CRATES=(
   xh ouch hurl jwt-cli oha
 )
 
-# rtk (Rust Token Killer) — build from source with null-fix patch for Vertex AI
+# ── Parallel strategy: start RTK clone+patch while binstall runs ──────────
+# RTK needs source build (patched); start clone in background, compile after binstall finishes.
+_RTK_PID=""
+_RTK_SRC="$WORKDIR/rtk-src"
 if ! command -v rtk &>/dev/null || ! rtk gain &>/dev/null 2>&1; then
-  echo -n "  rtk (Token Killer)..."
-  _RTK_SRC="$WORKDIR/rtk-src"
-  if run_q git clone --depth=1 https://github.com/rtk-ai/rtk "$_RTK_SRC" \
-    && patch -p1 -d "$_RTK_SRC" < "$REPO_FILES/config/rtk/ccusage.patch" \
-    && run_q cargo install --path "$_RTK_SRC"; then
-    echo -e " ${GREEN}✓${NC}"
-  else
-    echo -e " ${YELLOW}⚠ rtk install failed${NC}"
-  fi
+  echo -n "  rtk: cloning..."
+  (git clone --depth=1 --quiet https://github.com/rtk-ai/rtk "$_RTK_SRC" 2>>"$LOG_FILE" \
+    && patch -p1 -d "$_RTK_SRC" < "$REPO_FILES/config/rtk/ccusage.patch" >>"$LOG_FILE" 2>&1) &
+  _RTK_PID=$!
+  echo -e " ${GREEN}(background)${NC}"
 else
   ok "rtk (exists)"
 fi
@@ -73,17 +72,45 @@ else
   warn "$CARGO_FAIL cargo crate(s) failed — re-run or install individually"
 fi
 
+# Now compile RTK (clone+patch should be done by now)
+if [[ -n "$_RTK_PID" ]]; then
+  echo -n "  rtk (Token Killer)..."
+  if wait "$_RTK_PID" && run_q cargo install --path "$_RTK_SRC"; then
+    echo -e " ${GREEN}✓${NC}"
+  else
+    echo -e " ${YELLOW}⚠ rtk install failed${NC}"
+  fi
+fi
+
 ok "Cargo tools installed/updated"
 
-# recall — spaced repetition flashcard CLI (zippoxer/recall)
-if ! command -v recall &>/dev/null; then
-  run_q cargo install --git https://github.com/zippoxer/recall && ok "recall" || warn "recall"
-else ok "recall (exists)"; fi
+# ── Parallel cargo source builds (git-only crates) ───────────────────────
+# These have no binstall binaries — compile in parallel to overlap CPU time.
+_CARGO_GIT_PIDS=()
+_CARGO_GIT_NAMES=()
 
-# parry — prompt injection scanner
-if ! command -v parry &>/dev/null; then
-  run_q cargo install --git https://github.com/vaporif/parry && ok "parry" || warn "parry"
-else ok "parry (exists)"; fi
+_cargo_git_bg() {
+  local name="$1" url="$2"
+  if ! command -v "$name" &>/dev/null; then
+    cargo install --git "$url" --quiet >>"$LOG_FILE" 2>&1 &
+    _CARGO_GIT_PIDS+=($!)
+    _CARGO_GIT_NAMES+=("$name")
+  else
+    ok "$name (exists)"
+  fi
+}
+
+_cargo_git_bg "recall" "https://github.com/zippoxer/recall"
+_cargo_git_bg "parry-guard" "https://github.com/vaporif/parry"
+
+# Wait for all parallel cargo builds
+for _i in "${!_CARGO_GIT_PIDS[@]}"; do
+  if wait "${_CARGO_GIT_PIDS[$_i]}"; then
+    ok "${_CARGO_GIT_NAMES[$_i]}"
+  else
+    warn "${_CARGO_GIT_NAMES[$_i]}"
+  fi
+done
 
 # spotify_player — desktop only (Spotify TUI requires audio hardware)
 if [[ "$INSTALL_MODE" == "desktop" ]]; then
@@ -99,40 +126,156 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else ok "spotify_player (exists)"; fi
 fi
 
-# nushell — structured data shell (large compile; binstall saves ~10 min)
+# nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet nu; then
-    echo -e " ${GREEN}✓${NC}"
-  elif run_q cargo install nu --locked; then
-    echo -e " ${GREEN}✓ (compiled)${NC}"
-  else
-    echo -e " ${YELLOW}⚠ build failed — try: cargo binstall nu${NC}"
+  _NU_VER=$(curl -sf https://api.github.com/repos/nushell/nushell/releases/latest | jq -r '.tag_name // empty' || true)
+  _NU_INSTALLED=false
+  if [[ -n "$_NU_VER" ]]; then
+    _NU_URL="https://github.com/nushell/nushell/releases/download/${_NU_VER}/nu-${_NU_VER}-${ARCH_RUST}-unknown-linux-musl.tar.gz"
+    if curl -fsSL "$_NU_URL" -o "$WORKDIR/nu.tar.gz" 2>>"$LOG_FILE"; then
+      tar -xzf "$WORKDIR/nu.tar.gz" -C "$WORKDIR" 2>>"$LOG_FILE"
+      _NU_BIN=$(find "$WORKDIR" -maxdepth 2 -name "nu" -type f -perm -111 2>/dev/null | head -1)
+      if [[ -n "$_NU_BIN" ]]; then
+        install -m 0755 "$_NU_BIN" "$HOME/.cargo/bin/nu"
+        echo -e " ${GREEN}✓${NC}"
+        _NU_INSTALLED=true
+      fi
+    fi
+  fi
+  if ! $_NU_INSTALLED; then
+    # Fallback: binstall → source compile
+    if command -v cargo-binstall &>/dev/null && run_q cargo binstall --no-confirm --quiet nu; then
+      echo -e " ${GREEN}✓ (binstall)${NC}"
+    elif run_q cargo install nu --locked; then
+      echo -e " ${GREEN}✓ (compiled)${NC}"
+    else
+      echo -e " ${YELLOW}⚠ build failed${NC}"
+    fi
   fi
 else ok "nu (exists)"; fi
 
 # ─── Go tools (with existence checks — skip if already installed) ───
 echo -e "\n  ${CYAN}Go tools:${NC}"
 
-# Associative array: binary_name → install_path
-# This lets us check if the binary exists before running go install
+# ── Binary downloads for heaviest Go tools (saves ~15 min compile time) ──────
+# These tools have 50-357 Go dependencies each; pre-built binaries are much faster.
+_go_binary_install() {
+  local name="$1" url="$2"
+  if command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; then
+    ok "$name (exists)"; return 0
+  fi
+  echo -n "  $name (binary)..."
+  local tmpf="$WORKDIR/${name}.tmp"
+  if curl -fsSL "$url" -o "$tmpf" 2>>"$LOG_FILE"; then
+    # Detect archive type and extract
+    case "$url" in
+      *.tar.gz|*.tgz)
+        tar -xzf "$tmpf" -C "$WORKDIR" 2>>"$LOG_FILE"
+        # Look for the binary in extracted files
+        local bin
+        bin=$(find "$WORKDIR" -maxdepth 2 -name "$name" -type f -perm -111 2>/dev/null | head -1)
+        if [[ -z "$bin" ]]; then
+          bin=$(find "$WORKDIR" -maxdepth 2 -name "$name" -type f 2>/dev/null | head -1)
+        fi
+        if [[ -n "$bin" ]]; then
+          install -m 0755 "$bin" "$HOME/go/bin/$name"
+          echo -e " ${GREEN}✓${NC}"; return 0
+        fi
+        ;;
+      *.zip)
+        unzip -qo "$tmpf" -d "$WORKDIR/${name}_extract" 2>>"$LOG_FILE"
+        local bin
+        bin=$(find "$WORKDIR/${name}_extract" -maxdepth 2 -name "$name" -type f 2>/dev/null | head -1)
+        if [[ -n "$bin" ]]; then
+          install -m 0755 "$bin" "$HOME/go/bin/$name"
+          echo -e " ${GREEN}✓${NC}"; return 0
+        fi
+        ;;
+    esac
+    echo -e " ${YELLOW}⚠ extract failed${NC}"; return 1
+  else
+    echo -e " ${YELLOW}⚠ download failed${NC}"; return 1
+  fi
+}
+
+mkdir -p "$HOME/go/bin"
+
+# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
+_gh_latest_tag() {
+  local url
+  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
+  basename "$url" 2>/dev/null
+}
+
+# nuclei (357 deps, ~7 min compile) — binary download
+_NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
+if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
+  _go_binary_install "nuclei" \
+    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" \
+    || true
+fi
+command -v nuclei &>/dev/null && ok "nuclei (exists)" \
+  || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
+
+# gitleaks (64 deps) — binary download
+_GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
+if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
+  # gitleaks uses x64/arm64 naming
+  _GL_ARCH="x64"; [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
+  _go_binary_install "gitleaks" \
+    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" \
+    || true
+fi
+command -v gitleaks &>/dev/null && ok "gitleaks (exists)" \
+  || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
+
+# sops (89 deps) — standalone binary download
+_SOPS_VER=$(_gh_latest_tag "getsops/sops")
+if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
+  echo -n "  sops (binary)..."
+  if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
+    chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
+  else echo -e " ${YELLOW}⚠${NC}"; fi
+fi
+command -v sops &>/dev/null && ok "sops (exists)" \
+  || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
+
+# osv-scanner (51 deps) — standalone binary download
+_OSV_VER=$(_gh_latest_tag "google/osv-scanner")
+if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
+  echo -n "  osv-scanner (binary)..."
+  if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
+    chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
+  else echo -e " ${YELLOW}⚠${NC}"; fi
+fi
+command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" \
+  || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
+
+# act (46 deps) — binary download
+_ACT_VER=$(_gh_latest_tag "nektos/act")
+if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
+  _go_binary_install "act" \
+    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" \
+    || true
+fi
+command -v act &>/dev/null && ok "act (exists)" \
+  || { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
+
+# ── Parallel go install for remaining tools ──────────────────────────────────
+# These are lighter tools — run them all in parallel with background jobs.
 declare -A GO_MAP=(
   ["dive"]="github.com/wagoodman/dive@latest"
   ["stern"]="github.com/stern/stern@latest"
   ["glow"]="github.com/charmbracelet/glow@latest"
   ["mkcert"]="filippo.io/mkcert@latest"
   ["task"]="github.com/go-task/task/v3/cmd/task@latest"
-  ["nuclei"]="github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
   ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
   ["usql"]="github.com/xo/usql@latest"
   ["grpcurl"]="github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
   ["actionlint"]="github.com/rhysd/actionlint/cmd/actionlint@latest"
-  ["osv-scanner"]="github.com/google/osv-scanner/cmd/osv-scanner@latest"
   ["hcloud"]="github.com/hetznercloud/cli/cmd/hcloud@latest"
-  ["sops"]="github.com/getsops/sops/v3/cmd/sops@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
-  ["gitleaks"]="github.com/zricethezav/gitleaks/v8@latest"
-  ["act"]="github.com/nektos/act@latest"
   ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
   ["gron"]="github.com/tomnomnom/gron@latest"
   ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
@@ -142,30 +285,38 @@ declare -A GO_MAP=(
   ["scc"]="github.com/boyter/scc/v3@latest"
 )
 
-GO_FAILED=()
+_GO_PIDS=()
+_GO_NAMES=()
+_GO_SKIPPED=0
+
 for name in "${!GO_MAP[@]}"; do
   if command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; then
     ok "$name (exists)"
+    ((_GO_SKIPPED++)) || true
   else
-    echo -n "  Installing $name..."
-    if run_q go install "${GO_MAP[$name]}"; then
-      echo -e " ${GREEN}✓${NC}"
-    else
-      # Retry once — go proxy connections can be flaky
-      sleep 2
-      if run_q go install "${GO_MAP[$name]}"; then
-        echo -e " ${GREEN}✓ (retry)${NC}"
-      else
-        GO_FAILED+=("$name")
-        echo -e " ${YELLOW}⚠ failed: go install ${GO_MAP[$name]}${NC}"
-      fi
-    fi
+    go install "${GO_MAP[$name]}" >>"$LOG_FILE" 2>&1 &
+    _GO_PIDS+=($!)
+    _GO_NAMES+=("$name")
+  fi
+done
+
+if [[ ${#_GO_PIDS[@]} -gt 0 ]]; then
+  echo "  Installing ${#_GO_PIDS[@]} Go tools in parallel..."
+fi
+
+GO_FAILED=()
+for _i in "${!_GO_PIDS[@]}"; do
+  if wait "${_GO_PIDS[$_i]}"; then
+    ok "${_GO_NAMES[$_i]}"
+  else
+    GO_FAILED+=("${_GO_NAMES[$_i]}")
+    warn "${_GO_NAMES[$_i]}"
   fi
 done
 
 if [ ${#GO_FAILED[@]} -gt 0 ]; then
   warn "${#GO_FAILED[@]} Go tool(s) failed (likely network): ${GO_FAILED[*]}"
-  echo "    Retry later: for t in ${GO_FAILED[*]}; do go install \${GO_MAP[\$t]}; done"
+  echo "    Retry: for t in ${GO_FAILED[*]}; do go install \${GO_MAP[\$t]}; done"
 fi
 
 # age — special case: go install cmd/... installs 'age' and 'age-keygen'
