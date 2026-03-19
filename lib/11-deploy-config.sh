@@ -385,8 +385,8 @@ ok "command: /tools"
 install -Dm644 "$REPO_FILES/dot-claude/commands/workspace-init.md" "$CLAUDE_DIR/commands/workspace-init.md"
 ok "command: /workspace-init"
 
-install -Dm644 "$REPO_FILES/dot-claude/commands/context.md" "$CLAUDE_DIR/commands/context.md"
-ok "command: /context"
+install -Dm644 "$REPO_FILES/dot-claude/commands/pack.md" "$CLAUDE_DIR/commands/pack.md"
+ok "command: /pack"
 
 # ─── GitHub Actions Template ───
 install -Dm644 "$REPO_FILES/dot-claude/templates/claude-code-action.yml" "$CLAUDE_DIR/templates/claude-code-action.yml"
