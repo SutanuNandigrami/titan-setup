@@ -1975,6 +1975,9 @@ ok "rule: security.md"
 install -Dm644 "$REPO_FILES/dot-claude/rules/memory.md" "$CLAUDE_DIR/rules/memory.md"
 ok "rule: memory.md"
 
+install -Dm644 "$REPO_FILES/dot-claude/rules/skill-authoring.md" "$CLAUDE_DIR/rules/skill-authoring.md"
+ok "rule: skill-authoring.md"
+
 # ─── /recall command ───
 install -Dm644 "$REPO_FILES/dot-claude/commands/recall.md" "$CLAUDE_DIR/commands/recall.md"
 ok "command: /recall"
