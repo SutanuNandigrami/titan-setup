@@ -1,7 +1,7 @@
 ---
 name: docker-security
 description: Container hardening, image security, and Docker best practices. Use when building, scanning, or securing containers and images.
-paths: ["**/Dockerfile*", "**/docker-compose*", "**/.dockerignore", "**/docker-compose.yml", "**/docker-compose.yaml", "**/docker-bake*"]
+paths: "**/Dockerfile*,**/docker-compose*,**/.dockerignore,**/docker-compose.yml,**/docker-compose.yaml,**/docker-bake*"
 ---
 
 # Docker Security

@@ -1,7 +1,7 @@
 ---
 name: git-workflow
 description: Git branching, commit, and PR conventions. Use when creating branches, making commits, or opening PRs.
-paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/*.md", "**/*.tf", "**/Dockerfile*"]
+paths: "**/*.py,**/*.js,**/*.ts,**/*.go,**/*.sh,**/*.rs,**/*.md,**/*.tf,**/Dockerfile*"
 ---
 # Git Workflow
 Branches: `feat/<desc>`, `fix/<desc>`, `chore/<desc>`, `docs/<desc>`

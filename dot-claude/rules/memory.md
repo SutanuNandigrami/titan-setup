@@ -1,5 +1,5 @@
 ---
-paths: ["**/*"]
+paths: "**/*"
 ---
 # Memory Discipline (Always Active)
 - When you discover a non-obvious fix after debugging: write it to auto memory

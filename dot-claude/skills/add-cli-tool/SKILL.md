@@ -1,7 +1,7 @@
 ---
 name: add-cli-tool
 description: Add a new CLI tool to the titan setup and make it usable immediately. Use when installing a new CLI tool, registering a tool in the setup script, updating the tool inventory, or when the user says "add tool", "new CLI tool", "register tool", "install X to titan". Also triggers on "I installed X", "add X to the setup", or any request to add a CLI tool to the workstation.
-paths: ["**/titan-setup.sh", "**/.claude/**", "**/CLAUDE.md"]
+paths: "**/titan-setup.sh,**/.claude/**,**/CLAUDE.md"
 ---
 
 # Add CLI Tool

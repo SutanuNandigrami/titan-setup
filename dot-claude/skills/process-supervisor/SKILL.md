@@ -9,7 +9,7 @@ triggers:
   - background service
   - auto restart
   - user unit
-paths: ["**/*.service", "**/*.timer", "**/systemd/**", "**/supervisord*"]
+paths: "**/*.service,**/*.timer,**/systemd/**,**/supervisord*"
 ---
 
 # Process Supervisor (systemd user units)

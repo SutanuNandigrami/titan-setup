@@ -1,7 +1,7 @@
 ---
 name: infra-deploy
 description: Infrastructure as Code workflows with Terraform, Ansible, Docker, and Kubernetes. Use when provisioning, configuring, deploying, or managing infrastructure.
-paths: ["**/*.tf", "**/*.tfvars", "**/*.hcl", "**/ansible*", "**/playbooks/**", "**/*.yaml", "**/*.yml", "**/k8s/**", "**/helm/**"]
+paths: "**/*.tf,**/*.tfvars,**/*.hcl,**/ansible*,**/playbooks/**,**/*.yaml,**/*.yml,**/k8s/**,**/helm/**"
 ---
 
 # Infrastructure Workflows

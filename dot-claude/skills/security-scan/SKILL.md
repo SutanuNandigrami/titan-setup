@@ -1,7 +1,7 @@
 ---
 name: security-scan
 description: Security scanning and vulnerability assessment workflows. Use when performing security audits, scanning for vulnerabilities, checking dependencies, or hardening systems.
-paths: ["**/*.py", "**/*.js", "**/*.go", "**/*.sh", "**/*.ts", "**/*.rs", "**/Dockerfile*", "**/requirements*.txt", "**/package.json", "**/*.tf"]
+paths: "**/*.py,**/*.js,**/*.go,**/*.sh,**/*.ts,**/*.rs,**/Dockerfile*,**/requirements*.txt,**/package.json,**/*.tf"
 ---
 
 # Security Scanning Workflows

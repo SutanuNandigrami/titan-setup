@@ -289,19 +289,19 @@ if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
     cp -r /tmp/superpowers/skills/writing-plans "$CLAUDE_DIR/skills/writing-plans" 2>/dev/null || true
     # Add paths scoping to large skills so they don't load on every session (bug #14882)
     if [ -f "$CLAUDE_DIR/skills/tdd/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/tdd/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.go", "**/*.rs", "**/*.java", "**/*.cpp", "**/*.c", "**/*.rb", "**/test*", "**/spec*", "**/*_test*", "**/*_spec*", "**/pytest.ini", "**/jest.config*", "**/go.mod"]' "$CLAUDE_DIR/skills/tdd/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.jsx,**/*.tsx,**/*.go,**/*.rs,**/*.java,**/*.cpp,**/*.c,**/*.rb,**/test*,**/spec*,**/*_test*,**/*_spec*,**/pytest.ini,**/jest.config*,**/go.mod"' "$CLAUDE_DIR/skills/tdd/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.go,**/*.rs,**/*.java,**/*.sh,**/*.bash,**/*.cpp,**/*.c,**/*.rb,**/Makefile,**/CMakeLists.txt"' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/brainstorming/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/brainstorming/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/*.spec.md", "**/brainstorm*"]' "$CLAUDE_DIR/skills/brainstorming/SKILL.md"
+      sed -i '3a paths: "**/_scratchpad*,**/_plan*,**/spec*,**/*.spec.md,**/brainstorm*"' "$CLAUDE_DIR/skills/brainstorming/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/test*", "**/spec*", "**/Makefile"]' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.go,**/*.sh,**/*.rs,**/test*,**/spec*,**/Makefile"' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/writing-plans/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/writing-plans/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/plan*", "**/*.spec.md"]' "$CLAUDE_DIR/skills/writing-plans/SKILL.md"
+      sed -i '3a paths: "**/_scratchpad*,**/_plan*,**/spec*,**/plan*,**/*.spec.md"' "$CLAUDE_DIR/skills/writing-plans/SKILL.md"
     fi
     ok "superpowers skills"
   else
@@ -318,7 +318,7 @@ if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
 if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
-  sed -i '3a paths: ["**/*.html", "**/*.htm", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.py", "**/routes*", "**/auth*", "**/views*", "**/controllers*", "**/api*", "**/nginx*", "**/Dockerfile*", "**/docker-compose*"]' "$CLAUDE_DIR/skills/vibesec/SKILL.md"
+  sed -i '3a paths: "**/*.html,**/*.htm,**/*.js,**/*.ts,**/*.jsx,**/*.tsx,**/*.vue,**/*.svelte,**/*.py,**/routes*,**/auth*,**/views*,**/controllers*,**/api*,**/nginx*,**/Dockerfile*,**/docker-compose*"' "$CLAUDE_DIR/skills/vibesec/SKILL.md"
 fi
 
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
@@ -337,12 +337,12 @@ else ok "trailofbits: modern-python (exists)"; fi
 # Also add paths scoping so it only loads for Python files
 if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] \
    && [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
-  sed '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+  sed '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" \
     > "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
   ok "trailofbits: SKILL.md fixed at root with paths scoping"
 elif [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" 2>/dev/null; then
-  sed -i '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+  sed -i '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
 fi
 # Remove duplicate nested SKILL.md — root copy has correct paths: scoping; nested is always-on (bug)

@@ -1,5 +1,5 @@
 ---
-paths: ["**/Dockerfile*", "**/docker-compose*", "**/compose.yaml", "**/compose.yml"]
+paths: "**/Dockerfile*,**/docker-compose*,**/compose.yaml,**/compose.yml"
 ---
 # Docker Rules
 - Lint with `hadolint` before building

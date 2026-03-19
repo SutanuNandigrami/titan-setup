@@ -1,5 +1,5 @@
 ---
-paths: ["**/*.sh", "**/*.bash", "**/justfile"]
+paths: "**/*.sh,**/*.bash,**/justfile"
 ---
 # Shell Rules
 - Start scripts with `set -euo pipefail`

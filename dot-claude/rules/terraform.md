@@ -1,5 +1,5 @@
 ---
-paths: ["**/*.tf", "**/*.tfvars", "**/*.hcl", "**/terraform/**"]
+paths: "**/*.tf,**/*.tfvars,**/*.hcl,**/terraform/**"
 ---
 # Terraform Rules
 - Always `terraform fmt` before commit

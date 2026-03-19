@@ -1,5 +1,5 @@
 ---
-paths: ["**/*"]
+paths: "**/*"
 ---
 # Security Rules (Always Active)
 - Run `gitleaks detect` before any `git push`

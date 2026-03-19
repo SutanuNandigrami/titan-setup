@@ -7,7 +7,7 @@ triggers:
   - run in parallel
   - background tasks
   - orchestrate
-paths: ["**/pueue*", "**/.pueue*", "**/*.task", "**/tasks/**"]
+paths: "**/pueue*,**/.pueue*,**/*.task,**/tasks/**"
 ---
 
 # Pueue Task Orchestrator

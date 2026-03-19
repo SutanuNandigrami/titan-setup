@@ -10,7 +10,7 @@ triggers:
   - visualize
   - erd
   - class diagram
-paths: ["**/*.md", "**/docs/**", "**/*.mermaid", "**/*.diagram", "**/*.drawio"]
+paths: "**/*.md,**/docs/**,**/*.mermaid,**/*.diagram,**/*.drawio"
 ---
 
 # Diagram Generation
