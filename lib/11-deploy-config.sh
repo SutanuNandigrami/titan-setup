@@ -13,7 +13,7 @@ if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE
   ok "Backed up existing config to $BACKUP"
 fi
 
-mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/nlm-cli,skills/docker-security,skills/ansible-ops,skills/incident-response,skills/terraform-security,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
+mkdir -p "$CLAUDE_DIR"/{skills/cli-tools,skills/security-scan,skills/git-workflow,skills/infra-deploy,skills/add-cli-tool/references,skills/tmux-control,skills/workspace,skills/pueue-orchestrator,skills/diagrams,skills/deploy,skills/process-supervisor,skills/docker-security,skills/vibesec,skills/trailofbits-modern-python,skills/notebooklm-skills,commands,agents,hooks,memory,rules,logs,templates,agent-stash/_loaded,agent-stash/agents}
 mkdir -p "$HOME/.config/agt"
 
 # ─── Repo files (static content loaded from git repo) ────────────────────────
@@ -216,29 +216,21 @@ ok "skill: deploy"
 install -Dm644 "$REPO_FILES/dot-claude/skills/process-supervisor/SKILL.md" "$CLAUDE_DIR/skills/process-supervisor/SKILL.md"
 ok "skill: process-supervisor"
 
-# ─── Skill: nlm-cli ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/nlm-cli/SKILL.md" "$CLAUDE_DIR/skills/nlm-cli/SKILL.md"
-ok "skill: nlm-cli"
-
 # ─── Skill: docker-security ───
 install -Dm644 "$REPO_FILES/dot-claude/skills/docker-security/SKILL.md" "$CLAUDE_DIR/skills/docker-security/SKILL.md"
 ok "skill: docker-security"
 
-# ─── Skill: ansible-ops ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/ansible-ops/SKILL.md" "$CLAUDE_DIR/skills/ansible-ops/SKILL.md"
-ok "skill: ansible-ops"
+# ─── Skill: vibesec ───
+install -Dm644 "$REPO_FILES/dot-claude/skills/vibesec/SKILL.md" "$CLAUDE_DIR/skills/vibesec/SKILL.md"
+ok "skill: vibesec"
 
-# ─── Skill: incident-response ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/incident-response/SKILL.md" "$CLAUDE_DIR/skills/incident-response/SKILL.md"
-ok "skill: incident-response"
+# ─── Skill: trailofbits-modern-python ───
+install -Dm644 "$REPO_FILES/dot-claude/skills/trailofbits-modern-python/SKILL.md" "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
+ok "skill: trailofbits-modern-python"
 
-# ─── Skill: terraform-security ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/terraform-security/SKILL.md" "$CLAUDE_DIR/skills/terraform-security/SKILL.md"
-ok "skill: terraform-security"
-
-# ─── Skill: shell-consistency ───
-install -Dm644 "$REPO_FILES/dot-claude/skills/shell-consistency/SKILL.md" "$CLAUDE_DIR/skills/shell-consistency/SKILL.md"
-ok "skill: shell-consistency"
+# ─── Skill: notebooklm-skills ───
+install -Dm644 "$REPO_FILES/dot-claude/skills/notebooklm-skills/SKILL.md" "$CLAUDE_DIR/skills/notebooklm-skills/SKILL.md"
+ok "skill: notebooklm-skills"
 
 # ─── Hook Scripts (Memory/Context Management) ───
 
