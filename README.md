@@ -19,7 +19,7 @@
 - [Context Budget](#context-budget)
 - [For New Projects](#for-new-projects)
 - [Troubleshooting](#troubleshooting)
-- [Developer Workflow](#developer-workflow)
+- [Contributing](#contributing)
 - [Changelog](#full-changelog)
 - [Tool Reference](#detailed-tool-reference)
 
@@ -257,53 +257,21 @@ Desktop only: `maim`, `xdotool`.
 
 ## Letta / Subconscious Memory
 
-Titan optionally installs [Letta](https://github.com/letta-ai/letta) — a persistent memory server that gives Claude long-term memory across sessions. The `claude-subconscious` plugin silently updates memory blocks between turns without interrupting your workflow.
+Titan optionally installs [Letta](https://github.com/letta-ai/letta) — a persistent memory server that gives Claude long-term memory across sessions via the `claude-subconscious` plugin.
 
-### Architecture
-
-```
-Claude Code ←→ claude-subconscious plugin
-                    ↓
-              Letta server (Docker, port 8283)
-                    ↓ embeddings
-              Ollama (nomic-embed-text, port 11434)
-                    ↓ LLM calls
-              better-ccflare (port 8080) → billing proxy (port 8081)
-```
-
-### Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| Ollama | 11434 | Local embedding model (`nomic-embed-text`) |
+| Service | Port | Purpose |
+|---------|------|---------|
 | Letta | 8283 | Memory server (Docker, bundles Postgres+pgvector) |
+| Ollama | 11434 | Local embeddings (`nomic-embed-text`) |
 | better-ccflare | 8080 | Claude load balancer proxy |
-| Billing proxy | 8081 | Header injection for OAuth accounts (fixes issue #89) |
-| LettaCtrl | 8284 | Web GUI for managing agents and memory blocks |
+| LettaCtrl | 8284 | Web GUI for agents and memory blocks |
 
-All services run as systemd user units and start at boot (`loginctl enable-linger`).
-
-### Credentials
-
-Stored at `~/.config/letta/credentials` (auto-generated on first run):
-- `LETTA_SERVER_PASSWORD` — API key for Letta server
-- `LETTA_BASE_URL` — http://127.0.0.1:8283
-
-### LettaCtrl GUI
-
-Web dashboard for managing Letta agents and memory blocks. Access at `http://localhost:8284` (or via Tailscale HTTPS on VPS). Uses the Letta API key from credentials file.
-
-### Skipping Letta
+All services run as systemd user units. Credentials are auto-generated at `~/.config/letta/credentials`.
 
 ```bash
-# Skip everything Letta-related
-./titan-setup.sh --letta-skip
-
-# Skip only Ollama (use OpenAI embeddings instead)
-./titan-setup.sh --no-ollama
-
-# Skip only the GUI
-./titan-setup.sh --letta-ctrl-skip
+./titan-setup.sh --letta-skip       # Skip Letta entirely
+./titan-setup.sh --no-ollama        # Skip Ollama only
+./titan-setup.sh --letta-ctrl-skip  # Skip GUI only
 ```
 
 ---
@@ -312,50 +280,13 @@ Web dashboard for managing Letta agents and memory blocks. Access at `http://loc
 
 VPS mode (`--mode vps`) adds server hardening, Tailscale networking, and service exposure on top of the standard workstation install.
 
-### Security Hardening
+**Hardening:** SSH password auth disabled, fail2ban, auditd, unattended-upgrades, APT repo allowlist, root account locked.
 
-| Layer | What |
-|-------|------|
-| SSH | Password auth disabled, root login disabled, MaxAuthTries 3 |
-| fail2ban | SSH brute-force protection (5 retries → 1h ban) |
-| auditd | Privilege escalation monitoring, passwd/sudoers watch |
-| unattended-upgrades | Security patches auto-applied (no auto-reboot) |
-| Repo supply chain guard | Allowlisted APT sources, insecure HTTP repos disabled |
-| Root lock | `passwd -l root` — root account locked |
+**Networking:** Tailscale (WireGuard) provides network-level isolation. SSH restricted to Tailscale IP. Services exposed via `tailscale serve` on HTTPS.
 
-### Tailscale Integration
+**Compliance:** Automated checks run at boot +5min and every 6h (`sudo /usr/local/bin/compliance_check.sh`).
 
-Tailscale provides network-level isolation via WireGuard. After install:
-- SSH is restricted to the Tailscale IP only (`ListenAddress` in sshd_config)
-- UFW is intentionally **not** enabled (conflicts with Tailscale routing)
-- Services are exposed on Tailscale HTTPS via `tailscale serve`
-
-### Exposed Services (VPS)
-
-| Service | Tailscale URL |
-|---------|--------------|
-| n8n | `https://<hostname>:5678` |
-| better-ccflare | `https://<hostname>:8080` |
-| Letta | `https://<hostname>:8283` |
-| LettaCtrl | `https://<hostname>:8284` |
-
-### Compliance Check
-
-A compliance check script runs at boot +5min and every 6h via systemd timer. Manually run:
-
-```bash
-sudo /usr/local/bin/compliance_check.sh
-```
-
-Checks: SSH hardening, fail2ban, auditd, unattended-upgrades, APT repo allowlist, root lock, Tailscale connectivity.
-
-### tmux Resilience
-
-The install runs inside a named `titan-setup` tmux session. If SSH drops:
-
-```bash
-tmux attach -t titan-setup
-```
+**SSH resilience:** Install runs in a `titan-setup` tmux session. Reconnect after drop: `tmux attach -t titan-setup`.
 
 ---
 
@@ -509,50 +440,9 @@ If still missing, re-run titan-setup — idempotent installs pick up whatever wa
 
 ---
 
-## Developer Workflow
+## Contributing
 
-Titan is built from modular shell fragments assembled at build time. **Never edit `titan-setup.sh` directly** — it is generated.
-
-### Source of Truth
-
-```
-lib/
-├── 00-header.sh          # Version, banner, colors
-├── 01-common.sh          # Helper functions (ok, warn, fail, run_q, section)
-├── 02-cli.sh             # CLI option parsing and usage()
-├── 03-vps-reexec.sh      # VPS user creation and re-exec
-├── 04-vps-harden.sh      # SSH, fail2ban, auditd, compliance
-├── 05-prerequisites.sh   # apt packages, build deps
-├── 06-package-managers.sh # Rust, uv, bun, Go, mise, Docker
-├── 07-tools-python-js.sh # Python/JS tools, n8n, playwright
-├── 08-tools-letta.sh     # Ollama, Letta, better-ccflare, billing proxy
-├── 09-tools-rust-go.sh   # Cargo crates, Go tools, binary installs
-├── 10-claude-code.sh     # Claude Code install + config
-├── 11-deploy-config.sh   # Deploy ~/.claude/ files from dot-claude/
-├── 12-plugins-install.sh # Plugin marketplace + installs
-├── 13-plugins-config.sh  # Plugin post-install config (subconscious, etc.)
-├── 14-plugins-letta-ctrl.sh # LettaCtrl GUI install
-├── 15-plugins-cleanup.sh # Plugin cache cleanup
-├── 16-shell-integration.sh # PATH exports, bashrc integration
-└── 17-finalize.sh        # Summary, compliance check, tmux cleanup
-```
-
-### Build & Test
-
-```bash
-just build       # Assemble lib/*.sh → titan-setup.sh
-just test        # Run 71 bats tests
-just lint        # shellcheck on all fragments
-just smoke       # Quick syntax check
-just check       # lint + test (CI runs this on every PR)
-```
-
-### Contributing
-
-1. Edit the relevant `lib/*.sh` fragment
-2. Run `just build` to regenerate `titan-setup.sh`
-3. Run `just check` to lint + test
-4. Commit both the fragment and the generated `titan-setup.sh`
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development workflow.
 
 ---
 
