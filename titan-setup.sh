@@ -2113,9 +2113,9 @@ ok "agent: planner"
 install -Dm644 "$REPO_FILES/dot-claude/agents/reviewer.md" "$CLAUDE_DIR/agents/reviewer.md"
 ok "agent: reviewer"
 
-# ─── On-Demand Agent Slots (slot-1..5) ───
-for _slot_i in 1 2 3 4 5; do
-  case $_slot_i in 1|2|3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
+# ─── On-Demand Agent Slots (slot-1..10) ───
+for _slot_i in 1 2 3 4 5 6 7 8 9 10; do
+  case $_slot_i in 1|2|3|6|7|8) _slot_model="haiku" ;; 4|9) _slot_model="sonnet" ;; 5|10) _slot_model="opus" ;; esac
   _slot_i="$_slot_i" _slot_model="$_slot_model" \
     envsubst '$_slot_i $_slot_model' \
     < "$REPO_FILES/dot-claude/agents/slot-template.md" \
