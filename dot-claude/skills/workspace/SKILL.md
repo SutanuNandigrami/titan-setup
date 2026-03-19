@@ -9,7 +9,7 @@ triggers:
   - how to deploy
   - envrc
   - project config
-paths: ["**/_workspace.json", "**/.envrc", "**/justfile", "**/Makefile", "**/package.json", "**/pyproject.toml"]
+paths: "**/_workspace.json,**/.envrc,**/justfile,**/Makefile,**/package.json,**/pyproject.toml"
 ---
 
 # Workspace Configuration

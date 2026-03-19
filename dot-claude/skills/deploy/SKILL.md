@@ -9,7 +9,7 @@ triggers:
   - deploy to docker
   - terraform apply
   - helm upgrade
-paths: ["**/Dockerfile*", "**/docker-compose*", "**/compose.y*ml", "**/*deploy*", "**/*.helm", "**/Chart.yaml", "**/fly.toml", "**/vercel.json"]
+paths: "**/Dockerfile*,**/docker-compose*,**/compose.y*ml,**/*deploy*,**/*.helm,**/Chart.yaml,**/fly.toml,**/vercel.json"
 ---
 
 # Deploy Skill

@@ -7,7 +7,7 @@ triggers:
   - monitor process
   - split pane
   - send keys
-paths: ["**/.tmux*", "**/tmux.conf", "**/*.tmux", "**/tmuxinator*"]
+paths: "**/.tmux*,**/tmux.conf,**/*.tmux,**/tmuxinator*"
 ---
 
 # tmux Control

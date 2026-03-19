@@ -657,18 +657,6 @@ git config --global pull.rebase true 2>/dev/null || true
 ok "Git defaults set (main branch, rebase pull)"
 
 
-# ─── Repo files (static content loaded from git repo) ────────────────────────
-# Cloned early so tools like RTK can use patches from the repo during Phase 3.
-REPO_FILES="${TITAN_REPO_FILES:-}"
-if [[ -z "$REPO_FILES" ]]; then
-  _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
-  ok "Fetching repo files..."
-  git clone --depth=1 --quiet \
-    https://github.com/SutanuNandigrami/claude-titan-setup.git \
-    "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
-  REPO_FILES="$_REPO_TMPDIR"
-  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
-fi
 section "Phase 2/6 — Package Managers"
 
 # ─── Rust / Cargo ───
@@ -785,6 +773,18 @@ if ! $LETTA_SKIP; then
   fi
 fi
 
+# ─── Repo files (static content loaded from git repo) ────────────────────────
+# Cloned early so tools like RTK can use patches from the repo during Phase 3.
+REPO_FILES="${TITAN_REPO_FILES:-}"
+if [[ -z "$REPO_FILES" ]]; then
+  _REPO_TMPDIR=$(mktemp -d -t titan-files-XXXXXX)
+  ok "Fetching repo files..."
+  git clone --depth=1 --quiet \
+    https://github.com/SutanuNandigrami/claude-titan-setup.git \
+    "$_REPO_TMPDIR" 2>&1 | tee -a "$LOG_FILE"
+  REPO_FILES="$_REPO_TMPDIR"
+  _CLEANUP_DIRS+=("$_REPO_TMPDIR")
+fi
 section "Phase 3/6 — 155+ CLI Tools"
 
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
@@ -1975,6 +1975,9 @@ ok "rule: security.md"
 install -Dm644 "$REPO_FILES/dot-claude/rules/memory.md" "$CLAUDE_DIR/rules/memory.md"
 ok "rule: memory.md"
 
+install -Dm644 "$REPO_FILES/dot-claude/rules/skill-authoring.md" "$CLAUDE_DIR/rules/skill-authoring.md"
+ok "rule: skill-authoring.md"
+
 # ─── /recall command ───
 install -Dm644 "$REPO_FILES/dot-claude/commands/recall.md" "$CLAUDE_DIR/commands/recall.md"
 ok "command: /recall"
@@ -1994,19 +1997,19 @@ if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
     cp -r /tmp/superpowers/skills/writing-plans "$CLAUDE_DIR/skills/writing-plans" 2>/dev/null || true
     # Add paths scoping to large skills so they don't load on every session (bug #14882)
     if [ -f "$CLAUDE_DIR/skills/tdd/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/tdd/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.go", "**/*.rs", "**/*.java", "**/*.cpp", "**/*.c", "**/*.rb", "**/test*", "**/spec*", "**/*_test*", "**/*_spec*", "**/pytest.ini", "**/jest.config*", "**/go.mod"]' "$CLAUDE_DIR/skills/tdd/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.jsx,**/*.tsx,**/*.go,**/*.rs,**/*.java,**/*.cpp,**/*.c,**/*.rb,**/test*,**/spec*,**/*_test*,**/*_spec*,**/pytest.ini,**/jest.config*,**/go.mod"' "$CLAUDE_DIR/skills/tdd/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.rs", "**/*.java", "**/*.sh", "**/*.bash", "**/*.cpp", "**/*.c", "**/*.rb", "**/Makefile", "**/CMakeLists.txt"]' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.go,**/*.rs,**/*.java,**/*.sh,**/*.bash,**/*.cpp,**/*.c,**/*.rb,**/Makefile,**/CMakeLists.txt"' "$CLAUDE_DIR/skills/systematic-debugging/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/brainstorming/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/brainstorming/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/*.spec.md", "**/brainstorm*"]' "$CLAUDE_DIR/skills/brainstorming/SKILL.md"
+      sed -i '3a paths: "**/_scratchpad*,**/_plan*,**/spec*,**/*.spec.md,**/brainstorm*"' "$CLAUDE_DIR/skills/brainstorming/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/*.py", "**/*.js", "**/*.ts", "**/*.go", "**/*.sh", "**/*.rs", "**/test*", "**/spec*", "**/Makefile"]' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md"
+      sed -i '3a paths: "**/*.py,**/*.js,**/*.ts,**/*.go,**/*.sh,**/*.rs,**/test*,**/spec*,**/Makefile"' "$CLAUDE_DIR/skills/verification-before-completion/SKILL.md"
     fi
     if [ -f "$CLAUDE_DIR/skills/writing-plans/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/writing-plans/SKILL.md" 2>/dev/null; then
-      sed -i '3a paths: ["**/_scratchpad*", "**/_plan*", "**/spec*", "**/plan*", "**/*.spec.md"]' "$CLAUDE_DIR/skills/writing-plans/SKILL.md"
+      sed -i '3a paths: "**/_scratchpad*,**/_plan*,**/spec*,**/plan*,**/*.spec.md"' "$CLAUDE_DIR/skills/writing-plans/SKILL.md"
     fi
     ok "superpowers skills"
   else
@@ -2023,7 +2026,7 @@ if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
 if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
-  sed -i '3a paths: ["**/*.html", "**/*.htm", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.py", "**/routes*", "**/auth*", "**/views*", "**/controllers*", "**/api*", "**/nginx*", "**/Dockerfile*", "**/docker-compose*"]' "$CLAUDE_DIR/skills/vibesec/SKILL.md"
+  sed -i '3a paths: "**/*.html,**/*.htm,**/*.js,**/*.ts,**/*.jsx,**/*.tsx,**/*.vue,**/*.svelte,**/*.py,**/routes*,**/auth*,**/views*,**/controllers*,**/api*,**/nginx*,**/Dockerfile*,**/docker-compose*"' "$CLAUDE_DIR/skills/vibesec/SKILL.md"
 fi
 
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
@@ -2042,12 +2045,12 @@ else ok "trailofbits: modern-python (exists)"; fi
 # Also add paths scoping so it only loads for Python files
 if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] \
    && [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
-  sed '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+  sed '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" \
     > "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
   ok "trailofbits: SKILL.md fixed at root with paths scoping"
 elif [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" 2>/dev/null; then
-  sed -i '3a paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/setup.cfg", "**/requirements*.txt", "**/.python-version", "**/uv.lock", "**/Pipfile*"]' \
+  sed -i '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
 fi
 # Remove duplicate nested SKILL.md — root copy has correct paths: scoping; nested is always-on (bug)
@@ -2090,8 +2093,8 @@ ok "command: /tools"
 install -Dm644 "$REPO_FILES/dot-claude/commands/workspace-init.md" "$CLAUDE_DIR/commands/workspace-init.md"
 ok "command: /workspace-init"
 
-install -Dm644 "$REPO_FILES/dot-claude/commands/context.md" "$CLAUDE_DIR/commands/context.md"
-ok "command: /context"
+install -Dm644 "$REPO_FILES/dot-claude/commands/pack.md" "$CLAUDE_DIR/commands/pack.md"
+ok "command: /pack"
 
 # ─── GitHub Actions Template ───
 install -Dm644 "$REPO_FILES/dot-claude/templates/claude-code-action.yml" "$CLAUDE_DIR/templates/claude-code-action.yml"
@@ -2184,10 +2187,28 @@ else
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
   claude plugin install skill-creator 2>/dev/null && ok "skill-creator" || warn "skill-creator"
 
+  # playwright MCP — Microsoft's official browser automation MCP server (@playwright/mcp)
+  # Provides 22 deferred tools (browser_navigate, browser_click, browser_snapshot, etc.)
+  # Uses ref-based accessibility tree for deterministic element targeting — no fragile CSS selectors
+  # Requires playwright + chromium (already installed via bun in Phase 4)
+  # Token cost: ~300 tokens at startup (deferred tool names), ~2.7K when tools are fetched on first use
+  # NOTE: Do NOT remove — this is intentionally an MCP plugin, not a CLI replacement.
+  # Playwright CLI (installed in lib/07) handles E2E testing; MCP plugin handles AI-driven browser automation.
+  claude plugin install playwright 2>/dev/null && ok "playwright MCP" || warn "playwright MCP"
+
   # semgrep plugin — only if token was provided
   if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
     if claude plugin install semgrep 2>/dev/null; then
       ok "semgrep plugin"
+      # Remove semgrep's UserPromptSubmit hook — injects ~500 tokens of static
+      # "Secure-by-Default Libraries" text on EVERY prompt. Wasteful and errors out.
+      # Keep PostToolUse (scan on edit) and SessionStart (one-time defaults).
+      _sg_hooks=$(find "$HOME/.claude/plugins/cache" -path "*/semgrep/*/hooks/hooks.json" 2>/dev/null | head -1)
+      if [[ -n "$_sg_hooks" ]] && jq -e '.hooks.UserPromptSubmit' "$_sg_hooks" &>/dev/null; then
+        jq 'del(.hooks.UserPromptSubmit)' "$_sg_hooks" > "${_sg_hooks}.tmp" \
+          && mv "${_sg_hooks}.tmp" "$_sg_hooks" \
+          && ok "semgrep: removed UserPromptSubmit hook (~500 tokens/prompt saved)"
+      fi
       # Patch semgrep hooks.json to guard against non-git-repo dirs
       # semgrep ci requires a git root; without this guard, every Write/Edit outside a repo fails
       _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)

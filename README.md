@@ -129,7 +129,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    ```bash
    claude plugin list
    ```
-   Titan installs: `hookify` · `code-review` · `skill-creator` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `cozempic` · `semgrep` (if token provided)
+   Titan installs: `hookify` · `code-review` · `skill-creator` · `playwright` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `cozempic` · `semgrep` (if token provided)
 
 5. **Quick sanity check:**
    ```bash
@@ -247,7 +247,7 @@ Desktop only: `maim`, `xdotool`.
 | Component | Count | Description |
 |-----------|-------|-------------|
 | Skills | 15 | Trimmed, self-contained (vibesec, cli-tools, modern-python, security-scan, etc.) |
-| Plugins (MCP) | 5–7 | hookify, code-review, skill-creator, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
+| Plugins (MCP) | 6–8 | hookify, code-review, skill-creator, playwright, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 6 | Trigger on file type (Python, shell, terraform, docker, security) |
 | Slash commands | 12 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
@@ -372,7 +372,7 @@ claude auth login
 Then install plugins:
 ```bash
 claude plugin marketplace add anthropic/claude-plugins-official
-claude plugin install hookify code-review skill-creator
+claude plugin install hookify code-review skill-creator playwright
 claude plugin marketplace add obra/superpowers-marketplace
 claude plugin install episodic-memory
 # semgrep — only if you have a token from semgrep.dev
@@ -486,6 +486,7 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | *hookify* (official plugin) | Visual hook configuration and management |
 | *code-review* (official plugin) | PR review subagent with structured review |
 | *skill-creator* (official plugin) | Interactive skill authoring |
+| *playwright* (official plugin) | Microsoft's browser automation MCP — 22 deferred tools, ref-based accessibility targeting |
 | *episodic-memory* (community plugin) | Semantic search over past conversations |
 | *semgrep* (official plugin) | Inline SAST findings (requires Semgrep CLI + token) |
 

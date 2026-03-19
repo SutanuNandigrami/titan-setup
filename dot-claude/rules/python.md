@@ -1,5 +1,5 @@
 ---
-paths: ["**/*.py", "**/pyproject.toml", "**/setup.py", "**/requirements*.txt"]
+paths: "**/*.py,**/pyproject.toml,**/setup.py,**/requirements*.txt"
 ---
 # Python Rules
 - Use type hints on all function signatures

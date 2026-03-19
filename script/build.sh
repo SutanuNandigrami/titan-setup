@@ -17,7 +17,7 @@ if [[ ! -d "$LIB_DIR" ]]; then
 fi
 
 # Collect fragments in order
-mapfile -t FRAGMENTS < <(find "$LIB_DIR" -maxdepth 1 -name '*.sh' | sort)
+mapfile -t FRAGMENTS < <(find "$LIB_DIR" -maxdepth 1 -name '*.sh' | LC_ALL=C sort)
 
 if [[ ${#FRAGMENTS[@]} -eq 0 ]]; then
   echo "ERROR: no .sh files found in $LIB_DIR" >&2
