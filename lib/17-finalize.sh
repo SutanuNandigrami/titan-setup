@@ -29,6 +29,13 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     fi
   fi
 
+  # ── Apply deferred SSH hardening ────────────────────────────────────
+  # Config was written in lib/04-vps-harden.sh but sshd reload was deferred
+  # until Tailscale SSH provides alternative access (--ssh flag above).
+  # Now that Tailscale is up, reload sshd to enforce password auth disable.
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+  ok "SSH hardening applied (sshd reloaded — password auth now enforced)"
+
   if [[ "${_TAILSCALE_FAILED:-}" != "true" ]]; then
     # Get MagicDNS hostname for service URLs
     TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')

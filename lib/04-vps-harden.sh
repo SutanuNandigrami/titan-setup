@@ -23,8 +23,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
-  # ── SSH hardening ──────────────────────────────────────────────────────
-  # Patch main config AND drop-in dir (e.g. Hetzner's 50-cloud-init.conf overrides main)
+  # ── SSH hardening (config only — reload deferred to finalize) ─────────
+  # Write hardened config NOW but do NOT reload sshd yet.
+  # Reloading here locks out password-based SSH before Tailscale provides
+  # alternative access. The sshd reload happens in lib/17-finalize.sh
+  # after Tailscale SSH is confirmed working.
   sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
   sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
   sudo sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
@@ -33,8 +36,9 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$_dropin"
     sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$_dropin"
   done
-  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
-  ok "SSH hardened (password auth off, root login disabled, MaxAuthTries 3)"
+  # NOTE: sshd reload intentionally NOT done here — deferred to lib/17-finalize.sh
+  ok "SSH config written (password auth off, root login disabled, MaxAuthTries 3)"
+  ok "  sshd reload deferred until Tailscale SSH is verified"
 
   # ── UFW — NOT used (Tailscale handles network isolation) ─────────────
   # UFW conflicts with Tailscale routing. Tailscale provides network-level
