@@ -65,7 +65,7 @@ fi
 if command -v cc-patch-thinking >/dev/null 2>&1; then
   _patch_rc=0
   cc-patch-thinking --check 2>/dev/null || _patch_rc=$?
-  case  in
+  case $_patch_rc in
     0) ;; # already patched
     1) cc-patch-thinking 2>&1 | while read -r line; do echo "[Patch] $line" >&2; done ;;
     2) echo "[Patch] cc-patch-thinking: unknown CC version — may need patcher update" >&2 ;;
