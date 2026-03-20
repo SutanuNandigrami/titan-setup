@@ -8,3 +8,4 @@ vendor/
 
 # Superpowers runtime artifacts
 .superpowers/
+*.pyc

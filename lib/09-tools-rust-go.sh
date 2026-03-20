@@ -31,13 +31,17 @@ if [[ ! -f "$HOME/.cargo/binstall.toml" ]]; then
   printf '[telemetry]\nenabled = false\n' >"$HOME/.cargo/binstall.toml"
 fi
 
+# Core cargo crates (always installed)
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat xsv htmlq
   git-absorb git-delta difftastic typos-cli
-  websocat bore-cli procs hyperfine
-  pueue watchexec-cli just choose
-  xh ouch hurl jwt-cli oha
+  procs hyperfine pueue watchexec-cli just choose
+  xh ouch
 )
+# Extended cargo crates (skipped with --minimal)
+if ! $MINIMAL; then
+  CARGO_CRATES+=(websocat bore-cli hurl jwt-cli oha)
+fi
 
 # ── Parallel strategy: start RTK clone+patch while binstall runs ──────────
 # RTK needs source build (patched); start clone in background, compile after binstall finishes.
@@ -288,26 +292,32 @@ command -v act &>/dev/null && ok "act (exists)" ||
 
 # ── Parallel go install for remaining tools ──────────────────────────────────
 # These are lighter tools — run them all in parallel with background jobs.
+# Core Go tools (always installed)
 declare -A GO_MAP=(
   ["dive"]="github.com/wagoodman/dive@latest"
   ["stern"]="github.com/stern/stern@latest"
   ["glow"]="github.com/charmbracelet/glow@latest"
-  ["mkcert"]="filippo.io/mkcert@latest"
   ["task"]="github.com/go-task/task/v3/cmd/task@latest"
-  ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
   ["usql"]="github.com/xo/usql@latest"
-  ["grpcurl"]="github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
   ["actionlint"]="github.com/rhysd/actionlint/cmd/actionlint@latest"
   ["hcloud"]="github.com/hetznercloud/cli/cmd/hcloud@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
-  ["gron"]="github.com/tomnomnom/gron@latest"
-  ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
-  ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-  ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
-  ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
   ["scc"]="github.com/boyter/scc/v3@latest"
 )
+# Extended Go tools (skipped with --minimal)
+if ! $MINIMAL; then
+  GO_MAP+=(
+    ["mkcert"]="filippo.io/mkcert@latest"
+    ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
+    ["grpcurl"]="github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
+    ["gron"]="github.com/tomnomnom/gron@latest"
+    ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+    ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+    ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
+  )
+fi
 
 _GO_PIDS=()
 _GO_NAMES=()
@@ -535,3 +545,17 @@ if [[ "$ARCH_AMD" == "amd64" ]]; then
       ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
 else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
+
+# ── Wait for background uv tools + show results ──────────────────────────
+if [[ -n "${_UV_PID:-}" ]]; then
+  echo -e "\n  ${CYAN}Background uv tools results:${NC}"
+  wait "$_UV_PID" 2>/dev/null || true
+  while IFS='=' read -r status tool; do
+    case "$status" in
+      UV_OK) ok "$tool (already installed)" ;;
+      UV_INSTALLED) ok "$tool" ;;
+      UV_FAIL) warn "$tool (uv install failed)" ;;
+      UV_UPGRADE) [[ "$tool" == "ok" ]] && ok "uv tool upgrade --all" || warn "uv tool upgrade failed" ;;
+    esac
+  done <"$_PHASE3_UV_LOG"
+fi
