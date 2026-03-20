@@ -2164,11 +2164,8 @@ ok "rule: terraform.md"
 install -Dm644 "$REPO_FILES/dot-claude/rules/docker.md" "$CLAUDE_DIR/rules/docker.md"
 ok "rule: docker.md"
 
-install -Dm644 "$REPO_FILES/dot-claude/rules/security.md" "$CLAUDE_DIR/rules/security.md"
-ok "rule: security.md"
-
-install -Dm644 "$REPO_FILES/dot-claude/rules/memory.md" "$CLAUDE_DIR/rules/memory.md"
-ok "rule: memory.md"
+# security.md and memory.md removed — content already in global CLAUDE.md
+rm -f "$CLAUDE_DIR/rules/security.md" "$CLAUDE_DIR/rules/memory.md"
 
 install -Dm644 "$REPO_FILES/dot-claude/rules/skill-authoring.md" "$CLAUDE_DIR/rules/skill-authoring.md"
 ok "rule: skill-authoring.md"
@@ -2308,15 +2305,17 @@ ok "agent: planner"
 install -Dm644 "$REPO_FILES/dot-claude/agents/reviewer.md" "$CLAUDE_DIR/agents/reviewer.md"
 ok "agent: reviewer"
 
-# ─── On-Demand Agent Slots (slot-1..10) ───
-for _slot_i in 1 2 3 4 5 6 7 8 9 10; do
-  case $_slot_i in 1|2|3|6|7|8) _slot_model="haiku" ;; 4|9) _slot_model="sonnet" ;; 5|10) _slot_model="opus" ;; esac
+# ─── On-Demand Agent Slots (slot-1..5) ───
+for _slot_i in 1 2 3 4 5; do
+  case $_slot_i in 1|2|3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
   _slot_i="$_slot_i" _slot_model="$_slot_model" \
     envsubst '$_slot_i $_slot_model' \
     < "$REPO_FILES/dot-claude/agents/slot-template.md" \
     > "$CLAUDE_DIR/agents/slot-${_slot_i}.md"
   ok "agent: slot-${_slot_i} [${_slot_model}]"
 done
+# Clean up stale slots from previous installs (was 10, now 5)
+rm -f "$CLAUDE_DIR/agents"/slot-{6,7,8,9,10}.md
 unset _slot_i _slot_model
 
 # ─── agt config ───
