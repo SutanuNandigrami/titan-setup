@@ -7,8 +7,8 @@ setup() {
 
 # ── dot-claude required files ──────────────────────────────────────────────
 
-@test "dot-claude/CLAUDE.md exists" {
-  assert [ -f "$REPO/dot-claude/CLAUDE.md" ]
+@test "dot-claude/CLAUDE.md.tmpl exists" {
+  assert [ -f "$REPO/dot-claude/CLAUDE.md.tmpl" ]
 }
 
 @test "dot-claude/settings.json exists" {
