@@ -28,13 +28,13 @@
 
 ## What Does This Do?
 
-Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **125+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
+Titan is a single bash script that transforms a fresh Ubuntu system into a complete AI development workstation with **150+ CLI tools**, **Claude Code configuration**, **security hardening** (VPS mode), and **automated workflows**.
 
 In plain English:
 
 | What | How |
 |------|-----|
-| Installs 125+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
+| Installs 150+ tools | Python, Node, Rust, Go, Docker, Kubernetes tools, security scanners, terminal enhancers |
 | Configures Claude Code | Sets up `~/.claude/` with hooks, skills, commands, agents, and token optimization |
 | Adds smart safety | Permission rules, destructive command blocks, file guards, git protections |
 | Runs idempotently | Safe to re-run — existing tools are skipped, missing ones are installed |
@@ -79,6 +79,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | `--semgrep-token TOKEN` | Add Semgrep token for security scanning |
 | `--no-semgrep` | Skip Semgrep setup (no prompt) |
 | `--no-cozempic` | Skip cozempic context cleaner install |
+| `--force-updates` | Force upgrade all tools (uv, bun, cargo, go, binaries) |
 | `--dry-run` | Preview what will happen without making changes |
 | `-v`, `--verbose` | Log all output to `/tmp/titan-setup-<timestamp>.log` |
 | `--version` | Show Titan version |

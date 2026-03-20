@@ -6,6 +6,45 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ---
 
+### v3.19 — Idempotency overhaul, atomic settings merge, desktop bug fixes
+
+**Idempotency (Phase 2 — settings.json atomic merge):**
+- New `script/merge-settings.py`: replaces `install -Dm644` clobber + 6 sequential `jq` calls with single atomic Python merge
+- Strategy: "Replace what we own, merge what we share, preserve what's theirs"
+- Titan-managed keys always win, runtime-injected keys set via `--inject`, user-owned keys never overwritten
+- `enabledPlugins` union merge: titan + user plugins both preserved
+- `model` key is now user-owned: `/model` changes persist across re-runs (fresh installs get `opusplan`)
+- Atomic write via temp file + `os.rename()` — safe even if CC is running
+- Fallback: if merge fails, falls back to template overwrite
+
+**Phase 3 — `--force-updates` flag + cleanup:**
+- New `--force-updates` CLI flag: upgrades all tools instead of skip-if-exists default
+  - UV: `uv tool upgrade --all`
+  - Bun: `bun install -g` for all tools
+  - Cargo: bypasses version check, triggers reinstall via binstall/compile
+  - Go: bypasses binary existence check, re-downloads latest
+- Claude Code: removed skip guard — always runs installer (it's idempotent)
+- Targeted cleanup block: removes stale hookify plugin cache, renamed skills
+- Running CC detection: warns before config changes
+
+**Desktop bug fixes (Phase 1):**
+- `agt build-index`: fixed xargs quoting error (deployed repo version with `sed` instead of `xargs`)
+- CLI tool count: "155+" → "150+" in header, section title, and summary
+- ccstatusline: auto-detects if installed, sets as statusLine command; else falls back to statusline-command.sh
+- Removed `xdg-open` auto-opening of services (security risk) — prints URLs instead
+- n8n: prints first-run setup info (no default password, first visitor becomes owner)
+- Letta: prints API key from credentials file on screen (both VPS and desktop)
+- letta-ctrl: prints auth token from ctrl-token file on screen
+
+**cc-patch-thinking fix:**
+- Uses atomic `os.rename()` instead of direct write — fixes "Text file busy" when CC is running
+- SessionStart hook now successfully auto-patches on every startup
+
+**Architecture Decision Records:**
+- New `docs/decisions.md` with 10 ADRs: CLI-over-MCP, telemetry env vars, opusplan, hook pipefail, hookify removal, settings.json merge, skip-if-exists, selective skills, agent teams, idempotency categories
+
+---
+
 ### v3.18 — GitHub Action security hardening, documentation overhaul
 
 **GitHub Action security:**
