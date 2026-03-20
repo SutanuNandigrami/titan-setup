@@ -210,6 +210,10 @@ while [[ $# -gt 0 ]]; do
       FORCE_UPDATES=true
       shift
       ;;
+    --fresh)
+      phase_reset
+      shift
+      ;;
     --version)
       echo "titan-setup ${SCRIPT_VERSION}"
       exit 0

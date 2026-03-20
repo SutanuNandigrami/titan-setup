@@ -99,6 +99,7 @@ else
 fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
+check_port 5678 "n8n" || true
 if command -v docker &>/dev/null; then
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
@@ -128,7 +129,8 @@ if command -v docker &>/dev/null; then
   cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
 [Unit]
 Description=n8n workflow automation
-After=default.target
+After=docker.service default.target
+Wants=docker.service
 
 [Service]
 Type=simple
@@ -137,6 +139,9 @@ ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/h
 ExecStop=${DOCKER_BIN} stop n8n
 Restart=on-failure
 RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=512M
 
 [Install]
 WantedBy=default.target

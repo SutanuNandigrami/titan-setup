@@ -105,3 +105,21 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: Go installation deleted `/usr/local/go` before extracting the new tar. If extraction failed (disk full, corrupted download), the system was left without Go and no recovery path.
 **Decision**: Extract/build to a temp location first, then atomic swap (rm old + mv new). Applied to: Go installation, settings.json merge, binary downloads.
 **Consequences**: System state is never left broken mid-operation. Trade-off: requires temp disk space for the new version alongside the old one during swap.
+
+## ADR-018: Service systemd dependencies and resource limits (2026-03-20)
+**Status**: Accepted
+**Context**: Docker-based services (n8n, Letta) had no `After=docker.service` dependency — they'd fail on reboot if Docker wasn't ready. No `MemoryMax` limits meant services could OOM-kill each other on 2-4GB VPS. No journald limits meant logs could fill disk in days.
+**Decision**: All Docker-based services declare `After=docker.service Wants=docker.service`. Resource limits: n8n 512MB, Letta 1GB, ccflare 256MB. Journald: 500MB SystemMaxUse, 7-day retention. All services get `StartLimitBurst=5` to prevent infinite restart loops.
+**Consequences**: Services start in correct order after reboot. OOM kills are directed at the service exceeding its limit, not random. Disk usage is bounded. Trade-off: services may be killed if they legitimately need more RAM (user can override via systemd drop-in).
+
+## ADR-019: Network binding — never 0.0.0.0 for internal proxies (2026-03-20)
+**Status**: Accepted
+**Context**: ccflare-billing-proxy was binding to `0.0.0.0:8081` to allow Docker containers to reach it. This exposed an unauthenticated API proxy to the entire network — anyone could POST to `/v1/messages` and consume Anthropic API quota.
+**Decision**: Internal proxies bind to Docker bridge IP (`172.17.0.1`) instead of `0.0.0.0`. Docker containers access via `host.docker.internal` which resolves to the bridge IP. Only services explicitly designed for external access (none currently) may bind to `0.0.0.0`.
+**Consequences**: Proxy is unreachable from external network. Docker containers still reach it via bridge. Trade-off: if Docker bridge IP changes (non-default config), the proxy becomes unreachable — user must update systemd env.
+
+## ADR-020: Phase checkpoints for resume capability (2026-03-20)
+**Status**: Accepted
+**Context**: Install takes 45-80 minutes. If it fails at Phase 3 and user re-runs, Phases 1-2 re-execute unnecessarily (5-20 minutes wasted). No state tracking existed.
+**Decision**: Write marker files to `~/.titan-progress/<phase>` after each phase completes. On re-run, skip completed phases unless `--force-updates` or `--fresh` is passed. Phase 1 (prerequisites) and Phase 2 (package managers) get checkpoints. Phase 3+ always runs (tool installs are already idempotent via `command -v` checks).
+**Consequences**: Re-runs after Phase 3 failure skip 5-20 minutes of redundant work. `--fresh` resets all checkpoints for clean re-install. Trade-off: if system state changes between runs (e.g., apt sources modified), stale checkpoint may skip needed updates — `--fresh` resolves this.
