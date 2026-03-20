@@ -16,11 +16,11 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: Remove all three keys from settings.json entirely. Do not set them to any value.
 **Consequences**: Remote-control and voice features work. Telemetry runs (acceptable trade-off). `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is not even a real CC env var — it was cargo-culted from community configs.
 
-## ADR-003: opusplan model config (2026-03-14)
-**Status**: Accepted
-**Context**: `opusplan` is a valid Claude Code model alias (documented at docs.anthropic.com/claude-code/model-config). It uses Opus in plan mode (Shift+Tab) and Sonnet for execution. v3.13 mistakenly changed it to `claude-sonnet-4-6`.
-**Decision**: Keep `"model": "opusplan"` in settings.json. Do not change to plain sonnet.
-**Consequences**: Plan mode uses Opus (higher quality planning), execution uses Sonnet (faster, cheaper). Known bug #27183: occasionally routes all turns to Opus (exception, not rule).
+## ADR-003: opusplan model config — user-owned key (2026-03-14, updated 2026-03-20)
+**Status**: Accepted (revised)
+**Context**: `opusplan` is a valid Claude Code model alias. It uses Opus in plan mode (Shift+Tab) and Sonnet for execution. v3.13 mistakenly changed it to `claude-sonnet-4-6`. Additionally, `/model` menu in CC overwrites the model key — and there's no way to type `opusplan` back via the menu.
+**Decision**: `model` is user-owned, not titan-managed. Fresh installs get `opusplan` from template. If the user changes model via `/model`, their choice persists across re-runs. To restore opusplan: edit settings.json manually.
+**Consequences**: Users who switch models don't get silently overridden on next titan run. Trade-off: if opusplan was accidentally changed, it won't auto-restore.
 
 ## ADR-004: No pipefail in CC hooks (2026-03-18)
 **Status**: Accepted
