@@ -103,13 +103,7 @@ elif [[ "$INSTALL_MODE" == "vps" ]]; then
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 fi
 
-# ── Desktop: open dashboards silently ──────────────────────────────────────
-if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-  if command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:5678" 2>/dev/null & disown
-    ! $CCFLARE_SKIP && { xdg-open "http://localhost:${CCFLARE_PORT}" 2>/dev/null & disown; } || true
-  fi
-fi
+# ── Desktop: print service URLs (do NOT auto-open — security risk) ────────
 
 section "Setup Complete"
 
@@ -118,7 +112,7 @@ echo -e "
 
   ${CYAN}Installed:${NC}
     Package managers: uv, bun, cargo, go, mise
-    CLI tools:        ~155+ across all managers
+    CLI tools:        ~150+ across all managers
     Claude Code:      native binary
     Config:           ~/.claude/ (skills, hooks, commands, agents)
     Log:              $LOG_FILE
@@ -134,6 +128,16 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   $LETTA_SKIP   || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
+  echo ""
+  if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
+    _LETTA_DISP_KEY=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
+    echo -e "  ${CYAN}Letta credentials:${NC}
+    API key:      ${_LETTA_DISP_KEY}"
+  fi
+  if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/ctrl-token" ]]; then
+    echo -e "  ${CYAN}LettaCtrl token:${NC}
+    Token:        $(tr -d '[:space:]' < "$HOME/.config/letta/ctrl-token")"
+  fi
   echo ""
   echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
   echo ""
@@ -152,6 +156,38 @@ else
   $LETTA_SKIP   || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
   echo ""
+
+  # ── B8: n8n default credentials ──
+  echo -e "  ${CYAN}n8n credentials (first-run setup):${NC}
+    Open http://localhost:5678 and create your owner account.
+    n8n has no default password — first visitor becomes owner."
+
+  # ── B9: Letta API key ──
+  if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
+    _LETTA_DISP_KEY=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
+    echo -e "
+  ${CYAN}Letta subconscious memory:${NC}
+    API key:      ${_LETTA_DISP_KEY}
+    Base URL:     http://127.0.0.1:${LETTA_PORT}
+    Credentials:  cat ~/.config/letta/credentials
+    Logs:         journalctl --user -u letta -f
+    Verify:       curl -sf -H \"Authorization: Bearer ${_LETTA_DISP_KEY}\" http://127.0.0.1:${LETTA_PORT}/v1/agents | jq '.[] | .name'"
+  fi
+
+  # ── B10: letta-ctrl token ──
+  if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP; then
+    _CTRL_TOKEN_FILE="$HOME/.config/letta/ctrl-token"
+    if [[ -f "$_CTRL_TOKEN_FILE" ]]; then
+      _CTRL_TOKEN=$(cat "$_CTRL_TOKEN_FILE" | tr -d '[:space:]')
+      echo -e "
+  ${CYAN}LettaCtrl GUI:${NC}
+    URL:          http://localhost:${LETTA_CTRL_PORT}
+    Auth token:   ${_CTRL_TOKEN}
+    The frontend prompts for this token on first load."
+    fi
+  fi
+
+  echo ""
   echo -e "  ${CYAN}Next steps:${NC}
     source ~/.bashrc
     claude auth login
@@ -160,14 +196,6 @@ else
     cd <your-project>
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
-  if ! $LETTA_SKIP; then
-    echo -e "
-  ${CYAN}Letta subconscious memory:${NC}
-    Auto-starts on first Claude Code session (agent created automatically)
-    Credentials:  cat ~/.config/letta/credentials
-    Logs:         journalctl --user -u letta -f
-    Verify:       source ~/.config/letta/credentials && curl -s -H \"Authorization: Bearer \$LETTA_API_KEY\" http://127.0.0.1:${LETTA_PORT}/v1/agents | jq"
-  fi
 fi
 
 echo -e "

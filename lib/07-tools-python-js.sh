@@ -1,4 +1,4 @@
-section "Phase 3/6 — 155+ CLI Tools"
+section "Phase 3/6 — 150+ CLI Tools"
 
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
 echo -e "  ${CYAN}Python tools (uv):${NC}"

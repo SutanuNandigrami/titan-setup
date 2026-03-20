@@ -243,7 +243,15 @@ ok "hook: prompt-memory-inject.sh"
 
 # ─── Status Line Script ───
 install -Dm755 "$REPO_FILES/dot-claude/statusline-command.sh" "$CLAUDE_DIR/statusline-command.sh"
-ok "statusline-command.sh"
+# If ccstatusline is installed, use it directly; else fall back to statusline-command.sh
+if command -v ccstatusline &>/dev/null; then
+  jq '.statusLine = {"type": "command", "command": "ccstatusline", "padding": 0}' \
+    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
+    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+  ok "statusline: ccstatusline (native)"
+else
+  ok "statusline: statusline-command.sh (fallback)"
+fi
 
 # ─── .claudeignore Template ───
 

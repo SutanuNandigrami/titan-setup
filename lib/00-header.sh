@@ -26,7 +26,7 @@ fi
 # ║  What this does:                                                 ║
 # ║   1. System prerequisites + Linux tuning                        ║
 # ║   2. Package managers: uv, bun, cargo, go, mise                ║
-# ║   3. 155+ CLI tools (zero pip, zero npm -g)                    ║
+# ║   3. 150+ CLI tools (zero pip, zero npm -g)                    ║
 # ║   4. Claude Code CLI (native binary)                            ║
 # ║   5. ~/.claude/ global config (skills, hooks, commands, agents) ║
 # ║   6. Shell integration + verification                           ║
