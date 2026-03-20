@@ -18,6 +18,11 @@ UV_TOOLS=(
   "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
 )
 
+if $FORCE_UPDATES; then
+  echo -e "  ${YELLOW}Force-updating all Python tools...${NC}"
+  uv tool upgrade --all 2>/dev/null && ok "uv tool upgrade --all" || warn "uv tool upgrade --all failed"
+fi
+
 for tool in "${UV_TOOLS[@]}"; do
   if uv tool list 2>/dev/null | grep -q "^${tool} "; then
     ok "$tool (already installed)"
@@ -57,14 +62,21 @@ BUNFIG
 export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
 BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix" "ccstatusline")
-for tool in "${BUN_TOOLS[@]}"; do
-  if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
-    ok "$tool (exists)"
-  else
-    echo -n "  Installing $tool..."
-    run_q bun install -g "$tool" && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
-  fi
-done
+if $FORCE_UPDATES; then
+  echo -e "  ${YELLOW}Force-updating all Bun tools...${NC}"
+  for tool in "${BUN_TOOLS[@]}"; do
+    run_q bun install -g "$tool" && ok "$tool (updated)" || warn "$tool update failed"
+  done
+else
+  for tool in "${BUN_TOOLS[@]}"; do
+    if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
+      ok "$tool (exists)"
+    else
+      echo -n "  Installing $tool..."
+      run_q bun install -g "$tool" && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+    fi
+  done
+fi
 
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install -g @google/gemini-cli && ok "gemini-cli" || warn "gemini-cli"; }
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }

@@ -1,22 +1,13 @@
 section "Phase 4/6 — Claude Code CLI"
 
-if command -v claude &>/dev/null && [[ -z "$CC_VERSION" ]]; then
-  ok "Claude Code already installed: $(claude --version 2>/dev/null || echo 'installed')"
-  echo "  Run 'claude doctor' to verify health"
+# Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
+echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
+if [[ -n "$CC_VERSION" ]]; then
+  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
 else
-  echo "  Installing Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
-  if [[ -n "$CC_VERSION" ]]; then
-    curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
-  else
-    curl -fsSL https://claude.ai/install.sh | bash
-  fi
-  ok "Claude Code installed${CC_VERSION:+ v${CC_VERSION}}"
-  echo ""
-  echo "  After this script finishes:"
-  echo "    1. Run: claude"
-  echo "    2. Authenticate with your Anthropic account"
-  echo "    3. Run: claude doctor   (to verify)"
+  curl -fsSL https://claude.ai/install.sh | bash
 fi
+ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
 
 # ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
 if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then

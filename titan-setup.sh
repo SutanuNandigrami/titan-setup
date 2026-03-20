@@ -77,6 +77,7 @@ OLLAMA_SKIP=false
 LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
+FORCE_UPDATES=false
 
 usage() {
   cat <<USAGE
@@ -110,6 +111,7 @@ Options:
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
   --no-cozempic            Skip cozempic install (context bloat cleaner)
 
+  --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
   -h, --help               Show this help message
 
@@ -149,6 +151,7 @@ while [[ $# -gt 0 ]]; do
     --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
     --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
     --no-cozempic)     COZEMPIC_SKIP=true; shift ;;
+    --force-updates)   FORCE_UPDATES=true; shift ;;
     --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
     -h|--help)         usage ;;
     *) fail "Unknown option: $1"; usage ;;
@@ -827,6 +830,11 @@ UV_TOOLS=(
   "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
 )
 
+if $FORCE_UPDATES; then
+  echo -e "  ${YELLOW}Force-updating all Python tools...${NC}"
+  uv tool upgrade --all 2>/dev/null && ok "uv tool upgrade --all" || warn "uv tool upgrade --all failed"
+fi
+
 for tool in "${UV_TOOLS[@]}"; do
   if uv tool list 2>/dev/null | grep -q "^${tool} "; then
     ok "$tool (already installed)"
@@ -866,14 +874,21 @@ BUNFIG
 export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
 BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix" "ccstatusline")
-for tool in "${BUN_TOOLS[@]}"; do
-  if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
-    ok "$tool (exists)"
-  else
-    echo -n "  Installing $tool..."
-    run_q bun install -g "$tool" && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
-  fi
-done
+if $FORCE_UPDATES; then
+  echo -e "  ${YELLOW}Force-updating all Bun tools...${NC}"
+  for tool in "${BUN_TOOLS[@]}"; do
+    run_q bun install -g "$tool" && ok "$tool (updated)" || warn "$tool update failed"
+  done
+else
+  for tool in "${BUN_TOOLS[@]}"; do
+    if bun pm ls -g 2>/dev/null | grep -q "$tool"; then
+      ok "$tool (exists)"
+    else
+      echo -n "  Installing $tool..."
+      run_q bun install -g "$tool" && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+    fi
+  done
+fi
 
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install -g @google/gemini-cli && ok "gemini-cli" || warn "gemini-cli"; }
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }
@@ -1356,7 +1371,7 @@ fi
 CARGO_FAIL=0
 _CARGO_LIST=$(cargo install --list 2>/dev/null)
 for crate in "${CARGO_CRATES[@]}"; do
-  if echo "$_CARGO_LIST" | grep -q "^${crate} v"; then
+  if ! $FORCE_UPDATES && echo "$_CARGO_LIST" | grep -q "^${crate} v"; then
     echo "  $crate (installed) ✓"
     continue
   fi
@@ -1467,7 +1482,7 @@ echo -e "\n  ${CYAN}Go tools:${NC}"
 # These tools have 50-357 Go dependencies each; pre-built binaries are much faster.
 _go_binary_install() {
   local name="$1" url="$2"
-  if command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; then
+  if ! $FORCE_UPDATES && { command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; }; then
     ok "$name (exists)"; return 0
   fi
   echo -n "  $name (binary)..."
@@ -1831,23 +1846,14 @@ else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
 
 section "Phase 4/6 — Claude Code CLI"
 
-if command -v claude &>/dev/null && [[ -z "$CC_VERSION" ]]; then
-  ok "Claude Code already installed: $(claude --version 2>/dev/null || echo 'installed')"
-  echo "  Run 'claude doctor' to verify health"
+# Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
+echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
+if [[ -n "$CC_VERSION" ]]; then
+  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
 else
-  echo "  Installing Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
-  if [[ -n "$CC_VERSION" ]]; then
-    curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
-  else
-    curl -fsSL https://claude.ai/install.sh | bash
-  fi
-  ok "Claude Code installed${CC_VERSION:+ v${CC_VERSION}}"
-  echo ""
-  echo "  After this script finishes:"
-  echo "    1. Run: claude"
-  echo "    2. Authenticate with your Anthropic account"
-  echo "    3. Run: claude doctor   (to verify)"
+  curl -fsSL https://claude.ai/install.sh | bash
 fi
+ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
 
 # ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
 if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
@@ -1883,6 +1889,17 @@ if ! command -v sd &>/dev/null; then
 fi
 
 CLAUDE_DIR="$HOME/.claude"
+
+# ─── Detect running CC sessions — warn before config changes ───
+if pgrep -f 'claude' &>/dev/null; then
+  warn "Claude Code is running — config changes may not take effect until restart"
+fi
+
+# ─── Cleanup stale artifacts from previous versions ───
+rm -rf "$HOME/.claude/plugins/cache/claude-plugins-official/hookify/" 2>/dev/null
+rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null    # replaced by cli-tools
+rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null      # replaced by security-scan
+rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null    # replaced by systematic-debugging
 
 # Backup existing
 if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE_DIR/agents" ]; then

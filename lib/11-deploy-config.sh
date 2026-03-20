@@ -6,6 +6,17 @@ fi
 
 CLAUDE_DIR="$HOME/.claude"
 
+# ─── Detect running CC sessions — warn before config changes ───
+if pgrep -f 'claude' &>/dev/null; then
+  warn "Claude Code is running — config changes may not take effect until restart"
+fi
+
+# ─── Cleanup stale artifacts from previous versions ───
+rm -rf "$HOME/.claude/plugins/cache/claude-plugins-official/hookify/" 2>/dev/null
+rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null    # replaced by cli-tools
+rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null      # replaced by security-scan
+rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null    # replaced by systematic-debugging
+
 # Backup existing
 if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE_DIR/agents" ]; then
   BACKUP="$CLAUDE_DIR.backup.$(date +%s)"

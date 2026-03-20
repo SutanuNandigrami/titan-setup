@@ -51,7 +51,7 @@ fi
 CARGO_FAIL=0
 _CARGO_LIST=$(cargo install --list 2>/dev/null)
 for crate in "${CARGO_CRATES[@]}"; do
-  if echo "$_CARGO_LIST" | grep -q "^${crate} v"; then
+  if ! $FORCE_UPDATES && echo "$_CARGO_LIST" | grep -q "^${crate} v"; then
     echo "  $crate (installed) ✓"
     continue
   fi
@@ -162,7 +162,7 @@ echo -e "\n  ${CYAN}Go tools:${NC}"
 # These tools have 50-357 Go dependencies each; pre-built binaries are much faster.
 _go_binary_install() {
   local name="$1" url="$2"
-  if command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; then
+  if ! $FORCE_UPDATES && { command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; }; then
     ok "$name (exists)"; return 0
   fi
   echo -n "  $name (binary)..."
