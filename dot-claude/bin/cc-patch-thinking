@@ -145,8 +145,16 @@ def patch(binary_path: Path, dry_run: bool = False) -> bool:
         patched += 1
 
     if patched > 0:
-        with open(binary_path, "wb") as f:
-            f.write(new_data)
+        # Write to temp file + atomic rename to avoid "Text file busy" on running binary
+        tmp_path = binary_path.with_suffix(".tmp")
+        try:
+            with open(tmp_path, "wb") as f:
+                f.write(new_data)
+            shutil.copymode(binary_path, tmp_path)
+            os.rename(tmp_path, binary_path)
+        except OSError:
+            tmp_path.unlink(missing_ok=True)
+            raise
 
         # Store hash of the patched binary
         new_hash = file_hash(binary_path)
