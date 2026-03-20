@@ -78,8 +78,11 @@ TITAN_MANAGED_TOPLEVEL: set[str] = {
     "showTurnDuration",
     "skipDangerousModePermissionPrompt",
     "preferences",
-    "model",
 }
+
+# model is special: set from template on fresh install only.
+# If the user changes it via /model, their choice persists across re-runs.
+# To restore opusplan: edit ~/.claude/settings.json manually or delete model key.
 
 # Titan-managed top-level block keys (template always wins, full replace)
 TITAN_MANAGED_BLOCKS: set[str] = {
@@ -156,12 +159,18 @@ def merge_settings(
         if k in template:
             result[k] = deepcopy(template[k])
 
+    # model: set from template on fresh install, preserve user's choice on re-run
+    if "model" in live:
+        result["model"] = live["model"]
+    elif "model" in template:
+        result["model"] = template["model"]
+
     # User-owned top-level keys: preserve from live
     for k, v in live.items():
         if (
             k not in TITAN_MANAGED_TOPLEVEL
             and k not in TITAN_MANAGED_BLOCKS
-            and k not in ("env", "enabledPlugins")
+            and k not in ("env", "enabledPlugins", "model")
             and k not in result
         ):
             result[k] = deepcopy(v)
