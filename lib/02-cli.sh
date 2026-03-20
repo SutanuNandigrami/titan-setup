@@ -13,7 +13,7 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
-CCFLARE_PROXY_PORT=8081  # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
+CCFLARE_PROXY_PORT=8081 # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
 SEMGREP_TOKEN=""
 SEMGREP_SKIP=false
 LETTA_SKIP=false
@@ -74,33 +74,151 @@ _ORIG_ARGS=("$@")
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
-    --mode)            [[ $# -ge 2 ]] || { fail "--mode requires a value (desktop|vps)"; usage; }
-                       [[ "$2" == "desktop" || "$2" == "vps" ]] || { fail "--mode must be 'desktop' or 'vps'"; usage; }
-                       INSTALL_MODE="$2"; shift 2 ;;
-    --tailscale-key)   [[ $# -ge 2 ]] || { fail "--tailscale-key requires a value"; usage; }; TAILSCALE_KEY="$2"; shift 2 ;;
-    --claude-user)     [[ $# -ge 2 ]] || { fail "--claude-user requires a value"; usage; }; CLAUDE_USER="$2"; shift 2 ;;
-    --cc-version)      [[ $# -ge 2 ]] || { fail "--cc-version requires a value"; usage; }; CC_VERSION="$2"; shift 2 ;;
-    --no-autoupdate)   CC_NO_AUTOUPDATE="true"; shift ;;
-    --cc-asked)        CC_ASKED=true; shift ;;
-    --dry-run)         DRY_RUN=true; shift ;;
-    -v|--verbose)      VERBOSE=true; shift ;;
-    --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
-    --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
-    --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
-    --semgrep-token)   [[ $# -ge 2 ]] || { fail "--semgrep-token requires a value"; usage; }; SEMGREP_TOKEN="$2"; shift 2 ;;
-    --no-semgrep)      SEMGREP_SKIP=true; shift ;;
-    --letta-skip)      LETTA_SKIP=true; shift ;;
-    --letta-port)      [[ $# -ge 2 ]] || { fail "--letta-port requires a value"; usage; }; LETTA_PORT="$2"; shift 2 ;;
-    --letta-password)  [[ $# -ge 2 ]] || { fail "--letta-password requires a value"; usage; }; LETTA_PASSWORD="$2"; shift 2 ;;
-    --no-ollama)       OLLAMA_SKIP=true; shift ;;
-    --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
-    --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
-    --no-cozempic)     COZEMPIC_SKIP=true; shift ;;
-    --force-updates)   FORCE_UPDATES=true; shift ;;
-    --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
-    -h|--help)         usage ;;
-    *) fail "Unknown option: $1"; usage ;;
+    --name)
+      [[ $# -ge 2 ]] || {
+        fail "--name requires a value"
+        usage
+      }
+      ENGINEER_NAME="$2"
+      shift 2
+      ;;
+    --mode)
+      [[ $# -ge 2 ]] || {
+        fail "--mode requires a value (desktop|vps)"
+        usage
+      }
+      [[ "$2" == "desktop" || "$2" == "vps" ]] || {
+        fail "--mode must be 'desktop' or 'vps'"
+        usage
+      }
+      INSTALL_MODE="$2"
+      shift 2
+      ;;
+    --tailscale-key)
+      [[ $# -ge 2 ]] || {
+        fail "--tailscale-key requires a value"
+        usage
+      }
+      TAILSCALE_KEY="$2"
+      shift 2
+      ;;
+    --claude-user)
+      [[ $# -ge 2 ]] || {
+        fail "--claude-user requires a value"
+        usage
+      }
+      CLAUDE_USER="$2"
+      shift 2
+      ;;
+    --cc-version)
+      [[ $# -ge 2 ]] || {
+        fail "--cc-version requires a value"
+        usage
+      }
+      CC_VERSION="$2"
+      shift 2
+      ;;
+    --no-autoupdate)
+      CC_NO_AUTOUPDATE="true"
+      shift
+      ;;
+    --cc-asked)
+      CC_ASKED=true
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    -v | --verbose)
+      VERBOSE=true
+      shift
+      ;;
+    --ccflare-skip)
+      CCFLARE_SKIP=true
+      shift
+      ;;
+    --ccflare-port)
+      [[ $# -ge 2 ]] || {
+        fail "--ccflare-port requires a value"
+        usage
+      }
+      CCFLARE_PORT="$2"
+      shift 2
+      ;;
+    --ccflare-host)
+      [[ $# -ge 2 ]] || {
+        fail "--ccflare-host requires a value"
+        usage
+      }
+      CCFLARE_HOST="$2"
+      shift 2
+      ;;
+    --semgrep-token)
+      [[ $# -ge 2 ]] || {
+        fail "--semgrep-token requires a value"
+        usage
+      }
+      SEMGREP_TOKEN="$2"
+      shift 2
+      ;;
+    --no-semgrep)
+      SEMGREP_SKIP=true
+      shift
+      ;;
+    --letta-skip)
+      LETTA_SKIP=true
+      shift
+      ;;
+    --letta-port)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-port requires a value"
+        usage
+      }
+      LETTA_PORT="$2"
+      shift 2
+      ;;
+    --letta-password)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-password requires a value"
+        usage
+      }
+      LETTA_PASSWORD="$2"
+      shift 2
+      ;;
+    --no-ollama)
+      OLLAMA_SKIP=true
+      shift
+      ;;
+    --letta-ctrl-skip)
+      LETTA_CTRL_SKIP=true
+      shift
+      ;;
+    --letta-ctrl-port)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-ctrl-port requires a value"
+        usage
+      }
+      LETTA_CTRL_PORT="$2"
+      shift 2
+      ;;
+    --no-cozempic)
+      COZEMPIC_SKIP=true
+      shift
+      ;;
+    --force-updates)
+      FORCE_UPDATES=true
+      shift
+      ;;
+    --version)
+      echo "titan-setup ${SCRIPT_VERSION}"
+      exit 0
+      ;;
+    -h | --help) usage ;;
+    *)
+      fail "Unknown option: $1"
+      usage
+      ;;
   esac
 done
 
@@ -124,7 +242,10 @@ if [[ -z "$INSTALL_MODE" ]]; then
   case "$_mode_choice" in
     1) INSTALL_MODE="desktop" ;;
     2) INSTALL_MODE="vps" ;;
-    *) fail "Invalid choice. Run with --mode desktop or --mode vps"; exit 1 ;;
+    *)
+      fail "Invalid choice. Run with --mode desktop or --mode vps"
+      exit 1
+      ;;
   esac
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
@@ -136,8 +257,8 @@ fi
 if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
   read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
   case "${_au_ans,,}" in
-    y|yes) CC_NO_AUTOUPDATE="true" ;;
-    *)     CC_NO_AUTOUPDATE="" ;;
+    y | yes) CC_NO_AUTOUPDATE="true" ;;
+    *) CC_NO_AUTOUPDATE="" ;;
   esac
 fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"

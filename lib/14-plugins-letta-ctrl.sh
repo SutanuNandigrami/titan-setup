@@ -18,7 +18,7 @@ else
 
     # Systemd user service
     mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/letta-ctrl.service" << LETTA_CTRL_SVC
+    cat >"$HOME/.config/systemd/user/letta-ctrl.service" <<LETTA_CTRL_SVC
 [Unit]
 Description=LettaCtrl — Letta management GUI
 After=letta.service
@@ -51,4 +51,3 @@ LETTA_CTRL_SVC
     fi
   fi
 fi
-

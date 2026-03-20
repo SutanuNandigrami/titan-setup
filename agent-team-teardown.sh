@@ -9,7 +9,8 @@ DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
 if ! command -v jq &>/dev/null; then
-    echo "Error: jq required" >&2; exit 1
+  echo "Error: jq required" >&2
+  exit 1
 fi
 
 echo "=== Agent Team Teardown ==="
@@ -26,8 +27,8 @@ jq '{
 echo ""
 
 if [[ "$DRY_RUN" == true ]]; then
-    echo "[dry-run] Would revert to: AGENT_TEAMS removed, SUBAGENT_MODEL=haiku, teammateMode removed"
-    exit 0
+  echo "[dry-run] Would revert to: AGENT_TEAMS removed, SUBAGENT_MODEL=haiku, teammateMode removed"
+  exit 0
 fi
 
 # Revert: remove AGENT_TEAMS flag, restore haiku, remove teammateMode
@@ -36,7 +37,7 @@ jq '
   del(.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) |
   .env.CLAUDE_CODE_SUBAGENT_MODEL = "claude-haiku-4-5-20251001" |
   del(.teammateMode)
-' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
+' "$SETTINGS" >"$tmp" && mv "$tmp" "$SETTINGS"
 
 echo "After:"
 jq '{

@@ -5,8 +5,8 @@ section "Phase 1/6 — System Prerequisites"
 if [[ -d /etc/needrestart ]]; then
   sudo mkdir -p /etc/needrestart/conf.d
   # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
-  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' \
-    | sudo tee /etc/needrestart/conf.d/titan-auto.conf > /dev/null
+  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' |
+    sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
 fi
 
 run_q sudo apt-get update -qq
@@ -78,5 +78,3 @@ git config --global init.defaultBranch main 2>/dev/null || true
 git config --global core.autocrlf input 2>/dev/null || true
 git config --global pull.rebase true 2>/dev/null || true
 ok "Git defaults set (main branch, rebase pull)"
-
-

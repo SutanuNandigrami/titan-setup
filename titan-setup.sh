@@ -13,7 +13,8 @@ if [[ ! -f "$0" ]]; then
   # Use bash+exit instead of exec to keep the process-substitution pipe open.
   # exec would close the pipe fd immediately, causing the original curl to fail
   # with "curl: (23) Failure writing output to destination".
-  bash "$_SELF" "$@"; _rc=$?
+  bash "$_SELF" "$@"
+  _rc=$?
   rm -f "$_SELF"
   exit "$_rc"
 fi
@@ -40,7 +41,6 @@ fi
 # ╚══════════════════════════════════════════════════════════════════╝
 
 SCRIPT_VERSION="v3.19"
-
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -48,10 +48,9 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 section() { echo -e "\n${CYAN}═══ $1 ═══${NC}\n"; }
-ok()      { echo -e "  ${GREEN}✓${NC} $1"; }
-warn()    { echo -e "  ${YELLOW}⚠${NC} $1"; }
-fail()    { echo -e "  ${RED}✗${NC} $1"; }
-
+ok() { echo -e "  ${GREEN}✓${NC} $1"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
+fail() { echo -e "  ${RED}✗${NC} $1"; }
 # ─── CLI Options ───
 ENGINEER_NAME=""
 INSTALL_MODE=""
@@ -67,7 +66,7 @@ VERBOSE=false
 CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
-CCFLARE_PROXY_PORT=8081  # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
+CCFLARE_PROXY_PORT=8081 # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
 SEMGREP_TOKEN=""
 SEMGREP_SKIP=false
 LETTA_SKIP=false
@@ -128,33 +127,151 @@ _ORIG_ARGS=("$@")
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --name)            [[ $# -ge 2 ]] || { fail "--name requires a value"; usage; }; ENGINEER_NAME="$2"; shift 2 ;;
-    --mode)            [[ $# -ge 2 ]] || { fail "--mode requires a value (desktop|vps)"; usage; }
-                       [[ "$2" == "desktop" || "$2" == "vps" ]] || { fail "--mode must be 'desktop' or 'vps'"; usage; }
-                       INSTALL_MODE="$2"; shift 2 ;;
-    --tailscale-key)   [[ $# -ge 2 ]] || { fail "--tailscale-key requires a value"; usage; }; TAILSCALE_KEY="$2"; shift 2 ;;
-    --claude-user)     [[ $# -ge 2 ]] || { fail "--claude-user requires a value"; usage; }; CLAUDE_USER="$2"; shift 2 ;;
-    --cc-version)      [[ $# -ge 2 ]] || { fail "--cc-version requires a value"; usage; }; CC_VERSION="$2"; shift 2 ;;
-    --no-autoupdate)   CC_NO_AUTOUPDATE="true"; shift ;;
-    --cc-asked)        CC_ASKED=true; shift ;;
-    --dry-run)         DRY_RUN=true; shift ;;
-    -v|--verbose)      VERBOSE=true; shift ;;
-    --ccflare-skip)    CCFLARE_SKIP=true; shift ;;
-    --ccflare-port)    [[ $# -ge 2 ]] || { fail "--ccflare-port requires a value"; usage; }; CCFLARE_PORT="$2"; shift 2 ;;
-    --ccflare-host)    [[ $# -ge 2 ]] || { fail "--ccflare-host requires a value"; usage; }; CCFLARE_HOST="$2"; shift 2 ;;
-    --semgrep-token)   [[ $# -ge 2 ]] || { fail "--semgrep-token requires a value"; usage; }; SEMGREP_TOKEN="$2"; shift 2 ;;
-    --no-semgrep)      SEMGREP_SKIP=true; shift ;;
-    --letta-skip)      LETTA_SKIP=true; shift ;;
-    --letta-port)      [[ $# -ge 2 ]] || { fail "--letta-port requires a value"; usage; }; LETTA_PORT="$2"; shift 2 ;;
-    --letta-password)  [[ $# -ge 2 ]] || { fail "--letta-password requires a value"; usage; }; LETTA_PASSWORD="$2"; shift 2 ;;
-    --no-ollama)       OLLAMA_SKIP=true; shift ;;
-    --letta-ctrl-skip) LETTA_CTRL_SKIP=true; shift ;;
-    --letta-ctrl-port) [[ $# -ge 2 ]] || { fail "--letta-ctrl-port requires a value"; usage; }; LETTA_CTRL_PORT="$2"; shift 2 ;;
-    --no-cozempic)     COZEMPIC_SKIP=true; shift ;;
-    --force-updates)   FORCE_UPDATES=true; shift ;;
-    --version)         echo "titan-setup ${SCRIPT_VERSION}"; exit 0 ;;
-    -h|--help)         usage ;;
-    *) fail "Unknown option: $1"; usage ;;
+    --name)
+      [[ $# -ge 2 ]] || {
+        fail "--name requires a value"
+        usage
+      }
+      ENGINEER_NAME="$2"
+      shift 2
+      ;;
+    --mode)
+      [[ $# -ge 2 ]] || {
+        fail "--mode requires a value (desktop|vps)"
+        usage
+      }
+      [[ "$2" == "desktop" || "$2" == "vps" ]] || {
+        fail "--mode must be 'desktop' or 'vps'"
+        usage
+      }
+      INSTALL_MODE="$2"
+      shift 2
+      ;;
+    --tailscale-key)
+      [[ $# -ge 2 ]] || {
+        fail "--tailscale-key requires a value"
+        usage
+      }
+      TAILSCALE_KEY="$2"
+      shift 2
+      ;;
+    --claude-user)
+      [[ $# -ge 2 ]] || {
+        fail "--claude-user requires a value"
+        usage
+      }
+      CLAUDE_USER="$2"
+      shift 2
+      ;;
+    --cc-version)
+      [[ $# -ge 2 ]] || {
+        fail "--cc-version requires a value"
+        usage
+      }
+      CC_VERSION="$2"
+      shift 2
+      ;;
+    --no-autoupdate)
+      CC_NO_AUTOUPDATE="true"
+      shift
+      ;;
+    --cc-asked)
+      CC_ASKED=true
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    -v | --verbose)
+      VERBOSE=true
+      shift
+      ;;
+    --ccflare-skip)
+      CCFLARE_SKIP=true
+      shift
+      ;;
+    --ccflare-port)
+      [[ $# -ge 2 ]] || {
+        fail "--ccflare-port requires a value"
+        usage
+      }
+      CCFLARE_PORT="$2"
+      shift 2
+      ;;
+    --ccflare-host)
+      [[ $# -ge 2 ]] || {
+        fail "--ccflare-host requires a value"
+        usage
+      }
+      CCFLARE_HOST="$2"
+      shift 2
+      ;;
+    --semgrep-token)
+      [[ $# -ge 2 ]] || {
+        fail "--semgrep-token requires a value"
+        usage
+      }
+      SEMGREP_TOKEN="$2"
+      shift 2
+      ;;
+    --no-semgrep)
+      SEMGREP_SKIP=true
+      shift
+      ;;
+    --letta-skip)
+      LETTA_SKIP=true
+      shift
+      ;;
+    --letta-port)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-port requires a value"
+        usage
+      }
+      LETTA_PORT="$2"
+      shift 2
+      ;;
+    --letta-password)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-password requires a value"
+        usage
+      }
+      LETTA_PASSWORD="$2"
+      shift 2
+      ;;
+    --no-ollama)
+      OLLAMA_SKIP=true
+      shift
+      ;;
+    --letta-ctrl-skip)
+      LETTA_CTRL_SKIP=true
+      shift
+      ;;
+    --letta-ctrl-port)
+      [[ $# -ge 2 ]] || {
+        fail "--letta-ctrl-port requires a value"
+        usage
+      }
+      LETTA_CTRL_PORT="$2"
+      shift 2
+      ;;
+    --no-cozempic)
+      COZEMPIC_SKIP=true
+      shift
+      ;;
+    --force-updates)
+      FORCE_UPDATES=true
+      shift
+      ;;
+    --version)
+      echo "titan-setup ${SCRIPT_VERSION}"
+      exit 0
+      ;;
+    -h | --help) usage ;;
+    *)
+      fail "Unknown option: $1"
+      usage
+      ;;
   esac
 done
 
@@ -178,7 +295,10 @@ if [[ -z "$INSTALL_MODE" ]]; then
   case "$_mode_choice" in
     1) INSTALL_MODE="desktop" ;;
     2) INSTALL_MODE="vps" ;;
-    *) fail "Invalid choice. Run with --mode desktop or --mode vps"; exit 1 ;;
+    *)
+      fail "Invalid choice. Run with --mode desktop or --mode vps"
+      exit 1
+      ;;
   esac
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
@@ -190,8 +310,8 @@ fi
 if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
   read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
   case "${_au_ans,,}" in
-    y|yes) CC_NO_AUTOUPDATE="true" ;;
-    *)     CC_NO_AUTOUPDATE="" ;;
+    y | yes) CC_NO_AUTOUPDATE="true" ;;
+    *) CC_NO_AUTOUPDATE="" ;;
   esac
 fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
@@ -215,7 +335,10 @@ echo ""
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   if [[ -z "$CLAUDE_USER" ]]; then
     read -rp "  Username for Claude Code (created if absent): " CLAUDE_USER
-    [[ -z "$CLAUDE_USER" ]] && { fail "Username required for VPS mode"; exit 1; }
+    [[ -z "$CLAUDE_USER" ]] && {
+      fail "Username required for VPS mode"
+      exit 1
+    }
   fi
 
   if [[ "$(whoami)" != "$CLAUDE_USER" ]]; then
@@ -223,7 +346,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
       sudo useradd -m -s /bin/bash "$CLAUDE_USER"
       echo -e "  ${GREEN}✓${NC} Created user: $CLAUDE_USER"
     fi
-    echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$CLAUDE_USER" > /dev/null
+    echo "$CLAUDE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$CLAUDE_USER" >/dev/null
     sudo chmod 440 /etc/sudoers.d/"$CLAUDE_USER"
     echo -e "  ${GREEN}✓${NC} Passwordless sudo granted to $CLAUDE_USER"
     echo -e "  Switching to $CLAUDE_USER and re-running...\n"
@@ -234,20 +357,20 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
       --name "$ENGINEER_NAME"
       --cc-asked
     )
-    [[ -n "$CC_VERSION" ]]         && _VPS_REEXEC_ARGS+=(--cc-version "$CC_VERSION")
+    [[ -n "$CC_VERSION" ]] && _VPS_REEXEC_ARGS+=(--cc-version "$CC_VERSION")
     [[ "$CC_NO_AUTOUPDATE" == "true" ]] && _VPS_REEXEC_ARGS+=(--no-autoupdate)
-    $VERBOSE                       && _VPS_REEXEC_ARGS+=(--verbose)
-    $CCFLARE_SKIP                  && _VPS_REEXEC_ARGS+=(--ccflare-skip)
+    $VERBOSE && _VPS_REEXEC_ARGS+=(--verbose)
+    $CCFLARE_SKIP && _VPS_REEXEC_ARGS+=(--ccflare-skip)
     _VPS_REEXEC_ARGS+=(--ccflare-port "$CCFLARE_PORT" --ccflare-host "$CCFLARE_HOST")
-    [[ -n "$SEMGREP_TOKEN" ]]      && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
-    $SEMGREP_SKIP                  && _VPS_REEXEC_ARGS+=(--no-semgrep)
-    $LETTA_SKIP                    && _VPS_REEXEC_ARGS+=(--letta-skip)
+    [[ -n "$SEMGREP_TOKEN" ]] && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
+    $SEMGREP_SKIP && _VPS_REEXEC_ARGS+=(--no-semgrep)
+    $LETTA_SKIP && _VPS_REEXEC_ARGS+=(--letta-skip)
     _VPS_REEXEC_ARGS+=(--letta-port "$LETTA_PORT")
-    [[ -n "$LETTA_PASSWORD" ]]     && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
-    $OLLAMA_SKIP                   && _VPS_REEXEC_ARGS+=(--no-ollama)
-    $LETTA_CTRL_SKIP                   && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
+    [[ -n "$LETTA_PASSWORD" ]] && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
+    $OLLAMA_SKIP && _VPS_REEXEC_ARGS+=(--no-ollama)
+    $LETTA_CTRL_SKIP && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
-    $COZEMPIC_SKIP                     && _VPS_REEXEC_ARGS+=(--no-cozempic)
+    $COZEMPIC_SKIP && _VPS_REEXEC_ARGS+=(--no-cozempic)
     # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.
@@ -311,7 +434,7 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
         printf ' --no-semgrep'
       fi
       printf ' 2>&1 | tee %q\n' "$_TMUX_LOG"
-    } > "$_TMUX_WRAPPER"
+    } >"$_TMUX_WRAPPER"
     chmod +x "$_TMUX_WRAPPER"
     echo -e "\n  ${CYAN}Re-launching inside tmux (SSH-disconnect safe)${NC}"
     echo -e "  ${GREEN}Reconnect:${NC} tmux attach -t titan-setup"
@@ -334,11 +457,11 @@ if [[ -n "${TMUX:-}" ]]; then
   fi
 else
   LOG_FILE="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
-  echo "# titan-setup log — $(date)" > "$LOG_FILE"
+  echo "# titan-setup log — $(date)" >"$LOG_FILE"
   exec > >(tee -a "$LOG_FILE") 2>&1
 fi
 # run_q: run a command, routing output to log file unless --verbose
-run_q() { if $VERBOSE; then "$@"; else "$@" >> "$LOG_FILE" 2>&1; fi; }
+run_q() { if $VERBOSE; then "$@"; else "$@" >>"$LOG_FILE" 2>&1; fi; }
 
 # ─── Temp directory for downloads ───
 WORKDIR=$(mktemp -d)
@@ -349,11 +472,23 @@ trap '_do_cleanup' EXIT
 # ─── Architecture detection ───
 UNAME_ARCH=$(uname -m)
 case "$UNAME_ARCH" in
-  x86_64)  ARCH_AMD="amd64"; ARCH_GO="amd64"; ARCH_RUST="x86_64"; ARCH_FULL="x86_64" ;;
-  aarch64) ARCH_AMD="arm64"; ARCH_GO="arm64"; ARCH_RUST="aarch64"; ARCH_FULL="aarch64" ;;
-  *) fail "Unsupported architecture: $UNAME_ARCH"; exit 1 ;;
+  x86_64)
+    ARCH_AMD="amd64"
+    ARCH_GO="amd64"
+    ARCH_RUST="x86_64"
+    ARCH_FULL="x86_64"
+    ;;
+  aarch64)
+    ARCH_AMD="arm64"
+    ARCH_GO="arm64"
+    ARCH_RUST="aarch64"
+    ARCH_FULL="aarch64"
+    ;;
+  *)
+    fail "Unsupported architecture: $UNAME_ARCH"
+    exit 1
+    ;;
 esac
-
 # ─── VPS Pre-hardening (before tool installation) ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   section "VPS — Server Hardening"
@@ -363,13 +498,19 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
     read -rsp "  Key: " TAILSCALE_KEY
     echo ""
-    [[ -z "$TAILSCALE_KEY" ]] && { fail "Tailscale key required for VPS mode"; exit 1; }
+    [[ -z "$TAILSCALE_KEY" ]] && {
+      fail "Tailscale key required for VPS mode"
+      exit 1
+    }
   fi
 
   # ── Require non-root Claude user ───────────────────────────────────────
   if [[ -z "$CLAUDE_USER" ]]; then
     read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
-    [[ -z "$CLAUDE_USER" ]] && { fail "--claude-user required for VPS mode"; exit 1; }
+    [[ -z "$CLAUDE_USER" ]] && {
+      fail "--claude-user required for VPS mode"
+      exit 1
+    }
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
@@ -393,7 +534,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   # Reference: https://tailscale.com/kb/1077/secure-server-ubuntu-18-04
 
   # ── fail2ban — SSH protection ─────────────────────────────────────────
-  sudo tee /etc/fail2ban/jail.local > /dev/null << 'FAIL2BAN_EOF'
+  sudo tee /etc/fail2ban/jail.local >/dev/null <<'FAIL2BAN_EOF'
 [DEFAULT]
 bantime  = 1h
 findtime = 10m
@@ -409,7 +550,7 @@ FAIL2BAN_EOF
   ok "fail2ban active (SSH: 5 retries → 1h ban)"
 
   # ── unattended-upgrades — security patches only ───────────────────────
-  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades-titan > /dev/null << 'UU_EOF'
+  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades-titan >/dev/null <<'UU_EOF'
 Unattended-Upgrade::Allowed-Origins {
     "${distro_id}:${distro_codename}-security";
 };
@@ -420,7 +561,7 @@ UU_EOF
   ok "unattended-upgrades active (security patches only, no auto-reboot)"
 
   # ── auditd — privilege escalation monitoring ──────────────────────────
-  sudo tee /etc/audit/rules.d/titan.rules > /dev/null << 'AUDIT_EOF'
+  sudo tee /etc/audit/rules.d/titan.rules >/dev/null <<'AUDIT_EOF'
 -a always,exit -F arch=b64 -S execve -F euid=0 -F auid!=0 -k privesc
 -w /etc/passwd -p wa -k passwd_changes
 -w /etc/sudoers -p wa -k sudoers_changes
@@ -430,7 +571,7 @@ AUDIT_EOF
   ok "auditd active (privesc monitoring, passwd/sudoers watch)"
 
   # ── Repo supply chain guard ───────────────────────────────────────────
-  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
+  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh >/dev/null <<'GUARD_EOF'
 #!/bin/bash
 set -euo pipefail
 # Allowlist includes Ubuntu/Debian base repos plus all repos titan-setup.sh adds
@@ -470,7 +611,7 @@ GUARD_EOF
   ok "Repo supply chain guard installed and run"
 
   # ── Compliance check script ───────────────────────────────────────────
-  sudo tee /usr/local/bin/compliance_check.sh > /dev/null << 'COMPLIANCE_EOF'
+  sudo tee /usr/local/bin/compliance_check.sh >/dev/null <<'COMPLIANCE_EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -569,7 +710,7 @@ COMPLIANCE_EOF
   ok "Compliance check script installed"
 
   # ── Compliance systemd timer (every 6h) ───────────────────────────────
-  sudo tee /etc/systemd/system/compliance-check.service > /dev/null << 'SVC_EOF'
+  sudo tee /etc/systemd/system/compliance-check.service >/dev/null <<'SVC_EOF'
 [Unit]
 Description=Run server compliance checks
 After=network-online.target
@@ -580,7 +721,7 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/compliance_check.sh
 SVC_EOF
 
-  sudo tee /etc/systemd/system/compliance-check.timer > /dev/null << 'TIMER_EOF'
+  sudo tee /etc/systemd/system/compliance-check.timer >/dev/null <<'TIMER_EOF'
 [Unit]
 Description=Periodic compliance checks
 
@@ -599,7 +740,6 @@ TIMER_EOF
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
 fi
-
 section "Phase 1/6 — System Prerequisites"
 
 # Suppress needrestart interactive kernel/service restart prompts on Ubuntu VPS
@@ -607,8 +747,8 @@ section "Phase 1/6 — System Prerequisites"
 if [[ -d /etc/needrestart ]]; then
   sudo mkdir -p /etc/needrestart/conf.d
   # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
-  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' \
-    | sudo tee /etc/needrestart/conf.d/titan-auto.conf > /dev/null
+  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' |
+    sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
 fi
 
 run_q sudo apt-get update -qq
@@ -680,8 +820,6 @@ git config --global init.defaultBranch main 2>/dev/null || true
 git config --global core.autocrlf input 2>/dev/null || true
 git config --global pull.rebase true 2>/dev/null || true
 ok "Git defaults set (main branch, rebase pull)"
-
-
 section "Phase 2/6 — Package Managers"
 
 # ─── Rust / Cargo ───
@@ -771,7 +909,6 @@ if ! command -v node &>/dev/null; then
   run_q mise use -g node@lts && ok "node (via mise)" || warn "node install failed — bun postinstalls may need node"
 fi
 
-
 # ─── Docker ───
 if command -v docker &>/dev/null; then
   ok "docker already installed: $(docker --version)"
@@ -791,13 +928,12 @@ fi
 # ─── Letta resource check ───
 if ! $LETTA_SKIP; then
   _TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
-  if (( _TOTAL_RAM_MB < 3072 )); then
+  if ((_TOTAL_RAM_MB < 3072)); then
     warn "System has ${_TOTAL_RAM_MB}MB RAM — Letta+Ollama need ~2GB."
     echo "  Consider --letta-skip or adding swap:"
     echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
   fi
 fi
-
 # ─── Repo files (static content loaded from git repo) ────────────────────────
 # Cloned early so tools like RTK can use patches from the repo during Phase 3.
 REPO_FILES="${TITAN_REPO_FILES:-}"
@@ -816,18 +952,18 @@ section "Phase 3/6 — 150+ CLI Tools"
 echo -e "  ${CYAN}Python tools (uv):${NC}"
 
 UV_TOOLS=(
-  "yq"              # yq — YAML/XML/TOML processor
-  "semgrep"         # semgrep — static analysis
-  "ansible-core"    # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
-  "ansible-lint"    # ansible-lint — linter for Ansible playbooks
-  "sqlmap"          # sqlmap — SQL injection testing
-  "pgcli"           # pgcli — Postgres with autocomplete
-  "ruff"            # ruff — Python linter (replaces flake8+black+isort+pyflakes)
-  "ast-grep-cli"    # ast-grep, sg — structural code search
-  "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
-  "cookiecutter"    # cookiecutter — project scaffolding from templates
-  "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
-  "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
+  "yq"                 # yq — YAML/XML/TOML processor
+  "semgrep"            # semgrep — static analysis
+  "ansible-core"       # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
+  "ansible-lint"       # ansible-lint — linter for Ansible playbooks
+  "sqlmap"             # sqlmap — SQL injection testing
+  "pgcli"              # pgcli — Postgres with autocomplete
+  "ruff"               # ruff — Python linter (replaces flake8+black+isort+pyflakes)
+  "ast-grep-cli"       # ast-grep, sg — structural code search
+  "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
+  "cookiecutter"       # cookiecutter — project scaffolding from templates
+  "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
+  "cozempic"           # cozempic — context bloat cleaner for Claude Code sessions
 )
 
 if $FORCE_UPDATES; then
@@ -853,9 +989,9 @@ command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccu
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 # claude-agent-sdk is a library (not a CLI tool) — needs --break-system-packages on Ubuntu 24.04 externally-managed Python
 _PYSITE="$HOME/.local/lib/python3.12/site-packages"
-python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || \
-  { mkdir -p "$_PYSITE" && uv pip install --target "$_PYSITE" --quiet claude-agent-sdk 2>/dev/null \
-    && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install --target ~/.local/lib/python3.12/site-packages claude-agent-sdk)"; }
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" ||
+  { mkdir -p "$_PYSITE" && uv pip install --target "$_PYSITE" --quiet claude-agent-sdk 2>/dev/null &&
+    ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install --target ~/.local/lib/python3.12/site-packages claude-agent-sdk)"; }
 unset _PYSITE
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
@@ -865,7 +1001,7 @@ echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
 # Trust postinstall scripts for packages that need them (esbuild, puppeteer, canvas, etc.)
 # Also skip puppeteer chromium download — we install chromium via playwright separately
-cat > "$HOME/.bunfig.toml" << 'BUNFIG'
+cat >"$HOME/.bunfig.toml" <<'BUNFIG'
 [install]
 trustedDependencies = ["puppeteer", "esbuild", "@swc/core", "canvas", "node-gyp", "sharp", "fsevents"]
 
@@ -899,12 +1035,12 @@ if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   # Install chromium: apt deps need root, browser download runs as current user
   if command -v playwright &>/dev/null; then
     # install-deps uses apt-get; titan has NOPASSWD sudo so playwright's internal sudo call works
-    sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >> "$LOG_FILE" 2>&1 || true
+    sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >>"$LOG_FILE" 2>&1 || true
     # mise shims may not be on PATH in non-interactive context; ensure node is findable
     _PW_PATH="$PATH"
     command -v node &>/dev/null || _PW_PATH="$HOME/.local/share/mise/shims:$_PW_PATH"
-    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" \
-      || warn "playwright chromium (install manually: playwright install chromium)"
+    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" ||
+      warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
   ok "playwright (exists)"
@@ -920,9 +1056,9 @@ if command -v docker &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
-  if docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1 \
-      || sg docker -c "docker pull n8nio/n8n:latest" >> "$LOG_FILE" 2>&1 \
-      || sudo docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1; then
+  if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
+    sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
+    sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
     ok "n8n docker image"
   else
     warn "n8n docker pull failed (check: docker pull n8nio/n8n:latest)"
@@ -937,7 +1073,7 @@ if command -v docker &>/dev/null; then
   # Create systemd user service for n8n
   mkdir -p "$HOME/.config/systemd/user"
   DOCKER_BIN=$(command -v docker)
-  cat > "$HOME/.config/systemd/user/n8n.service" << SERVICEEOF
+  cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
 [Unit]
 Description=n8n workflow automation
 After=default.target
@@ -970,7 +1106,7 @@ else
     ok "ollama already installed: $(ollama --version 2>/dev/null | head -1 || echo installed)"
   else
     echo "  Installing Ollama..."
-    if curl -fsSL https://ollama.com/install.sh | sh >> "$LOG_FILE" 2>&1; then
+    if curl -fsSL https://ollama.com/install.sh | sh >>"$LOG_FILE" 2>&1; then
       ok "ollama installed"
     else
       warn "ollama install failed — Letta will need OpenAI embeddings (set OPENAI_API_KEY)"
@@ -982,8 +1118,8 @@ else
     # Ollama installer creates /etc/systemd/system/ollama.service (system-level)
     # Bind to 0.0.0.0 so Docker bridge containers can reach it via host.docker.internal
     sudo mkdir -p /etc/systemd/system/ollama.service.d
-    printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0:11434"\n' \
-      | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
+    printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0:11434"\n' |
+      sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null
     sudo systemctl daemon-reload 2>/dev/null || true
     sudo systemctl enable ollama 2>/dev/null || true
     sudo systemctl start ollama 2>/dev/null || true
@@ -1003,7 +1139,7 @@ else
       ok "nomic-embed-text (exists)"
     else
       echo -n "  Pulling nomic-embed-text (~274MB)..."
-      if ollama pull nomic-embed-text >> "$LOG_FILE" 2>&1; then
+      if ollama pull nomic-embed-text >>"$LOG_FILE" 2>&1; then
         echo -e " ${GREEN}✓${NC}"
       else
         echo -e " ${YELLOW}⚠ pull failed — retry: ollama pull nomic-embed-text${NC}"
@@ -1019,7 +1155,7 @@ if ! $LETTA_SKIP; then
     LETTA_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
   fi
   mkdir -p "$HOME/.config/letta"
-  cat > "$HOME/.config/letta/credentials" << CREDEOF
+  cat >"$HOME/.config/letta/credentials" <<CREDEOF
 # Letta server credentials (generated by titan-setup ${SCRIPT_VERSION})
 LETTA_SERVER_PASSWORD=${LETTA_PASSWORD}
 LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}
@@ -1028,18 +1164,18 @@ CREDEOF
   chmod 600 "$HOME/.config/letta/credentials"
 
   # Docker env file for Letta container
-  cat > "$HOME/.config/letta/docker.env" << ENVEOF
+  cat >"$HOME/.config/letta/docker.env" <<ENVEOF
 SECURE=true
 LETTA_SERVER_PASSWORD=${LETTA_PASSWORD}
 ENVEOF
   if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
-    echo "OLLAMA_BASE_URL=http://host.docker.internal:11434/v1" >> "$HOME/.config/letta/docker.env"
+    echo "OLLAMA_BASE_URL=http://host.docker.internal:11434/v1" >>"$HOME/.config/letta/docker.env"
   fi
   if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
-    echo "ANTHROPIC_BASE_URL=http://host.docker.internal:${CCFLARE_PROXY_PORT}" >> "$HOME/.config/letta/docker.env"
-    echo "ANTHROPIC_API_KEY=sk-proxy-via-ccflare" >> "$HOME/.config/letta/docker.env"
+    echo "ANTHROPIC_BASE_URL=http://host.docker.internal:${CCFLARE_PROXY_PORT}" >>"$HOME/.config/letta/docker.env"
+    echo "ANTHROPIC_API_KEY=sk-proxy-via-ccflare" >>"$HOME/.config/letta/docker.env"
   elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-    echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> "$HOME/.config/letta/docker.env"
+    echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >>"$HOME/.config/letta/docker.env"
   fi
   chmod 600 "$HOME/.config/letta/docker.env"
   ok "Letta credentials (~/.config/letta/)"
@@ -1067,7 +1203,7 @@ else
 
     # Systemd user service using --env-file to avoid secrets in unit file
     mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/letta.service" << SERVICEEOF
+    cat >"$HOME/.config/systemd/user/letta.service" <<SERVICEEOF
 [Unit]
 Description=Letta persistent memory server
 After=default.target
@@ -1122,7 +1258,7 @@ else
     _CLEANUP_DIRS+=("$_BCF_SRC")
     if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then
       # Patch: fix NULL constraint for refresh_token in CLI account creation
-      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" << 'PYEOF'
+      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" <<'PYEOF'
 import sys, pathlib
 f = pathlib.Path(sys.argv[1])
 c = f.read_text()
@@ -1142,7 +1278,7 @@ for provider, values_placeholder, array_signature in [
 f.write_text(c)
 PYEOF
       # Also fix SQL placeholders: NULL, NULL, NULL → ?, NULL, NULL for console/minimax/zai
-      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" << 'PYEOF'
+      python3 - "$_BCF_SRC/packages/cli-commands/src/commands/account.ts" <<'PYEOF'
 import sys, pathlib
 f = pathlib.Path(sys.argv[1])
 c = f.read_text()
@@ -1197,7 +1333,7 @@ PYEOF
   # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
   _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
-  cat > "$HOME/.config/systemd/user/better-ccflare.service" << SERVICEEOF
+  cat >"$HOME/.config/systemd/user/better-ccflare.service" <<SERVICEEOF
 [Unit]
 Description=better-ccflare Claude load balancer proxy
 After=default.target
@@ -1236,7 +1372,7 @@ SERVICEEOF
   _BUN_BIN=$(command -v bun 2>/dev/null || echo "$HOME/.local/bin/bun")
   if [[ -x "$_BUN_BIN" ]]; then
     mkdir -p "$HOME/.config/letta"
-    cat > "$HOME/.config/letta/ccflare-billing-proxy.js" << 'BPROXY'
+    cat >"$HOME/.config/letta/ccflare-billing-proxy.js" <<'BPROXY'
 // ccflare-billing-proxy: fix for better-ccflare issue #89 (Sonnet/Opus 400 via OAuth)
 // Injects x-anthropic-billing-header as system[0] block — required by Anthropic API
 import { createHash } from "node:crypto";
@@ -1288,7 +1424,7 @@ Bun.serve({
 });
 BPROXY
 
-    cat > "$HOME/.config/systemd/user/ccflare-docker-proxy.service" << SVCEOF
+    cat >"$HOME/.config/systemd/user/ccflare-docker-proxy.service" <<SVCEOF
 [Unit]
 Description=betterccflare billing header proxy (issue #89 — Sonnet/Opus via OAuth)
 After=better-ccflare.service
@@ -1313,11 +1449,10 @@ SVCEOF
   else
     warn "bun not found — ccflare-billing-proxy skipped (Letta LLM calls will fail)"
   fi
-fi  # end $CCFLARE_SKIP
+fi # end $CCFLARE_SKIP
 
 command -v kilocode &>/dev/null && ok "kilocode (exists)" || { run_q bun install -g @kilocode/cli && ok "kilocode" || warn "kilocode"; }
 command -v vercel &>/dev/null && ok "vercel (exists)" || { run_q bun install -g vercel && ok "vercel" || warn "vercel"; }
-
 # ─── Rust tools via cargo ───
 echo -e "\n  ${CYAN}Rust tools (cargo):${NC}"
 echo "  This takes a while on first install (compiling from source)..."
@@ -1348,7 +1483,7 @@ fi
 
 # Suppress interactive telemetry prompt on first cargo-binstall run
 if [[ ! -f "$HOME/.cargo/binstall.toml" ]]; then
-  printf '[telemetry]\nenabled = false\n' > "$HOME/.cargo/binstall.toml"
+  printf '[telemetry]\nenabled = false\n' >"$HOME/.cargo/binstall.toml"
 fi
 
 CARGO_CRATES=(
@@ -1365,8 +1500,8 @@ _RTK_PID=""
 _RTK_SRC="$WORKDIR/rtk-src"
 if ! command -v rtk &>/dev/null || ! rtk gain &>/dev/null 2>&1; then
   echo -n "  rtk: cloning..."
-  (git clone --depth=1 --quiet https://github.com/rtk-ai/rtk "$_RTK_SRC" 2>>"$LOG_FILE" \
-    && patch -p1 -d "$_RTK_SRC" < "$REPO_FILES/config/rtk/ccusage.patch" >>"$LOG_FILE" 2>&1) &
+  (git clone --depth=1 --quiet https://github.com/rtk-ai/rtk "$_RTK_SRC" 2>>"$LOG_FILE" &&
+    patch -p1 -d "$_RTK_SRC" <"$REPO_FILES/config/rtk/ccusage.patch" >>"$LOG_FILE" 2>&1) &
   _RTK_PID=$!
   echo -e " ${GREEN}(background)${NC}"
 else
@@ -1489,14 +1624,15 @@ echo -e "\n  ${CYAN}Go tools:${NC}"
 _go_binary_install() {
   local name="$1" url="$2"
   if ! $FORCE_UPDATES && { command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; }; then
-    ok "$name (exists)"; return 0
+    ok "$name (exists)"
+    return 0
   fi
   echo -n "  $name (binary)..."
   local tmpf="$WORKDIR/${name}.tmp"
   if curl -fsSL "$url" -o "$tmpf" 2>>"$LOG_FILE"; then
     # Detect archive type and extract
     case "$url" in
-      *.tar.gz|*.tgz)
+      *.tar.gz | *.tgz)
         tar -xzf "$tmpf" -C "$WORKDIR" 2>>"$LOG_FILE"
         # Look for the binary in extracted files
         local bin
@@ -1506,7 +1642,8 @@ _go_binary_install() {
         fi
         if [[ -n "$bin" ]]; then
           install -m 0755 "$bin" "$HOME/go/bin/$name"
-          echo -e " ${GREEN}✓${NC}"; return 0
+          echo -e " ${GREEN}✓${NC}"
+          return 0
         fi
         ;;
       *.zip)
@@ -1515,13 +1652,16 @@ _go_binary_install() {
         bin=$(find "$WORKDIR/${name}_extract" -maxdepth 2 -name "$name" -type f 2>/dev/null | head -1)
         if [[ -n "$bin" ]]; then
           install -m 0755 "$bin" "$HOME/go/bin/$name"
-          echo -e " ${GREEN}✓${NC}"; return 0
+          echo -e " ${GREEN}✓${NC}"
+          return 0
         fi
         ;;
     esac
-    echo -e " ${YELLOW}⚠ extract failed${NC}"; return 1
+    echo -e " ${YELLOW}⚠ extract failed${NC}"
+    return 1
   else
-    echo -e " ${YELLOW}⚠ download failed${NC}"; return 1
+    echo -e " ${YELLOW}⚠ download failed${NC}"
+    return 1
   fi
 }
 
@@ -1538,55 +1678,58 @@ _gh_latest_tag() {
 _NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
 if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
-    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" \
-    || true
+    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" ||
+    true
 fi
-command -v nuclei &>/dev/null && ok "nuclei (exists)" \
-  || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
+command -v nuclei &>/dev/null && ok "nuclei (exists)" ||
+  { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
 _GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
 if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
   # gitleaks uses x64/arm64 naming
-  _GL_ARCH="x64"; [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
+  _GL_ARCH="x64"
+  [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
   _go_binary_install "gitleaks" \
-    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" \
-    || true
+    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" ||
+    true
 fi
-command -v gitleaks &>/dev/null && ok "gitleaks (exists)" \
-  || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
+command -v gitleaks &>/dev/null && ok "gitleaks (exists)" ||
+  { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
 # sops (89 deps) — standalone binary download
 _SOPS_VER=$(_gh_latest_tag "getsops/sops")
 if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
   echo -n "  sops (binary)..."
   if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
-    chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
+    chmod +x "$HOME/go/bin/sops"
+    echo -e " ${GREEN}✓${NC}"
   else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v sops &>/dev/null && ok "sops (exists)" \
-  || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
+command -v sops &>/dev/null && ok "sops (exists)" ||
+  { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
 # osv-scanner (51 deps) — standalone binary download
 _OSV_VER=$(_gh_latest_tag "google/osv-scanner")
 if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
   echo -n "  osv-scanner (binary)..."
   if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
-    chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
+    chmod +x "$HOME/go/bin/osv-scanner"
+    echo -e " ${GREEN}✓${NC}"
   else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" \
-  || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
+command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" ||
+  { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
 _ACT_VER=$(_gh_latest_tag "nektos/act")
 if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
-    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" \
-    || true
+    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" ||
+    true
 fi
-command -v act &>/dev/null && ok "act (exists)" \
-  || { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
+command -v act &>/dev/null && ok "act (exists)" ||
+  { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
 
 # ── Parallel go install for remaining tools ──────────────────────────────────
 # These are lighter tools — run them all in parallel with background jobs.
@@ -1653,16 +1796,14 @@ else
   run_q go install filippo.io/age/cmd/...@latest && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
-
 # ctop — archived project, go install broken, use pinned binary release
 if command -v ctop &>/dev/null; then
   ok "ctop (exists)"
 else
   echo -n "  Installing ctop (binary)..."
-  curl -fsSL "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" -o "$WORKDIR/ctop" 2>>"$LOG_FILE" \
-    && sudo install -m 0755 "$WORKDIR/ctop" /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  curl -fsSL "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" -o "$WORKDIR/ctop" 2>>"$LOG_FILE" &&
+    sudo install -m 0755 "$WORKDIR/ctop" /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
-
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools:${NC}"
 # claude-tmux — Rust TUI for managing Claude Code tmux sessions
@@ -1678,13 +1819,12 @@ else ok "claude-esp (exists)"; fi
 if ! command -v claude-squad &>/dev/null; then
   CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name')
   mkdir -p "$HOME/.local/bin"
-  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz \
-    && tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad \
-    && chmod +x "$HOME/.local/bin/claude-squad" \
-    && rm -f /tmp/cs.tar.gz \
-    && ok "claude-squad" || warn "claude-squad"
+  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
+    tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
+    chmod +x "$HOME/.local/bin/claude-squad" &&
+    rm -f /tmp/cs.tar.gz &&
+    ok "claude-squad" || warn "claude-squad"
 else ok "claude-squad (exists)"; fi
-
 
 # ─── Binary installs (no package manager available) ───
 echo -e "\n  ${CYAN}Binary installs:${NC}"
@@ -1696,19 +1836,18 @@ if ! command -v kubectl &>/dev/null; then
   ok "kubectl"
 else ok "kubectl (exists)"; fi
 
-
 # helm
 if ! command -v helm &>/dev/null; then
-  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null \
-    && ok "helm" || warn "helm install failed"
+  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null &&
+    ok "helm" || warn "helm install failed"
 else ok "helm (exists)"; fi
 
 # gcloud CLI
 if ! command -v gcloud &>/dev/null; then
-  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
-  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
+    sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
   sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
@@ -1735,9 +1874,9 @@ else ok "infracost (exists)"; fi
 
 # hadolint
 if ! command -v hadolint &>/dev/null; then
-  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-linux-${ARCH_FULL/aarch64/arm64}" \
-    && sudo chmod +x /usr/local/bin/hadolint \
-    && ok "hadolint" || warn "hadolint install failed"
+  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-linux-${ARCH_FULL/aarch64/arm64}" &&
+    sudo chmod +x /usr/local/bin/hadolint &&
+    ok "hadolint" || warn "hadolint install failed"
 else ok "hadolint (exists)"; fi
 
 # duckdb
@@ -1787,10 +1926,9 @@ if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
   warn "shellcheck — failed to fetch version, keeping existing"
 elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
   wget -qO "$WORKDIR/shellcheck.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${ARCH_FULL}.tar.xz"
-  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ \
-    && ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
+  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ &&
+    ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
 else ok "shellcheck (exists)"; fi
-
 
 # Dippy — auto-approve safe commands for Claude Code (brew preferred, fallback to clone)
 if ! command -v dippy &>/dev/null && ! [ -f "$HOME/.local/bin/dippy" ]; then
@@ -1820,32 +1958,28 @@ else ok "infisical (exists)"; fi
 
 # cloudflared — Cloudflare tunnels
 if ! command -v cloudflared &>/dev/null; then
-  curl -sL -o "$WORKDIR/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_AMD}" \
-    && sudo install -m 0755 "$WORKDIR/cloudflared" /usr/local/bin/cloudflared \
-    && ok "cloudflared" || warn "cloudflared install failed"
+  curl -sL -o "$WORKDIR/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_AMD}" &&
+    sudo install -m 0755 "$WORKDIR/cloudflared" /usr/local/bin/cloudflared &&
+    ok "cloudflared" || warn "cloudflared install failed"
 else ok "cloudflared (exists)"; fi
-
 
 # step-cli — certificate inspection, generation, and TLS debugging
 # Uses versionless asset name (step-cli_amd64.deb) so latest/download works reliably
 if ! command -v step &>/dev/null; then
   curl -fsSL -o "$WORKDIR/step-cli.deb" \
-    "https://github.com/smallstep/cli/releases/latest/download/step-cli_${ARCH_AMD}.deb" \
-    && sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null \
-    && ok "step-cli" || warn "step-cli install failed"
+    "https://github.com/smallstep/cli/releases/latest/download/step-cli_${ARCH_AMD}.deb" &&
+    sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null &&
+    ok "step-cli" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
     sudo apt-get install -y libpcre3-dev libev4 2>/dev/null
-    echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
-      && ok "comby" || warn "comby install failed"
+    echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null &&
+      ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
 else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
-
-
-
 section "Phase 4/6 — Claude Code CLI"
 
 # Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
@@ -1881,9 +2015,7 @@ elif [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" != "amd64" ]]; then
   warn "Claude Desktop: skipped (amd64 only, detected ${ARCH_AMD})"
 fi
 
-
 section "Phase 5/6 — Deploy ~/.claude/ Config"
-
 # sd is required for template substitution (installed via cargo in Phase 3)
 if ! command -v sd &>/dev/null; then
   warn "sd not found — falling back to sed for template substitution"
@@ -1899,9 +2031,9 @@ fi
 
 # ─── Cleanup stale artifacts from previous versions ───
 rm -rf "$HOME/.claude/plugins/cache/claude-plugins-official/hookify/" 2>/dev/null
-rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null    # replaced by cli-tools
-rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null      # replaced by security-scan
-rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null    # replaced by systematic-debugging
+rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null # replaced by cli-tools
+rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null   # replaced by security-scan
+rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null # replaced by systematic-debugging
 
 # Backup existing
 if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE_DIR/agents" ]; then
@@ -1956,27 +2088,29 @@ python3 "$REPO_FILES/script/merge-settings.py" \
   "$CLAUDE_DIR/settings.json" \
   --engineer "$ENGINEER_NAME" \
   --path "$TITAN_PATH" \
-  "${_MERGE_INJECT[@]}" \
-  && ok "settings.json (atomic merge)" \
-  || { warn "settings.json merge failed — falling back to template overwrite"
-       install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-       sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
-       sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-       ok "settings.json (fallback — template overwrite)"; }
+  "${_MERGE_INJECT[@]}" &&
+  ok "settings.json (atomic merge)" ||
+  {
+    warn "settings.json merge failed — falling back to template overwrite"
+    install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+    sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+    sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+    ok "settings.json (fallback — template overwrite)"
+  }
 
 # Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
 if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
   jq '.enabledPlugins["semgrep@claude-plugins-official"] = true' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
-    && ok "settings.json (semgrep plugin enabled)" \
-    || warn "semgrep plugin enablement failed"
+    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
+    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
+    ok "settings.json (semgrep plugin enabled)" ||
+    warn "semgrep plugin enablement failed"
 fi
 
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
 if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
-  run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" \
-    || warn "rtk init -g failed — run manually: rtk init -g"
+  run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" ||
+    warn "rtk init -g failed — run manually: rtk init -g"
 fi
 
 # ─── cozempic — context bloat cleaner (global hooks) ───
@@ -2033,9 +2167,9 @@ with open(f, 'w') as fh:
     json.dump(cfg, fh, indent=2)
     fh.write('\n')
 PYEOF
-  [[ $? -eq 0 ]] \
-    && ok "cozempic: hooks wired globally in ~/.claude/settings.json" \
-    || warn "cozempic: hook injection failed — run manually from a project dir: cozempic init"
+  [[ $? -eq 0 ]] &&
+    ok "cozempic: hooks wired globally in ~/.claude/settings.json" ||
+    warn "cozempic: hook injection failed — run manually from a project dir: cozempic init"
 
   # Install /cozempic slash command from cozempic's own venv (avoids cozempic init's cwd problem)
   _COZEMPIC_PY="$(dirname "$(command -v cozempic)")/python3"
@@ -2043,14 +2177,14 @@ PYEOF
     _SLASH=$("$_COZEMPIC_PY" -c \
       "import importlib.resources as r; print(r.files('cozempic.data').joinpath('cozempic_slash_command.md'))" \
       2>/dev/null)
-    [[ -n "$_SLASH" ]] && install -Dm644 "$_SLASH" "$CLAUDE_DIR/commands/cozempic.md" \
-      && ok "cozempic: /cozempic slash command installed"
+    [[ -n "$_SLASH" ]] && install -Dm644 "$_SLASH" "$CLAUDE_DIR/commands/cozempic.md" &&
+      ok "cozempic: /cozempic slash command installed"
   fi
 fi
 
 # ─── ccstatusline config ───
-install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
-  && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
+install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" &&
+  ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
@@ -2140,8 +2274,8 @@ install -Dm755 "$REPO_FILES/dot-claude/statusline-command.sh" "$CLAUDE_DIR/statu
 # If ccstatusline is installed, use it directly; else fall back to statusline-command.sh
 if command -v ccstatusline &>/dev/null; then
   jq '.statusLine = {"type": "command", "command": "ccstatusline", "padding": 0}' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
+    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
   ok "statusline: ccstatusline (native)"
 else
   ok "statusline: statusline-command.sh (fallback)"
@@ -2237,11 +2371,11 @@ if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
 else ok "trailofbits: modern-python (exists)"; fi
 # Fix SKILL.md path: plugin structure nests SKILL.md under skills/modern-python/, Claude expects root
 # Also add paths scoping so it only loads for Python files
-if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] \
-   && [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
+if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] &&
+  [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
   sed '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" \
-    > "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
+    >"$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
   ok "trailofbits: SKILL.md fixed at root with paths scoping"
 elif [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" 2>/dev/null; then
   sed -i '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
@@ -2260,7 +2394,6 @@ if [ -d "$CLAUDE_DIR/skills/hashicorp" ]; then
   rm -rf "$CLAUDE_DIR/skills/hashicorp"
   ok "removed old hashicorp full clone (14 skills → covered by infra-deploy)"
 fi
-
 
 # ─── Commands ───
 install -Dm644 "$REPO_FILES/dot-claude/commands/catchup.md" "$CLAUDE_DIR/commands/catchup.md"
@@ -2309,11 +2442,11 @@ ok "agent: reviewer"
 
 # ─── On-Demand Agent Slots (slot-1..5) ───
 for _slot_i in 1 2 3 4 5; do
-  case $_slot_i in 1|2|3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
+  case $_slot_i in 1 | 2 | 3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
   _slot_i="$_slot_i" _slot_model="$_slot_model" \
     envsubst '$_slot_i $_slot_model' \
-    < "$REPO_FILES/dot-claude/agents/slot-template.md" \
-    > "$CLAUDE_DIR/agents/slot-${_slot_i}.md"
+    <"$REPO_FILES/dot-claude/agents/slot-template.md" \
+    >"$CLAUDE_DIR/agents/slot-${_slot_i}.md"
   ok "agent: slot-${_slot_i} [${_slot_model}]"
 done
 # Clean up stale slots from previous installs (was 10, now 5)
@@ -2342,8 +2475,10 @@ touch "$AGT_STASH_DIR/_loaded/.lock" "$AGT_STASH_DIR/_loaded/.manifest"
 "$HOME/.local/bin/agt" build-index 2>/dev/null && ok "agent-stash: index built" || warn "agent-stash: index build failed"
 
 # ─── Cron: weekly agent stash refresh ───
-(crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh' || true; \
-  echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1") | crontab -
+(
+  crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh' || true
+  echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1"
+) | crontab -
 ok "cron: weekly agent-stash refresh (Sun 03:00)"
 
 # CLIProxyAPI — proxy server for AI coding tools (clone, not a CLI install)
@@ -2351,7 +2486,6 @@ if [ ! -d ~/tools/CLIProxyAPI ]; then
   mkdir -p ~/tools
   git clone --depth 1 https://github.com/router-for-me/CLIProxyAPI.git ~/tools/CLIProxyAPI 2>/dev/null && ok "CLIProxyAPI (cloned to ~/tools/)" || warn "CLIProxyAPI"
 else ok "CLIProxyAPI (exists)"; fi
-
 # ─── Phase 5b — Claude Code Plugins ───
 section "Phase 5b — Claude Code Plugins"
 echo "  Installing official and community plugins..."
@@ -2531,7 +2665,7 @@ else
 
     # Systemd user service
     mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/letta-ctrl.service" << LETTA_CTRL_SVC
+    cat >"$HOME/.config/systemd/user/letta-ctrl.service" <<LETTA_CTRL_SVC
 [Unit]
 Description=LettaCtrl — Letta management GUI
 After=letta.service
@@ -2564,7 +2698,6 @@ LETTA_CTRL_SVC
     fi
   fi
 fi
-
 # Patch plugin SKILL.md files with paths: scoping — plugin updates may clear these, so re-patch after install
 # This prevents skill-creator/episodic-memory from loading on every turn (93% token reduction)
 if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
@@ -2590,7 +2723,7 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   if ! $COZEMPIC_SKIP; then
     _COZEMPIC_KEY=$(jq -r '.plugins | keys[] | select(startswith("cozempic"))' \
       "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null | head -1)
-    [[ -n "$_COZEMPIC_KEY" ]] && \
+    [[ -n "$_COZEMPIC_KEY" ]] &&
       _patch_plugin_skill "$_COZEMPIC_KEY" \
         "skills/cozempic/SKILL.md" \
         '["**/.claude/**", "**/*.jsonl", "**/cozempic*"]'
@@ -2607,7 +2740,10 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
         vpath="${vpath%/}"
         is_active=false
         for ap in "${ACTIVE_PATHS[@]}"; do
-          [[ "$ap" == "$vpath" ]] && { is_active=true; break; }
+          [[ "$ap" == "$vpath" ]] && {
+            is_active=true
+            break
+          }
         done
         if ! $is_active; then
           rm -rf "$vpath" 2>/dev/null || true
@@ -2617,7 +2753,6 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
     fi
   fi
 fi
-
 section "Phase 6/6 — Shell Integration"
 
 # Build the shell config block
@@ -2631,7 +2766,7 @@ command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
 
 if ! grep -q "Titan CLI Arsenal" ~/.bashrc 2>/dev/null; then
-  echo "$SHELL_BLOCK" >> ~/.bashrc
+  echo "$SHELL_BLOCK" >>~/.bashrc
   ok "Shell integration added to ~/.bashrc"
 else
   ok "Shell integration already present"
@@ -2644,8 +2779,6 @@ git config --global delta.navigate true 2>/dev/null || true
 git config --global delta.line-numbers true 2>/dev/null || true
 git config --global delta.side-by-side true 2>/dev/null || true
 ok "Git delta pager configured"
-
-
 # ─── VPS — Tailscale + finalize ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Tailscale — install, connect, lock SSH ─────────────────────────────
@@ -2705,26 +2838,26 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
     # ── tailscale serve — expose local services on Tailscale network ───────
     if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
-      tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
-        && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
-        || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
+      tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
+        ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" ||
+        warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
     elif command -v docker &>/dev/null; then
       ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
     fi
     if ! $CCFLARE_SKIP; then
-      tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
-        && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
-        || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
+      tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null &&
+        ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" ||
+        warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
     fi
     if ! $LETTA_SKIP; then
-      tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null \
-        && ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" \
-        || warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
+      tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null &&
+        ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" ||
+        warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
     fi
     if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP; then
-      tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null \
-        && ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" \
-        || warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
+      tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null &&
+        ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" ||
+        warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
     fi
   fi
 
@@ -2773,7 +2906,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo -e "  ${CYAN}Services (Tailscale):${NC}"
   command -v docker &>/dev/null && echo "    n8n:            https://${TS_HOSTNAME}:5678"
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
-  $LETTA_SKIP   || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
+  $LETTA_SKIP || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
@@ -2784,7 +2917,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
   if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/ctrl-token" ]]; then
     echo -e "  ${CYAN}LettaCtrl token:${NC}
-    Token:        $(tr -d '[:space:]' < "$HOME/.config/letta/ctrl-token")"
+    Token:        $(tr -d '[:space:]' <"$HOME/.config/letta/ctrl-token")"
   fi
   echo ""
   echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
@@ -2801,7 +2934,7 @@ else
   echo -e "  ${CYAN}Services:${NC}
     n8n:              http://localhost:5678"
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
-  $LETTA_SKIP   || echo "    letta:            http://localhost:${LETTA_PORT}"
+  $LETTA_SKIP || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
   echo ""
 
@@ -2863,6 +2996,6 @@ if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   sudo ufw delete allow 22/tcp || true
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
   sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
 fi

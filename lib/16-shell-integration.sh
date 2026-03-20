@@ -11,7 +11,7 @@ command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
 
 if ! grep -q "Titan CLI Arsenal" ~/.bashrc 2>/dev/null; then
-  echo "$SHELL_BLOCK" >> ~/.bashrc
+  echo "$SHELL_BLOCK" >>~/.bashrc
   ok "Shell integration added to ~/.bashrc"
 else
   ok "Shell integration already present"
@@ -24,5 +24,3 @@ git config --global delta.navigate true 2>/dev/null || true
 git config --global delta.line-numbers true 2>/dev/null || true
 git config --global delta.side-by-side true 2>/dev/null || true
 ok "Git delta pager configured"
-
-

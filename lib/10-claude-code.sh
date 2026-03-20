@@ -33,6 +33,4 @@ elif [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" != "amd64" ]]; then
   warn "Claude Desktop: skipped (amd64 only, detected ${ARCH_AMD})"
 fi
 
-
 section "Phase 5/6 — Deploy ~/.claude/ Config"
-

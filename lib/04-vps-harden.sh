@@ -7,13 +7,19 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
     read -rsp "  Key: " TAILSCALE_KEY
     echo ""
-    [[ -z "$TAILSCALE_KEY" ]] && { fail "Tailscale key required for VPS mode"; exit 1; }
+    [[ -z "$TAILSCALE_KEY" ]] && {
+      fail "Tailscale key required for VPS mode"
+      exit 1
+    }
   fi
 
   # ── Require non-root Claude user ───────────────────────────────────────
   if [[ -z "$CLAUDE_USER" ]]; then
     read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
-    [[ -z "$CLAUDE_USER" ]] && { fail "--claude-user required for VPS mode"; exit 1; }
+    [[ -z "$CLAUDE_USER" ]] && {
+      fail "--claude-user required for VPS mode"
+      exit 1
+    }
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
@@ -37,7 +43,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   # Reference: https://tailscale.com/kb/1077/secure-server-ubuntu-18-04
 
   # ── fail2ban — SSH protection ─────────────────────────────────────────
-  sudo tee /etc/fail2ban/jail.local > /dev/null << 'FAIL2BAN_EOF'
+  sudo tee /etc/fail2ban/jail.local >/dev/null <<'FAIL2BAN_EOF'
 [DEFAULT]
 bantime  = 1h
 findtime = 10m
@@ -53,7 +59,7 @@ FAIL2BAN_EOF
   ok "fail2ban active (SSH: 5 retries → 1h ban)"
 
   # ── unattended-upgrades — security patches only ───────────────────────
-  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades-titan > /dev/null << 'UU_EOF'
+  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades-titan >/dev/null <<'UU_EOF'
 Unattended-Upgrade::Allowed-Origins {
     "${distro_id}:${distro_codename}-security";
 };
@@ -64,7 +70,7 @@ UU_EOF
   ok "unattended-upgrades active (security patches only, no auto-reboot)"
 
   # ── auditd — privilege escalation monitoring ──────────────────────────
-  sudo tee /etc/audit/rules.d/titan.rules > /dev/null << 'AUDIT_EOF'
+  sudo tee /etc/audit/rules.d/titan.rules >/dev/null <<'AUDIT_EOF'
 -a always,exit -F arch=b64 -S execve -F euid=0 -F auid!=0 -k privesc
 -w /etc/passwd -p wa -k passwd_changes
 -w /etc/sudoers -p wa -k sudoers_changes
@@ -74,7 +80,7 @@ AUDIT_EOF
   ok "auditd active (privesc monitoring, passwd/sudoers watch)"
 
   # ── Repo supply chain guard ───────────────────────────────────────────
-  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh > /dev/null << 'GUARD_EOF'
+  sudo tee /usr/local/sbin/repo_supply_chain_guard.sh >/dev/null <<'GUARD_EOF'
 #!/bin/bash
 set -euo pipefail
 # Allowlist includes Ubuntu/Debian base repos plus all repos titan-setup.sh adds
@@ -114,7 +120,7 @@ GUARD_EOF
   ok "Repo supply chain guard installed and run"
 
   # ── Compliance check script ───────────────────────────────────────────
-  sudo tee /usr/local/bin/compliance_check.sh > /dev/null << 'COMPLIANCE_EOF'
+  sudo tee /usr/local/bin/compliance_check.sh >/dev/null <<'COMPLIANCE_EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -213,7 +219,7 @@ COMPLIANCE_EOF
   ok "Compliance check script installed"
 
   # ── Compliance systemd timer (every 6h) ───────────────────────────────
-  sudo tee /etc/systemd/system/compliance-check.service > /dev/null << 'SVC_EOF'
+  sudo tee /etc/systemd/system/compliance-check.service >/dev/null <<'SVC_EOF'
 [Unit]
 Description=Run server compliance checks
 After=network-online.target
@@ -224,7 +230,7 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/compliance_check.sh
 SVC_EOF
 
-  sudo tee /etc/systemd/system/compliance-check.timer > /dev/null << 'TIMER_EOF'
+  sudo tee /etc/systemd/system/compliance-check.timer >/dev/null <<'TIMER_EOF'
 [Unit]
 Description=Periodic compliance checks
 
@@ -243,4 +249,3 @@ TIMER_EOF
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
 fi
-

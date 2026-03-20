@@ -23,7 +23,7 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   if ! $COZEMPIC_SKIP; then
     _COZEMPIC_KEY=$(jq -r '.plugins | keys[] | select(startswith("cozempic"))' \
       "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null | head -1)
-    [[ -n "$_COZEMPIC_KEY" ]] && \
+    [[ -n "$_COZEMPIC_KEY" ]] &&
       _patch_plugin_skill "$_COZEMPIC_KEY" \
         "skills/cozempic/SKILL.md" \
         '["**/.claude/**", "**/*.jsonl", "**/cozempic*"]'
@@ -40,7 +40,10 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
         vpath="${vpath%/}"
         is_active=false
         for ap in "${ACTIVE_PATHS[@]}"; do
-          [[ "$ap" == "$vpath" ]] && { is_active=true; break; }
+          [[ "$ap" == "$vpath" ]] && {
+            is_active=true
+            break
+          }
         done
         if ! $is_active; then
           rm -rf "$vpath" 2>/dev/null || true
@@ -50,4 +53,3 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
     fi
   fi
 fi
-

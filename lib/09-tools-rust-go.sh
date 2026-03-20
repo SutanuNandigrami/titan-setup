@@ -28,7 +28,7 @@ fi
 
 # Suppress interactive telemetry prompt on first cargo-binstall run
 if [[ ! -f "$HOME/.cargo/binstall.toml" ]]; then
-  printf '[telemetry]\nenabled = false\n' > "$HOME/.cargo/binstall.toml"
+  printf '[telemetry]\nenabled = false\n' >"$HOME/.cargo/binstall.toml"
 fi
 
 CARGO_CRATES=(
@@ -45,8 +45,8 @@ _RTK_PID=""
 _RTK_SRC="$WORKDIR/rtk-src"
 if ! command -v rtk &>/dev/null || ! rtk gain &>/dev/null 2>&1; then
   echo -n "  rtk: cloning..."
-  (git clone --depth=1 --quiet https://github.com/rtk-ai/rtk "$_RTK_SRC" 2>>"$LOG_FILE" \
-    && patch -p1 -d "$_RTK_SRC" < "$REPO_FILES/config/rtk/ccusage.patch" >>"$LOG_FILE" 2>&1) &
+  (git clone --depth=1 --quiet https://github.com/rtk-ai/rtk "$_RTK_SRC" 2>>"$LOG_FILE" &&
+    patch -p1 -d "$_RTK_SRC" <"$REPO_FILES/config/rtk/ccusage.patch" >>"$LOG_FILE" 2>&1) &
   _RTK_PID=$!
   echo -e " ${GREEN}(background)${NC}"
 else
@@ -169,14 +169,15 @@ echo -e "\n  ${CYAN}Go tools:${NC}"
 _go_binary_install() {
   local name="$1" url="$2"
   if ! $FORCE_UPDATES && { command -v "$name" &>/dev/null || [ -f "$HOME/go/bin/$name" ]; }; then
-    ok "$name (exists)"; return 0
+    ok "$name (exists)"
+    return 0
   fi
   echo -n "  $name (binary)..."
   local tmpf="$WORKDIR/${name}.tmp"
   if curl -fsSL "$url" -o "$tmpf" 2>>"$LOG_FILE"; then
     # Detect archive type and extract
     case "$url" in
-      *.tar.gz|*.tgz)
+      *.tar.gz | *.tgz)
         tar -xzf "$tmpf" -C "$WORKDIR" 2>>"$LOG_FILE"
         # Look for the binary in extracted files
         local bin
@@ -186,7 +187,8 @@ _go_binary_install() {
         fi
         if [[ -n "$bin" ]]; then
           install -m 0755 "$bin" "$HOME/go/bin/$name"
-          echo -e " ${GREEN}✓${NC}"; return 0
+          echo -e " ${GREEN}✓${NC}"
+          return 0
         fi
         ;;
       *.zip)
@@ -195,13 +197,16 @@ _go_binary_install() {
         bin=$(find "$WORKDIR/${name}_extract" -maxdepth 2 -name "$name" -type f 2>/dev/null | head -1)
         if [[ -n "$bin" ]]; then
           install -m 0755 "$bin" "$HOME/go/bin/$name"
-          echo -e " ${GREEN}✓${NC}"; return 0
+          echo -e " ${GREEN}✓${NC}"
+          return 0
         fi
         ;;
     esac
-    echo -e " ${YELLOW}⚠ extract failed${NC}"; return 1
+    echo -e " ${YELLOW}⚠ extract failed${NC}"
+    return 1
   else
-    echo -e " ${YELLOW}⚠ download failed${NC}"; return 1
+    echo -e " ${YELLOW}⚠ download failed${NC}"
+    return 1
   fi
 }
 
@@ -218,55 +223,58 @@ _gh_latest_tag() {
 _NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
 if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
-    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" \
-    || true
+    "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" ||
+    true
 fi
-command -v nuclei &>/dev/null && ok "nuclei (exists)" \
-  || { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
+command -v nuclei &>/dev/null && ok "nuclei (exists)" ||
+  { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
 _GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
 if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
   # gitleaks uses x64/arm64 naming
-  _GL_ARCH="x64"; [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
+  _GL_ARCH="x64"
+  [[ "$ARCH_FULL" == "aarch64" ]] && _GL_ARCH="arm64"
   _go_binary_install "gitleaks" \
-    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" \
-    || true
+    "https://github.com/gitleaks/gitleaks/releases/download/${_GITLEAKS_VER}/gitleaks_${_GITLEAKS_VER#v}_linux_${_GL_ARCH}.tar.gz" ||
+    true
 fi
-command -v gitleaks &>/dev/null && ok "gitleaks (exists)" \
-  || { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
+command -v gitleaks &>/dev/null && ok "gitleaks (exists)" ||
+  { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
 # sops (89 deps) — standalone binary download
 _SOPS_VER=$(_gh_latest_tag "getsops/sops")
 if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
   echo -n "  sops (binary)..."
   if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
-    chmod +x "$HOME/go/bin/sops"; echo -e " ${GREEN}✓${NC}"
+    chmod +x "$HOME/go/bin/sops"
+    echo -e " ${GREEN}✓${NC}"
   else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v sops &>/dev/null && ok "sops (exists)" \
-  || { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
+command -v sops &>/dev/null && ok "sops (exists)" ||
+  { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
 # osv-scanner (51 deps) — standalone binary download
 _OSV_VER=$(_gh_latest_tag "google/osv-scanner")
 if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
   echo -n "  osv-scanner (binary)..."
   if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
-    chmod +x "$HOME/go/bin/osv-scanner"; echo -e " ${GREEN}✓${NC}"
+    chmod +x "$HOME/go/bin/osv-scanner"
+    echo -e " ${GREEN}✓${NC}"
   else echo -e " ${YELLOW}⚠${NC}"; fi
 fi
-command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" \
-  || { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
+command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" ||
+  { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
 _ACT_VER=$(_gh_latest_tag "nektos/act")
 if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
-    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" \
-    || true
+    "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" ||
+    true
 fi
-command -v act &>/dev/null && ok "act (exists)" \
-  || { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
+command -v act &>/dev/null && ok "act (exists)" ||
+  { run_q go install "github.com/nektos/act@latest" && ok "act (compiled)" || warn "act"; }
 
 # ── Parallel go install for remaining tools ──────────────────────────────────
 # These are lighter tools — run them all in parallel with background jobs.
@@ -333,16 +341,14 @@ else
   run_q go install filippo.io/age/cmd/...@latest && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
-
 # ctop — archived project, go install broken, use pinned binary release
 if command -v ctop &>/dev/null; then
   ok "ctop (exists)"
 else
   echo -n "  Installing ctop (binary)..."
-  curl -fsSL "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" -o "$WORKDIR/ctop" 2>>"$LOG_FILE" \
-    && sudo install -m 0755 "$WORKDIR/ctop" /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  curl -fsSL "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" -o "$WORKDIR/ctop" 2>>"$LOG_FILE" &&
+    sudo install -m 0755 "$WORKDIR/ctop" /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
-
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools:${NC}"
 # claude-tmux — Rust TUI for managing Claude Code tmux sessions
@@ -358,13 +364,12 @@ else ok "claude-esp (exists)"; fi
 if ! command -v claude-squad &>/dev/null; then
   CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name')
   mkdir -p "$HOME/.local/bin"
-  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz \
-    && tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad \
-    && chmod +x "$HOME/.local/bin/claude-squad" \
-    && rm -f /tmp/cs.tar.gz \
-    && ok "claude-squad" || warn "claude-squad"
+  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
+    tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
+    chmod +x "$HOME/.local/bin/claude-squad" &&
+    rm -f /tmp/cs.tar.gz &&
+    ok "claude-squad" || warn "claude-squad"
 else ok "claude-squad (exists)"; fi
-
 
 # ─── Binary installs (no package manager available) ───
 echo -e "\n  ${CYAN}Binary installs:${NC}"
@@ -376,19 +381,18 @@ if ! command -v kubectl &>/dev/null; then
   ok "kubectl"
 else ok "kubectl (exists)"; fi
 
-
 # helm
 if ! command -v helm &>/dev/null; then
-  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null \
-    && ok "helm" || warn "helm install failed"
+  curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash 2>/dev/null &&
+    ok "helm" || warn "helm install failed"
 else ok "helm (exists)"; fi
 
 # gcloud CLI
 if ! command -v gcloud &>/dev/null; then
-  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
-  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
+    sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
   sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
@@ -415,9 +419,9 @@ else ok "infracost (exists)"; fi
 
 # hadolint
 if ! command -v hadolint &>/dev/null; then
-  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-linux-${ARCH_FULL/aarch64/arm64}" \
-    && sudo chmod +x /usr/local/bin/hadolint \
-    && ok "hadolint" || warn "hadolint install failed"
+  sudo wget -qO /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-linux-${ARCH_FULL/aarch64/arm64}" &&
+    sudo chmod +x /usr/local/bin/hadolint &&
+    ok "hadolint" || warn "hadolint install failed"
 else ok "hadolint (exists)"; fi
 
 # duckdb
@@ -467,10 +471,9 @@ if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
   warn "shellcheck — failed to fetch version, keeping existing"
 elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
   wget -qO "$WORKDIR/shellcheck.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${ARCH_FULL}.tar.xz"
-  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ \
-    && ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
+  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ &&
+    ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
 else ok "shellcheck (exists)"; fi
-
 
 # Dippy — auto-approve safe commands for Claude Code (brew preferred, fallback to clone)
 if ! command -v dippy &>/dev/null && ! [ -f "$HOME/.local/bin/dippy" ]; then
@@ -500,29 +503,25 @@ else ok "infisical (exists)"; fi
 
 # cloudflared — Cloudflare tunnels
 if ! command -v cloudflared &>/dev/null; then
-  curl -sL -o "$WORKDIR/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_AMD}" \
-    && sudo install -m 0755 "$WORKDIR/cloudflared" /usr/local/bin/cloudflared \
-    && ok "cloudflared" || warn "cloudflared install failed"
+  curl -sL -o "$WORKDIR/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_AMD}" &&
+    sudo install -m 0755 "$WORKDIR/cloudflared" /usr/local/bin/cloudflared &&
+    ok "cloudflared" || warn "cloudflared install failed"
 else ok "cloudflared (exists)"; fi
-
 
 # step-cli — certificate inspection, generation, and TLS debugging
 # Uses versionless asset name (step-cli_amd64.deb) so latest/download works reliably
 if ! command -v step &>/dev/null; then
   curl -fsSL -o "$WORKDIR/step-cli.deb" \
-    "https://github.com/smallstep/cli/releases/latest/download/step-cli_${ARCH_AMD}.deb" \
-    && sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null \
-    && ok "step-cli" || warn "step-cli install failed"
+    "https://github.com/smallstep/cli/releases/latest/download/step-cli_${ARCH_AMD}.deb" &&
+    sudo dpkg -i "$WORKDIR/step-cli.deb" 2>/dev/null &&
+    ok "step-cli" || warn "step-cli install failed"
 else ok "step-cli (exists)"; fi
 
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
     sudo apt-get install -y libpcre3-dev libev4 2>/dev/null
-    echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
-      && ok "comby" || warn "comby install failed"
+    echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null &&
+      ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
 else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
-
-
-
