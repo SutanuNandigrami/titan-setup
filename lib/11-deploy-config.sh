@@ -30,7 +30,7 @@ mkdir -p "$HOME/.config/agt"
 # REPO_FILES already set by lib/06b-repo-files.sh (cloned early for tool patches)
 
 # ─── CLAUDE.md ───
-install -Dm644 "$REPO_FILES/dot-claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+install -Dm644 "$REPO_FILES/dot-claude/CLAUDE.md.tmpl" "$CLAUDE_DIR/CLAUDE.md"
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/CLAUDE.md"
 ok "CLAUDE.md"
 
@@ -51,7 +51,7 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   _MERGE_INJECT+=(--inject "LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}")
   _MERGE_INJECT+=(--inject "LETTA_API_KEY=${_LETTA_PASS}")
   _MERGE_INJECT+=(--inject "LETTA_MODEL=anthropic/claude-sonnet-4-6")
-  _MERGE_INJECT+=(--inject "LETTA_MODE=full")
+  _MERGE_INJECT+=(--inject "LETTA_MODE=whisper")
   _MERGE_INJECT+=(--inject "LETTA_SDK_TOOLS=read-only")
 fi
 

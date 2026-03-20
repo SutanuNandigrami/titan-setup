@@ -304,8 +304,7 @@
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
     "skill-creator@claude-plugins-official": true,
-    "episodic-memory@superpowers-marketplace": true,
-    "playwright@claude-plugins-official": true
+    "episodic-memory@superpowers-marketplace": true
   },
   "model": "opusplan",
   "skipDangerousModePermissionPrompt": true,
