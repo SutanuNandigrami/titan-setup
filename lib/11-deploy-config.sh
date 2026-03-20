@@ -73,11 +73,15 @@ python3 "$REPO_FILES/script/merge-settings.py" \
   "${_MERGE_INJECT[@]}" &&
   ok "settings.json (atomic merge)" ||
   {
-    warn "settings.json merge failed — falling back to template overwrite"
-    install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-    ok "settings.json (fallback — template overwrite)"
+    if [[ -f "$CLAUDE_DIR/settings.json" ]]; then
+      warn "settings.json merge failed — preserving existing user config (fix manually)"
+    else
+      warn "settings.json merge failed — installing template (no existing config found)"
+      install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+      ok "settings.json (template — first install)"
+    fi
   }
 
 # Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
@@ -296,10 +300,24 @@ ok "command: /recall"
 install -Dm644 "$REPO_FILES/dot-claude/commands/remember.md" "$CLAUDE_DIR/commands/remember.md"
 ok "command: /remember"
 
+# ── Parallel git clones for external skills (saves ~15s vs sequential) ──────
+_NEED_SUPERPOWERS=false
+_NEED_VIBESEC=false
+_NEED_TRAILOFBITS=false
+[ ! -d "$CLAUDE_DIR/skills/tdd" ] && _NEED_SUPERPOWERS=true
+[ ! -d "$CLAUDE_DIR/skills/vibesec" ] && _NEED_VIBESEC=true
+[ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ] && _NEED_TRAILOFBITS=true
+
+if $_NEED_SUPERPOWERS || $_NEED_VIBESEC || $_NEED_TRAILOFBITS; then
+  $_NEED_SUPERPOWERS && git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null &
+  $_NEED_VIBESEC && git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null &
+  $_NEED_TRAILOFBITS && git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null &
+  wait
+fi
+
 # obra/superpowers (multiple useful skills)
-if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
-  git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null || true
-  if [ -d /tmp/superpowers/skills ]; then
+if $_NEED_SUPERPOWERS; then
+  if [ -d "/tmp/superpowers/skills" ]; then
     cp -r /tmp/superpowers/skills/test-driven-development "$CLAUDE_DIR/skills/tdd" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/systematic-debugging "$CLAUDE_DIR/skills/systematic-debugging" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/brainstorming "$CLAUDE_DIR/skills/brainstorming" 2>/dev/null || true
@@ -331,8 +349,8 @@ else
 fi
 
 # Security skills
-if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
-  git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null && ok "vibesec" || warn "vibesec"
+if $_NEED_VIBESEC; then
+  [ -d "$CLAUDE_DIR/skills/vibesec" ] && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
 if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
@@ -342,8 +360,7 @@ fi
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
 # Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
 # Individual plugins can be installed on-demand via: claude plugin marketplace add trailofbits/skills
-if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
-  git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null
+if $_NEED_TRAILOFBITS; then
   if [ -d /tmp/trailofbits-skills/plugins/modern-python ]; then
     cp -r /tmp/trailofbits-skills/plugins/modern-python "$CLAUDE_DIR/skills/trailofbits-modern-python" 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
   else

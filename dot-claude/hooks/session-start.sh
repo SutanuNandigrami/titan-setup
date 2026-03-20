@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook — load previous session state and run maintenance
-set -euo pipefail
+# NOTE: no set -euo pipefail — hooks must not die on non-zero exits (ADR-015)
 
 # ─── ntfy push notification helper ───
 _ntfy() {

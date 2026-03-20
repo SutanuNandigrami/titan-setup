@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook — capture final session state for next session
-set -euo pipefail
+# NOTE: no set -euo pipefail — hooks must not die on non-zero exits (ADR-015)
 
 # ─── ntfy push notification helper ───
 _ntfy() {

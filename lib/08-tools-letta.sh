@@ -106,7 +106,8 @@ else
     cat >"$HOME/.config/systemd/user/letta.service" <<SERVICEEOF
 [Unit]
 Description=Letta persistent memory server
-After=default.target
+After=docker.service default.target
+Wants=docker.service
 
 [Service]
 Type=simple
@@ -115,6 +116,9 @@ ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p 127.0.0.1:${LETTA_PORT}
 ExecStop=${_DOCKER_BIN} stop letta-server
 Restart=on-failure
 RestartSec=15
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=1G
 
 [Install]
 WantedBy=default.target
@@ -153,7 +157,7 @@ else
   # Phase A: Install from source with patches
   # Upstream bugs: NULL constraint on refresh_token for kilo/zai/minimax/console CLI modes
   # See: https://github.com/tombii/better-ccflare/issues/83
-  if ! command -v better-ccflare &>/dev/null; then
+  if $FORCE_UPDATES || ! command -v better-ccflare &>/dev/null; then
     _BCF_SRC=$(mktemp -d -t bcf-src-XXXXXX)
     _CLEANUP_DIRS+=("$_BCF_SRC")
     if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then
@@ -243,6 +247,9 @@ Type=simple
 ExecStart=${_BCF_BIN} --serve --port ${CCFLARE_PORT}
 Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=256M
 Environment="PORT=${CCFLARE_PORT}"
 Environment="BETTER_CCFLARE_HOST=${CCFLARE_HOST}"
 Environment="LB_STRATEGY=session"
@@ -308,7 +315,7 @@ function injectBillingHeader(body) {
   } catch { return body; }
 }
 Bun.serve({
-  port: PORT, hostname: "0.0.0.0",
+  port: PORT, hostname: process.env.CCFLARE_PROXY_HOST || "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
     let body = await req.arrayBuffer();
@@ -335,6 +342,7 @@ Type=simple
 ExecStart=${_BUN_BIN} run %h/.config/letta/ccflare-billing-proxy.js
 Environment="CCFLARE_PORT=${CCFLARE_PORT}"
 Environment="CCFLARE_PROXY_PORT=${CCFLARE_PROXY_PORT}"
+Environment="CCFLARE_PROXY_HOST=172.17.0.1"
 Environment="PATH=${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 Restart=on-failure
 RestartSec=5
@@ -345,7 +353,7 @@ SVCEOF
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable ccflare-docker-proxy 2>/dev/null || true
     systemctl --user start ccflare-docker-proxy 2>/dev/null || true
-    ok "ccflare-billing-proxy (0.0.0.0:${CCFLARE_PROXY_PORT} → 127.0.0.1:${CCFLARE_PORT}, billing header injection)"
+    ok "ccflare-billing-proxy (172.17.0.1:${CCFLARE_PROXY_PORT} → 127.0.0.1:${CCFLARE_PORT}, billing header injection)"
   else
     warn "bun not found — ccflare-billing-proxy skipped (Letta LLM calls will fail)"
   fi

@@ -63,3 +63,63 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: titan-setup.sh was designed as a first-run installer, not an updater. Re-running causes stale caches, config overwrites, and service misconfiguration.
 **Decision**: Four categories: REPLACE (files we own — always overwrite), MERGE (shared state like settings.json — atomic merge), SKIP (tools — install only if missing), CLEANUP (known stale artifacts — targeted removal, not manifest diffing).
 **Consequences**: Safe re-runs. No manifest diffing complexity. Cleanup is explicit (add entries as items are removed). `--force-updates` for tool upgrades, `--clean-cache` for aggressive cleanup.
+
+## ADR-011: Parallel network operations (2026-03-20)
+**Status**: Accepted
+**Context**: Version detection for binary downloads (nuclei, gitleaks, sops, osv-scanner, act) ran sequentially — each `_gh_latest_tag` call is ~3s, totaling ~15s. External skill repos (superpowers, vibesec, trailofbits) also cloned sequentially (~15s total). Both are pure I/O with no dependencies.
+**Decision**: Batch all GitHub version fetches into parallel background jobs, wait once. Clone all external skill repos in parallel, then process results sequentially. Use temp dir for version results to avoid variable scoping issues with background jobs.
+**Consequences**: ~30s saved on fresh install. No risk of write conflicts (version fetches are read-only; skill clones go to separate directories). Pattern can be extended to future network-heavy operations.
+
+## ADR-012: Settings merge must never clobber user config (2026-03-20)
+**Status**: Accepted
+**Context**: When `merge-settings.py` fails (Python error, malformed JSON, etc.), the fallback was `install -Dm644` which overwrites `~/.claude/settings.json` with the template. This destroys: user's model choice (violates ADR-003), user-owned env vars, user-installed plugins, any runtime state.
+**Decision**: If merge fails AND a settings.json already exists, preserve the existing file and warn. Only use template overwrite on truly fresh installs (no existing file). Never silently clobber user configuration.
+**Consequences**: A failed merge requires manual intervention rather than silent data loss. Fresh installs still get the template. Users see a clear warning explaining what happened.
+
+## ADR-013: SSH lockdown must validate before restart (2026-03-20)
+**Status**: Accepted
+**Context**: VPS mode locks SSH to Tailscale IP by writing `ListenAddress $TS_IP` to sshd_config and restarting sshd. If `$TS_IP` is empty (Tailscale failed) or sshd_config is invalid, the restart could lock the user out permanently.
+**Decision**: Validate `$TS_IP` is non-empty before any SSH changes. Run `sshd -t` to validate config before restarting. If validation fails, revert the ListenAddress change.
+**Consequences**: No SSH lockouts from invalid config. Users see a warning if Tailscale IP is missing. Trade-off: one extra sshd -t call (~100ms).
+
+## ADR-014: Cached apt-get update (2026-03-20)
+**Status**: Accepted
+**Context**: `apt-get update` was called 4-6 times across phases (prerequisites, VPS hardening, gcloud, terraform, trivy, gh). Each call adds 5-10s even when the cache is fresh from the previous call seconds ago.
+**Decision**: Single `apt_update()` helper that runs `apt-get update -qq` once and sets a flag. Subsequent calls are no-ops. Defined in lib/01-common.sh, available to all fragments.
+**Consequences**: ~20-40s saved on fresh install. Trade-off: if a new apt source is added mid-script, the cache won't refresh automatically (acceptable — new sources are added before their first use, and the initial update runs before any source additions).
+
+## ADR-015: Hooks must never use set -euo pipefail (2026-03-20)
+**Status**: Accepted
+**Context**: Claude Code hooks run as subprocesses. `set -euo pipefail` causes hooks to abort on ANY non-zero exit, including `grep` not matching (exit 1), piped commands failing midway, and unset variables. Three hooks (session-start, session-end, pre-compact) were using `set -euo pipefail`, causing spurious hook errors in production.
+**Decision**: Hooks must NOT use `set -euo pipefail`. Instead, guard individual commands: `cmd || _rc=$?` or `cmd || true`. Hooks must always exit 0 unless they need to signal a fatal condition.
+**Consequences**: Hooks are resilient to partial failures. Trade-off: bugs may be silent — use explicit error logging (`echo "[Hook] error: ..." >&2`) for critical paths.
+
+## ADR-016: Temp files must use WORKDIR or mktemp, never hardcoded /tmp paths (2026-03-20)
+**Status**: Accepted
+**Context**: Multiple jq mutations in plugin config used hardcoded paths like `/tmp/_cc_settings.json`. If two script instances run concurrently, they overwrite each other's temp files, corrupting JSON configs.
+**Decision**: All temp files must use either `$WORKDIR` (per-session unique directory) or `mktemp`. Never use hardcoded `/tmp/filename` patterns.
+**Consequences**: Safe concurrent execution. Trade-off: slightly more verbose code.
+
+## ADR-017: Destructive operations must be atomic (2026-03-20)
+**Status**: Accepted
+**Context**: Go installation deleted `/usr/local/go` before extracting the new tar. If extraction failed (disk full, corrupted download), the system was left without Go and no recovery path.
+**Decision**: Extract/build to a temp location first, then atomic swap (rm old + mv new). Applied to: Go installation, settings.json merge, binary downloads.
+**Consequences**: System state is never left broken mid-operation. Trade-off: requires temp disk space for the new version alongside the old one during swap.
+
+## ADR-018: Service systemd dependencies and resource limits (2026-03-20)
+**Status**: Accepted
+**Context**: Docker-based services (n8n, Letta) had no `After=docker.service` dependency — they'd fail on reboot if Docker wasn't ready. No `MemoryMax` limits meant services could OOM-kill each other on 2-4GB VPS. No journald limits meant logs could fill disk in days.
+**Decision**: All Docker-based services declare `After=docker.service Wants=docker.service`. Resource limits: n8n 512MB, Letta 1GB, ccflare 256MB. Journald: 500MB SystemMaxUse, 7-day retention. All services get `StartLimitBurst=5` to prevent infinite restart loops.
+**Consequences**: Services start in correct order after reboot. OOM kills are directed at the service exceeding its limit, not random. Disk usage is bounded. Trade-off: services may be killed if they legitimately need more RAM (user can override via systemd drop-in).
+
+## ADR-019: Network binding — never 0.0.0.0 for internal proxies (2026-03-20)
+**Status**: Accepted
+**Context**: ccflare-billing-proxy was binding to `0.0.0.0:8081` to allow Docker containers to reach it. This exposed an unauthenticated API proxy to the entire network — anyone could POST to `/v1/messages` and consume Anthropic API quota.
+**Decision**: Internal proxies bind to Docker bridge IP (`172.17.0.1`) instead of `0.0.0.0`. Docker containers access via `host.docker.internal` which resolves to the bridge IP. Only services explicitly designed for external access (none currently) may bind to `0.0.0.0`.
+**Consequences**: Proxy is unreachable from external network. Docker containers still reach it via bridge. Trade-off: if Docker bridge IP changes (non-default config), the proxy becomes unreachable — user must update systemd env.
+
+## ADR-020: Phase checkpoints for resume capability (2026-03-20)
+**Status**: Accepted
+**Context**: Install takes 45-80 minutes. If it fails at Phase 3 and user re-runs, Phases 1-2 re-execute unnecessarily (5-20 minutes wasted). No state tracking existed.
+**Decision**: Write marker files to `~/.titan-progress/<phase>` after each phase completes. On re-run, skip completed phases unless `--force-updates` or `--fresh` is passed. Phase 1 (prerequisites) and Phase 2 (package managers) get checkpoints. Phase 3+ always runs (tool installs are already idempotent via `command -v` checks).
+**Consequences**: Re-runs after Phase 3 failure skip 5-20 minutes of redundant work. `--fresh` resets all checkpoints for clean re-install. Trade-off: if system state changes between runs (e.g., apt sources modified), stale checkpoint may skip needed updates — `--fresh` resolves this.

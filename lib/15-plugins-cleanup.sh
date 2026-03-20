@@ -34,8 +34,10 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   INSTALLED_JSON="$CLAUDE_DIR/plugins/installed_plugins.json"
   if [[ -f "$INSTALLED_JSON" ]]; then
     CACHE_ROOT="$CLAUDE_DIR/plugins/cache"
-    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$INSTALLED_JSON" 2>/dev/null)
-    if [[ -d "$CACHE_ROOT" ]]; then
+    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath // empty' "$INSTALLED_JSON" 2>/dev/null)
+    if [[ ${#ACTIVE_PATHS[@]} -eq 0 ]]; then
+      warn "plugin cache cleanup skipped — no active plugins found (jq may have failed)"
+    elif [[ -d "$CACHE_ROOT" ]]; then
       while IFS= read -r -d '' vpath; do
         vpath="${vpath%/}"
         is_active=false

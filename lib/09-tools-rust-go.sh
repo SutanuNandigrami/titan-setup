@@ -219,8 +219,22 @@ _gh_latest_tag() {
   basename "$url" 2>/dev/null
 }
 
+# ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
+_VER_DIR=$(mktemp -d)
+_gh_latest_tag "projectdiscovery/nuclei" >"$_VER_DIR/nuclei" &
+_gh_latest_tag "gitleaks/gitleaks" >"$_VER_DIR/gitleaks" &
+_gh_latest_tag "getsops/sops" >"$_VER_DIR/sops" &
+_gh_latest_tag "google/osv-scanner" >"$_VER_DIR/osv-scanner" &
+_gh_latest_tag "nektos/act" >"$_VER_DIR/act" &
+wait
+_NUCLEI_VER=$(<"$_VER_DIR/nuclei")
+_GITLEAKS_VER=$(<"$_VER_DIR/gitleaks")
+_SOPS_VER=$(<"$_VER_DIR/sops")
+_OSV_VER=$(<"$_VER_DIR/osv-scanner")
+_ACT_VER=$(<"$_VER_DIR/act")
+rm -rf "$_VER_DIR"
+
 # nuclei (357 deps, ~7 min compile) — binary download
-_NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
 if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
     "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" ||
@@ -230,7 +244,6 @@ command -v nuclei &>/dev/null && ok "nuclei (exists)" ||
   { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
-_GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
 if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
   # gitleaks uses x64/arm64 naming
   _GL_ARCH="x64"
@@ -243,7 +256,6 @@ command -v gitleaks &>/dev/null && ok "gitleaks (exists)" ||
   { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
 # sops (89 deps) — standalone binary download
-_SOPS_VER=$(_gh_latest_tag "getsops/sops")
 if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
   echo -n "  sops (binary)..."
   if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
@@ -255,7 +267,6 @@ command -v sops &>/dev/null && ok "sops (exists)" ||
   { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
 # osv-scanner (51 deps) — standalone binary download
-_OSV_VER=$(_gh_latest_tag "google/osv-scanner")
 if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
   echo -n "  osv-scanner (binary)..."
   if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
@@ -267,7 +278,6 @@ command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" ||
   { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
-_ACT_VER=$(_gh_latest_tag "nektos/act")
 if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
     "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" ||
@@ -393,7 +403,7 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
+  apt_update && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
 
@@ -401,7 +411,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq terraform packer
+  apt_update && sudo apt-get install -y -qq terraform packer
   ok "terraform + packer"
 else ok "terraform (exists)"; fi
 
@@ -435,7 +445,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq trivy
+  apt_update && sudo apt-get install -y -qq trivy
   ok "trivy"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -460,7 +470,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq gh
+  apt_update && sudo apt-get install -y -qq gh
   ok "gh"
 else ok "gh (exists)"; fi
 

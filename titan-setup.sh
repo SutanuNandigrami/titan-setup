@@ -41,6 +41,21 @@ fi
 # ╚══════════════════════════════════════════════════════════════════╝
 
 SCRIPT_VERSION="v3.19"
+# ─── Phase checkpoint system for resume capability ───
+_PROGRESS_DIR="$HOME/.titan-progress"
+mkdir -p "$_PROGRESS_DIR" 2>/dev/null || true
+
+phase_done() {
+  [[ -f "$_PROGRESS_DIR/$1" ]] && return 0 || return 1
+}
+phase_mark() {
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$_PROGRESS_DIR/$1"
+}
+phase_reset() {
+  rm -rf "$_PROGRESS_DIR"
+  mkdir -p "$_PROGRESS_DIR"
+}
+
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -51,6 +66,26 @@ section() { echo -e "\n${CYAN}═══ $1 ═══${NC}\n"; }
 ok() { echo -e "  ${GREEN}✓${NC} $1"; }
 warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
+
+# Cached apt-get update — runs once per session, skips on subsequent calls
+_APT_UPDATED=false
+apt_update() {
+  if ! $_APT_UPDATED; then
+    run_q sudo apt-get update -qq && _APT_UPDATED=true
+  fi
+}
+
+# Port pre-flight check — warn if a port is already in use
+check_port() {
+  local port="$1" service="$2"
+  if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+    local owner
+    owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+    warn "${service}: port ${port} already in use by ${owner}"
+    return 1
+  fi
+  return 0
+}
 # ─── CLI Options ───
 ENGINEER_NAME=""
 INSTALL_MODE=""
@@ -263,6 +298,10 @@ while [[ $# -gt 0 ]]; do
       FORCE_UPDATES=true
       shift
       ;;
+    --fresh)
+      phase_reset
+      shift
+      ;;
     --version)
       echo "titan-setup ${SCRIPT_VERSION}"
       exit 0
@@ -371,6 +410,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $LETTA_CTRL_SKIP && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
     $COZEMPIC_SKIP && _VPS_REEXEC_ARGS+=(--no-cozempic)
+    $FORCE_UPDATES && _VPS_REEXEC_ARGS+=(--force-updates)
     # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.
@@ -514,7 +554,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
-  run_q sudo apt-get update
+  apt_update
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins
@@ -740,200 +780,229 @@ TIMER_EOF
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
 fi
-section "Phase 1/6 — System Prerequisites"
+if phase_done "phase1" && ! $FORCE_UPDATES; then
+  section "Phase 1/6 — System Prerequisites (cached ✓)"
+else
+  section "Phase 1/6 — System Prerequisites"
 
-# Suppress needrestart interactive kernel/service restart prompts on Ubuntu VPS
-# Sets restart mode to automatic so apt upgrades never block waiting for user input
-if [[ -d /etc/needrestart ]]; then
-  sudo mkdir -p /etc/needrestart/conf.d
-  # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
-  printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' |
-    sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
-fi
-
-run_q sudo apt-get update -qq
-run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
-  -o Dpkg::Options::="--force-confold"
-
-run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-  -o Dpkg::Options::="--force-confold" \
-  curl wget git build-essential unzip software-properties-common \
-  lsb-release apt-transport-https gnupg ca-certificates \
-  jq mtr nmap tmux pandoc direnv entr nikto lynis \
-  redis-tools aria2 btop miller \
-  inotify-tools expect asciinema at \
-  lnav imagemagick \
-  universal-ctags chafa \
-  libclang-dev cmake libxml2-dev libcurl4-openssl-dev
-
-run_q sudo apt-get autoremove -y -qq
-
-# Desktop-only packages (screenshot/X11 tools not needed on VPS)
-if [[ "$INSTALL_MODE" == "desktop" ]]; then
-  run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq maim xdotool
-fi
-
-# ─── JetBrains Mono Nerd Font (desktop only — Powerline statusline) ───
-if [[ "$INSTALL_MODE" == "desktop" ]]; then
-  if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
-    ok "JetBrainsMono Nerd Font already installed"
-  else
-    echo -n "  Installing JetBrainsMono Nerd Font..."
-    FONT_DIR="$HOME/.local/share/fonts"
-    mkdir -p "$FONT_DIR"
-    TMPFONT=$(mktemp -d)
-    curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
-      "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
-    tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
-    cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
-    fc-cache -f "$FONT_DIR" 2>/dev/null
-    rm -rf "$TMPFONT"
-    ok "JetBrainsMono Nerd Font installed"
+  # Suppress needrestart interactive kernel/service restart prompts on Ubuntu VPS
+  # Sets restart mode to automatic so apt upgrades never block waiting for user input
+  if [[ -d /etc/needrestart ]]; then
+    sudo mkdir -p /etc/needrestart/conf.d
+    # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
+    printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' |
+      sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
   fi
-  # Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
-fi
 
-# ─── Linux tuning ───
-section "Linux Tuning"
+  # Cap journald disk usage — prevents n8n/Ollama/Letta logs from filling disk
+  if ! grep -q 'SystemMaxUse=500M' /etc/systemd/journald.conf 2>/dev/null; then
+    sudo mkdir -p /etc/systemd/journald.conf.d
+    printf '[Journal]\nSystemMaxUse=500M\nSystemMaxFileSize=50M\nMaxRetentionSec=7day\n' |
+      sudo tee /etc/systemd/journald.conf.d/titan-limits.conf >/dev/null
+    sudo systemctl restart systemd-journald 2>/dev/null || true
+    ok "journald log limits set (500MB max, 7-day retention)"
+  fi
 
-# Increase file watchers (needed for large projects)
-if ! grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf 2>/dev/null; then
-  echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
-  echo "fs.inotify.max_user_instances=1024" | sudo tee -a /etc/sysctl.conf
-  sudo sysctl -p
-  ok "Increased inotify watchers to 524288"
+  apt_update
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
+    -o Dpkg::Options::="--force-confold"
+
+  run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    -o Dpkg::Options::="--force-confold" \
+    curl wget git build-essential unzip software-properties-common \
+    lsb-release apt-transport-https gnupg ca-certificates \
+    jq mtr nmap tmux pandoc direnv entr nikto lynis \
+    redis-tools aria2 btop miller \
+    inotify-tools expect asciinema at \
+    lnav imagemagick \
+    universal-ctags chafa \
+    libclang-dev cmake libxml2-dev libcurl4-openssl-dev
+
+  run_q sudo apt-get autoremove -y -qq
+
+  # Desktop-only packages (screenshot/X11 tools not needed on VPS)
+  if [[ "$INSTALL_MODE" == "desktop" ]]; then
+    run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq maim xdotool
+  fi
+
+  # ─── JetBrains Mono Nerd Font (desktop only — Powerline statusline) ───
+  if [[ "$INSTALL_MODE" == "desktop" ]]; then
+    if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
+      ok "JetBrainsMono Nerd Font already installed"
+    else
+      echo -n "  Installing JetBrainsMono Nerd Font..."
+      FONT_DIR="$HOME/.local/share/fonts"
+      mkdir -p "$FONT_DIR"
+      TMPFONT=$(mktemp -d)
+      curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+      tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
+      cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
+      fc-cache -f "$FONT_DIR" 2>/dev/null
+      rm -rf "$TMPFONT"
+      ok "JetBrainsMono Nerd Font installed"
+    fi
+    # Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
+  fi
+
+  # ─── Linux tuning ───
+  section "Linux Tuning"
+
+  # Increase file watchers (needed for large projects)
+  if ! grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf 2>/dev/null; then
+    echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+    echo "fs.inotify.max_user_instances=1024" | sudo tee -a /etc/sysctl.conf
+    sudo sysctl -p
+    ok "Increased inotify watchers to 524288"
+  else
+    ok "inotify watchers already configured"
+  fi
+
+  # Increase file descriptor limits
+  if ! grep -q "nofile" /etc/security/limits.conf 2>/dev/null || ! grep -q "65535" /etc/security/limits.conf 2>/dev/null; then
+    echo "* soft nofile 65535" | sudo tee -a /etc/security/limits.conf
+    echo "* hard nofile 65535" | sudo tee -a /etc/security/limits.conf
+    ok "Increased file descriptor limits"
+  else
+    ok "File descriptor limits already configured"
+  fi
+
+  # Git config defaults
+  git config --global init.defaultBranch main 2>/dev/null || true
+  git config --global core.autocrlf input 2>/dev/null || true
+  git config --global pull.rebase true 2>/dev/null || true
+  ok "Git defaults set (main branch, rebase pull)"
+
+  phase_mark "phase1"
+fi # end phase1 checkpoint
+if phase_done "phase2" && ! $FORCE_UPDATES; then
+  section "Phase 2/6 — Package Managers (cached ✓)"
 else
-  ok "inotify watchers already configured"
-fi
+  section "Phase 2/6 — Package Managers"
 
-# Increase file descriptor limits
-if ! grep -q "nofile" /etc/security/limits.conf 2>/dev/null || ! grep -q "65535" /etc/security/limits.conf 2>/dev/null; then
-  echo "* soft nofile 65535" | sudo tee -a /etc/security/limits.conf
-  echo "* hard nofile 65535" | sudo tee -a /etc/security/limits.conf
-  ok "Increased file descriptor limits"
-else
-  ok "File descriptor limits already configured"
-fi
-
-# Git config defaults
-git config --global init.defaultBranch main 2>/dev/null || true
-git config --global core.autocrlf input 2>/dev/null || true
-git config --global pull.rebase true 2>/dev/null || true
-ok "Git defaults set (main branch, rebase pull)"
-section "Phase 2/6 — Package Managers"
-
-# ─── Rust / Cargo ───
-if command -v cargo &>/dev/null; then
-  ok "cargo already installed: $(cargo --version)"
-else
-  echo "  Installing Rust..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  # ─── Rust / Cargo ───
+  if command -v cargo &>/dev/null; then
+    ok "cargo already installed: $(cargo --version)"
+  else
+    echo "  Installing Rust..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # shellcheck source=/dev/null
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    ok "cargo installed: $(cargo --version)"
+  fi
+  # Ensure cargo binaries are on PATH for the rest of this script (idempotent)
   # shellcheck source=/dev/null
   [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-  ok "cargo installed: $(cargo --version)"
-fi
-# Ensure cargo binaries are on PATH for the rest of this script (idempotent)
-# shellcheck source=/dev/null
-[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
-# ─── uv (replaces pip, pipx, venv, pyenv) ───
-if command -v uv &>/dev/null; then
-  ok "uv already installed: $(uv --version)"
-else
-  echo "  Installing uv..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # ─── uv (replaces pip, pipx, venv, pyenv) ───
+  if command -v uv &>/dev/null; then
+    ok "uv already installed: $(uv --version)"
+  else
+    echo "  Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+    ok "uv installed: $(uv --version)"
+  fi
+  # Ensure uv/uvx binaries are on PATH for the rest of this script
   export PATH="$HOME/.local/bin:$PATH"
-  ok "uv installed: $(uv --version)"
-fi
-# Ensure uv/uvx binaries are on PATH for the rest of this script
-export PATH="$HOME/.local/bin:$PATH"
 
-# ─── bun (replaces npm, npx for CLI tools) ───
-if command -v bun &>/dev/null; then
-  ok "bun already installed: $(bun --version)"
-else
-  echo "  Installing bun..."
-  curl -fsSL https://bun.sh/install | bash
+  # ─── bun (replaces npm, npx for CLI tools) ───
+  if command -v bun &>/dev/null; then
+    ok "bun already installed: $(bun --version)"
+  else
+    echo "  Installing bun..."
+    curl -fsSL https://bun.sh/install | bash
+    export PATH="$HOME/.bun/bin:$PATH"
+    ok "bun installed: $(bun --version)"
+  fi
+  # Ensure bun globals are on PATH for the rest of this script
   export PATH="$HOME/.bun/bin:$PATH"
-  ok "bun installed: $(bun --version)"
-fi
-# Ensure bun globals are on PATH for the rest of this script
-export PATH="$HOME/.bun/bin:$PATH"
 
-# ─── Go ───
-GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
-GO_NEED_INSTALL=false
-if command -v go &>/dev/null; then
-  GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+')
-  GO_LATEST_VER=${GO_LATEST#go}
-  # Compare major.minor — upgrade if current < latest major.minor
-  GO_CUR_MINOR=$(echo "$GO_CURRENT" | cut -d. -f1-2)
-  GO_LAT_MINOR=$(echo "$GO_LATEST_VER" | cut -d. -f1-2)
-  if [ "$(printf '%s\n%s' "$GO_CUR_MINOR" "$GO_LAT_MINOR" | sort -V | head -1)" != "$GO_LAT_MINOR" ]; then
-    echo "  Go $GO_CURRENT is outdated (latest: $GO_LATEST_VER) — upgrading..."
+  # ─── Go ───
+  GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
+  GO_NEED_INSTALL=false
+  if command -v go &>/dev/null && ! $FORCE_UPDATES; then
+    GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+' || true)
+    GO_LATEST_VER=${GO_LATEST#go}
+    if [[ -z "$GO_CURRENT" ]]; then
+      warn "go version parse failed — reinstalling"
+      GO_NEED_INSTALL=true
+    else
+      # Compare major.minor — upgrade if current < latest major.minor
+      GO_CUR_MINOR=$(echo "$GO_CURRENT" | cut -d. -f1-2)
+      GO_LAT_MINOR=$(echo "$GO_LATEST_VER" | cut -d. -f1-2)
+      if [ "$(printf '%s\n%s' "$GO_CUR_MINOR" "$GO_LAT_MINOR" | sort -V | head -1)" != "$GO_LAT_MINOR" ]; then
+        echo "  Go $GO_CURRENT is outdated (latest: $GO_LATEST_VER) — upgrading..."
+        GO_NEED_INSTALL=true
+      else
+        ok "go already installed: $(go version)"
+      fi
+    fi
+  else
+    echo "  Installing Go..."
     GO_NEED_INSTALL=true
-  else
-    ok "go already installed: $(go version)"
   fi
-else
-  echo "  Installing Go..."
-  GO_NEED_INSTALL=true
-fi
-if [ "$GO_NEED_INSTALL" = true ]; then
-  if [[ -z "$GO_LATEST" ]]; then
-    warn "Failed to fetch Go version — skipping"
-  else
-    wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
-    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
-    export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
-    ok "go installed: $(go version)"
+  if [ "$GO_NEED_INSTALL" = true ]; then
+    if [[ -z "$GO_LATEST" ]]; then
+      warn "Failed to fetch Go version — skipping"
+    else
+      wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
+      # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
+      sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+        sudo rm -rf /usr/local/go &&
+        sudo mv "$WORKDIR/go" /usr/local/go
+      export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
+      ok "go installed: $(go version)"
+    fi
   fi
-fi
-export GOPATH="$HOME/go"
-export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
+  export GOPATH="$HOME/go"
+  export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 
-# ─── mise (replaces asdf, nvm, pyenv for runtime versions) ───
-if command -v mise &>/dev/null; then
-  ok "mise already installed"
-else
-  echo "  Installing mise..."
-  curl https://mise.run | sh
-  export PATH="$HOME/.local/bin:$PATH"
-  ok "mise installed"
-fi
-# Activate mise in the current script session so shims (node, python, etc.) are on PATH.
-# .bashrc already has eval "$(mise activate bash)" via SHELL_BLOCK — this covers the script run itself.
-eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null)" 2>/dev/null || true
-# Install node LTS so bun postinstall scripts (puppeteer, mermaid-cli, etc.) can find `node`
-if ! command -v node &>/dev/null; then
-  run_q mise use -g node@lts && ok "node (via mise)" || warn "node install failed — bun postinstalls may need node"
-fi
-
-# ─── Docker ───
-if command -v docker &>/dev/null; then
-  ok "docker already installed: $(docker --version)"
-else
-  echo "  Installing Docker..."
-  if curl -fsSL https://get.docker.com | sh 2>/dev/null; then
-    ok "docker installed: $(docker --version)"
+  # ─── mise (replaces asdf, nvm, pyenv for runtime versions) ───
+  if command -v mise &>/dev/null; then
+    ok "mise already installed"
   else
-    warn "docker install failed — n8n and dive will still work if Docker is installed later"
+    echo "  Installing mise..."
+    curl https://mise.run | sh
+    export PATH="$HOME/.local/bin:$PATH"
+    ok "mise installed"
   fi
-fi
-# Add current user to docker group (allows running without sudo)
-if command -v docker &>/dev/null && ! groups "$USER" | grep -q docker; then
-  sudo usermod -aG docker "$USER" 2>/dev/null && ok "added $USER to docker group (re-login to take effect)" || true
-fi
+  # Activate mise in the current script session so shims (node, python, etc.) are on PATH.
+  # .bashrc already has eval "$(mise activate bash)" via SHELL_BLOCK — this covers the script run itself.
+  eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null)" 2>/dev/null || true
+  # Install node LTS so bun postinstall scripts (puppeteer, mermaid-cli, etc.) can find `node`
+  if ! command -v node &>/dev/null; then
+    run_q mise use -g node@lts && ok "node (via mise)" || warn "node install failed — bun postinstalls may need node"
+  fi
 
-# ─── Letta resource check ───
-if ! $LETTA_SKIP; then
-  _TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
-  if ((_TOTAL_RAM_MB < 3072)); then
-    warn "System has ${_TOTAL_RAM_MB}MB RAM — Letta+Ollama need ~2GB."
-    echo "  Consider --letta-skip or adding swap:"
-    echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
+  # ─── Docker ───
+  if command -v docker &>/dev/null; then
+    ok "docker already installed: $(docker --version)"
+  else
+    echo "  Installing Docker..."
+    if curl -fsSL https://get.docker.com | sh 2>/dev/null; then
+      ok "docker installed: $(docker --version)"
+    else
+      warn "docker install failed — n8n and dive will still work if Docker is installed later"
+    fi
   fi
-fi
+  # Add current user to docker group (allows running without sudo)
+  if command -v docker &>/dev/null && ! groups "$USER" | grep -q docker; then
+    sudo usermod -aG docker "$USER" 2>/dev/null && ok "added $USER to docker group (re-login to take effect)" || true
+  fi
+
+  # ─── Letta resource check ───
+  if ! $LETTA_SKIP; then
+    _TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+    if ((_TOTAL_RAM_MB < 3072)); then
+      warn "System has ${_TOTAL_RAM_MB}MB RAM — Letta+Ollama need ~2GB."
+      echo "  Consider --letta-skip or adding swap:"
+      echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
+    fi
+  fi
+
+  phase_mark "phase2"
+fi # end phase2 checkpoint
 # ─── Repo files (static content loaded from git repo) ────────────────────────
 # Cloned early so tools like RTK can use patches from the repo during Phase 3.
 REPO_FILES="${TITAN_REPO_FILES:-}"
@@ -1047,6 +1116,7 @@ else
 fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
+check_port 5678 "n8n" || true
 if command -v docker &>/dev/null; then
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
@@ -1076,7 +1146,8 @@ if command -v docker &>/dev/null; then
   cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
 [Unit]
 Description=n8n workflow automation
-After=default.target
+After=docker.service default.target
+Wants=docker.service
 
 [Service]
 Type=simple
@@ -1085,6 +1156,9 @@ ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/h
 ExecStop=${DOCKER_BIN} stop n8n
 Restart=on-failure
 RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=512M
 
 [Install]
 WantedBy=default.target
@@ -1206,7 +1280,8 @@ else
     cat >"$HOME/.config/systemd/user/letta.service" <<SERVICEEOF
 [Unit]
 Description=Letta persistent memory server
-After=default.target
+After=docker.service default.target
+Wants=docker.service
 
 [Service]
 Type=simple
@@ -1215,6 +1290,9 @@ ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p 127.0.0.1:${LETTA_PORT}
 ExecStop=${_DOCKER_BIN} stop letta-server
 Restart=on-failure
 RestartSec=15
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=1G
 
 [Install]
 WantedBy=default.target
@@ -1253,7 +1331,7 @@ else
   # Phase A: Install from source with patches
   # Upstream bugs: NULL constraint on refresh_token for kilo/zai/minimax/console CLI modes
   # See: https://github.com/tombii/better-ccflare/issues/83
-  if ! command -v better-ccflare &>/dev/null; then
+  if $FORCE_UPDATES || ! command -v better-ccflare &>/dev/null; then
     _BCF_SRC=$(mktemp -d -t bcf-src-XXXXXX)
     _CLEANUP_DIRS+=("$_BCF_SRC")
     if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then
@@ -1343,6 +1421,9 @@ Type=simple
 ExecStart=${_BCF_BIN} --serve --port ${CCFLARE_PORT}
 Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+MemoryMax=256M
 Environment="PORT=${CCFLARE_PORT}"
 Environment="BETTER_CCFLARE_HOST=${CCFLARE_HOST}"
 Environment="LB_STRATEGY=session"
@@ -1408,7 +1489,7 @@ function injectBillingHeader(body) {
   } catch { return body; }
 }
 Bun.serve({
-  port: PORT, hostname: "0.0.0.0",
+  port: PORT, hostname: process.env.CCFLARE_PROXY_HOST || "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
     let body = await req.arrayBuffer();
@@ -1435,6 +1516,7 @@ Type=simple
 ExecStart=${_BUN_BIN} run %h/.config/letta/ccflare-billing-proxy.js
 Environment="CCFLARE_PORT=${CCFLARE_PORT}"
 Environment="CCFLARE_PROXY_PORT=${CCFLARE_PROXY_PORT}"
+Environment="CCFLARE_PROXY_HOST=172.17.0.1"
 Environment="PATH=${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 Restart=on-failure
 RestartSec=5
@@ -1445,7 +1527,7 @@ SVCEOF
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable ccflare-docker-proxy 2>/dev/null || true
     systemctl --user start ccflare-docker-proxy 2>/dev/null || true
-    ok "ccflare-billing-proxy (0.0.0.0:${CCFLARE_PROXY_PORT} → 127.0.0.1:${CCFLARE_PORT}, billing header injection)"
+    ok "ccflare-billing-proxy (172.17.0.1:${CCFLARE_PROXY_PORT} → 127.0.0.1:${CCFLARE_PORT}, billing header injection)"
   else
     warn "bun not found — ccflare-billing-proxy skipped (Letta LLM calls will fail)"
   fi
@@ -1674,8 +1756,22 @@ _gh_latest_tag() {
   basename "$url" 2>/dev/null
 }
 
+# ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
+_VER_DIR=$(mktemp -d)
+_gh_latest_tag "projectdiscovery/nuclei" >"$_VER_DIR/nuclei" &
+_gh_latest_tag "gitleaks/gitleaks" >"$_VER_DIR/gitleaks" &
+_gh_latest_tag "getsops/sops" >"$_VER_DIR/sops" &
+_gh_latest_tag "google/osv-scanner" >"$_VER_DIR/osv-scanner" &
+_gh_latest_tag "nektos/act" >"$_VER_DIR/act" &
+wait
+_NUCLEI_VER=$(<"$_VER_DIR/nuclei")
+_GITLEAKS_VER=$(<"$_VER_DIR/gitleaks")
+_SOPS_VER=$(<"$_VER_DIR/sops")
+_OSV_VER=$(<"$_VER_DIR/osv-scanner")
+_ACT_VER=$(<"$_VER_DIR/act")
+rm -rf "$_VER_DIR"
+
 # nuclei (357 deps, ~7 min compile) — binary download
-_NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
 if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
     "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" ||
@@ -1685,7 +1781,6 @@ command -v nuclei &>/dev/null && ok "nuclei (exists)" ||
   { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
-_GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
 if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
   # gitleaks uses x64/arm64 naming
   _GL_ARCH="x64"
@@ -1698,7 +1793,6 @@ command -v gitleaks &>/dev/null && ok "gitleaks (exists)" ||
   { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
 # sops (89 deps) — standalone binary download
-_SOPS_VER=$(_gh_latest_tag "getsops/sops")
 if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
   echo -n "  sops (binary)..."
   if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
@@ -1710,7 +1804,6 @@ command -v sops &>/dev/null && ok "sops (exists)" ||
   { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
 # osv-scanner (51 deps) — standalone binary download
-_OSV_VER=$(_gh_latest_tag "google/osv-scanner")
 if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
   echo -n "  osv-scanner (binary)..."
   if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
@@ -1722,7 +1815,6 @@ command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" ||
   { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
-_ACT_VER=$(_gh_latest_tag "nektos/act")
 if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
     "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" ||
@@ -1848,7 +1940,7 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
+  apt_update && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
 
@@ -1856,7 +1948,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq terraform packer
+  apt_update && sudo apt-get install -y -qq terraform packer
   ok "terraform + packer"
 else ok "terraform (exists)"; fi
 
@@ -1890,7 +1982,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq trivy
+  apt_update && sudo apt-get install -y -qq trivy
   ok "trivy"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -1915,7 +2007,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq gh
+  apt_update && sudo apt-get install -y -qq gh
   ok "gh"
 else ok "gh (exists)"; fi
 
@@ -2091,11 +2183,15 @@ python3 "$REPO_FILES/script/merge-settings.py" \
   "${_MERGE_INJECT[@]}" &&
   ok "settings.json (atomic merge)" ||
   {
-    warn "settings.json merge failed — falling back to template overwrite"
-    install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-    ok "settings.json (fallback — template overwrite)"
+    if [[ -f "$CLAUDE_DIR/settings.json" ]]; then
+      warn "settings.json merge failed — preserving existing user config (fix manually)"
+    else
+      warn "settings.json merge failed — installing template (no existing config found)"
+      install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+      ok "settings.json (template — first install)"
+    fi
   }
 
 # Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
@@ -2314,10 +2410,24 @@ ok "command: /recall"
 install -Dm644 "$REPO_FILES/dot-claude/commands/remember.md" "$CLAUDE_DIR/commands/remember.md"
 ok "command: /remember"
 
+# ── Parallel git clones for external skills (saves ~15s vs sequential) ──────
+_NEED_SUPERPOWERS=false
+_NEED_VIBESEC=false
+_NEED_TRAILOFBITS=false
+[ ! -d "$CLAUDE_DIR/skills/tdd" ] && _NEED_SUPERPOWERS=true
+[ ! -d "$CLAUDE_DIR/skills/vibesec" ] && _NEED_VIBESEC=true
+[ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ] && _NEED_TRAILOFBITS=true
+
+if $_NEED_SUPERPOWERS || $_NEED_VIBESEC || $_NEED_TRAILOFBITS; then
+  $_NEED_SUPERPOWERS && git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null &
+  $_NEED_VIBESEC && git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null &
+  $_NEED_TRAILOFBITS && git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null &
+  wait
+fi
+
 # obra/superpowers (multiple useful skills)
-if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
-  git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null || true
-  if [ -d /tmp/superpowers/skills ]; then
+if $_NEED_SUPERPOWERS; then
+  if [ -d "/tmp/superpowers/skills" ]; then
     cp -r /tmp/superpowers/skills/test-driven-development "$CLAUDE_DIR/skills/tdd" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/systematic-debugging "$CLAUDE_DIR/skills/systematic-debugging" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/brainstorming "$CLAUDE_DIR/skills/brainstorming" 2>/dev/null || true
@@ -2349,8 +2459,8 @@ else
 fi
 
 # Security skills
-if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
-  git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null && ok "vibesec" || warn "vibesec"
+if $_NEED_VIBESEC; then
+  [ -d "$CLAUDE_DIR/skills/vibesec" ] && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
 if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
@@ -2360,8 +2470,7 @@ fi
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
 # Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
 # Individual plugins can be installed on-demand via: claude plugin marketplace add trailofbits/skills
-if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
-  git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null
+if $_NEED_TRAILOFBITS; then
   if [ -d /tmp/trailofbits-skills/plugins/modern-python ]; then
     cp -r /tmp/trailofbits-skills/plugins/modern-python "$CLAUDE_DIR/skills/trailofbits-modern-python" 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
   else
@@ -2543,8 +2652,8 @@ else
       _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
       if [[ -f "$_SEMGREP_HOOKS" ]]; then
         jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
-          "$_SEMGREP_HOOKS" > /tmp/_semgrep_hooks.json \
-          && mv /tmp/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
+          "$_SEMGREP_HOOKS" > ${WORKDIR}/_semgrep_hooks.json \
+          && mv ${WORKDIR}/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
           && ok "semgrep: hooks patched (git-repo guard added)" \
           || warn "semgrep hooks patch failed"
       fi
@@ -2609,8 +2718,8 @@ else
           .agents[0].llm_config.provider_name = "anthropic" |
           .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
           .agents[0].llm_config.context_window = 200000
-        ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-          && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+        ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+          && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
           && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
           || warn "subconscious: .af LLM patch failed"
 
@@ -2622,8 +2731,8 @@ else
             .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
             .agents[0].embedding_config.embedding_dim = 768 |
             .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
-          ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-            && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+          ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+            && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
             && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
             || warn "subconscious: .af embedding patch failed"
         fi
@@ -2633,8 +2742,8 @@ else
 
       # Enable plugin in settings.json
       jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
-        "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-        && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
+        "$CLAUDE_DIR/settings.json" > ${WORKDIR}/_cc_settings.json \
+        && mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" \
         && ok "subconscious: enabled in settings.json" \
         || warn "subconscious: settings.json update failed"
     else
@@ -2734,8 +2843,10 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   INSTALLED_JSON="$CLAUDE_DIR/plugins/installed_plugins.json"
   if [[ -f "$INSTALLED_JSON" ]]; then
     CACHE_ROOT="$CLAUDE_DIR/plugins/cache"
-    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$INSTALLED_JSON" 2>/dev/null)
-    if [[ -d "$CACHE_ROOT" ]]; then
+    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath // empty' "$INSTALLED_JSON" 2>/dev/null)
+    if [[ ${#ACTIVE_PATHS[@]} -eq 0 ]]; then
+      warn "plugin cache cleanup skipped — no active plugins found (jq may have failed)"
+    elif [[ -d "$CACHE_ROOT" ]]; then
       while IFS= read -r -d '' vpath; do
         vpath="${vpath%/}"
         is_active=false
@@ -2756,7 +2867,7 @@ fi
 section "Phase 6/6 — Shell Integration"
 
 # Build the shell config block
-SHELL_BLOCK='
+_BASH_BLOCK='
 # ══════ Titan CLI Arsenal ══════
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
 eval "$(direnv hook bash)"
@@ -2765,11 +2876,27 @@ export GIT_PAGER="delta"
 command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
 
-if ! grep -q "Titan CLI Arsenal" ~/.bashrc 2>/dev/null; then
-  echo "$SHELL_BLOCK" >>~/.bashrc
+_ZSH_BLOCK='
+# ══════ Titan CLI Arsenal ══════
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
+eval "$(direnv hook zsh)"
+eval "$(mise activate zsh)"
+export GIT_PAGER="delta"
+command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
+# ══════════════════════════════'
+
+if ! grep -q "Titan CLI Arsenal" "$HOME/.bashrc" 2>/dev/null; then
+  echo "$_BASH_BLOCK" >>"$HOME/.bashrc"
   ok "Shell integration added to ~/.bashrc"
 else
-  ok "Shell integration already present"
+  ok "Shell integration already in ~/.bashrc"
+fi
+
+if [[ -f "$HOME/.zshrc" ]] && ! grep -q "Titan CLI Arsenal" "$HOME/.zshrc" 2>/dev/null; then
+  echo "$_ZSH_BLOCK" >>"$HOME/.zshrc"
+  ok "Shell integration added to ~/.zshrc"
+elif [[ -f "$HOME/.zshrc" ]]; then
+  ok "Shell integration already in ~/.zshrc"
 fi
 
 # Git pager config
@@ -2993,9 +3120,19 @@ echo -e "
 # so the install session stays alive throughout. This will drop the public
 # SSH connection; reconnect via Tailscale: ssh CLAUDE_USER@TS_HOSTNAME
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
-  sudo ufw delete allow 22/tcp || true
-  sudo ufw delete allow OpenSSH 2>/dev/null || true
-  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
-  sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+  if [[ -z "${TS_IP:-}" ]]; then
+    warn "Tailscale IP empty — skipping SSH lockdown (run manually after tailscale up)"
+  else
+    sudo ufw delete allow 22/tcp || true
+    sudo ufw delete allow OpenSSH 2>/dev/null || true
+    sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+    echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
+    # Validate config before restart to avoid SSH lockout
+    if sudo sshd -t 2>/dev/null; then
+      sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+    else
+      warn "sshd_config validation failed — reverting ListenAddress change"
+      sudo sed -i '/^ListenAddress /d' /etc/ssh/sshd_config
+    fi
+  fi
 fi
