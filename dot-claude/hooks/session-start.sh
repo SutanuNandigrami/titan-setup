@@ -18,9 +18,9 @@ HANDOFF="$HOME/.claude/memory/handoff.md"
 
 # Show handoff from previous session (if recent — within 24h)
 if [[ -f "$HANDOFF" ]]; then
-  FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0) ))
-  if (( FILE_AGE < 86400 )); then
-    echo "[Memory] Previous session handoff ($(( FILE_AGE / 60 ))m ago):" >&2
+  FILE_AGE=$(($(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0)))
+  if ((FILE_AGE < 86400)); then
+    echo "[Memory] Previous session handoff ($((FILE_AGE / 60))m ago):" >&2
     head -30 "$HANDOFF" >&2
     echo "---" >&2
   fi
@@ -28,7 +28,7 @@ fi
 
 # Remind about auto memory files
 MEMORY_COUNT=$(find "$HOME/.claude/projects/" -name "MEMORY.md" 2>/dev/null | wc -l)
-if (( MEMORY_COUNT > 0 )); then
+if ((MEMORY_COUNT > 0)); then
   echo "[Memory] ${MEMORY_COUNT} project memory file(s) available." >&2
 else
   echo "[Memory] No project memories yet. Use /remember or write to auto memory directory." >&2
@@ -46,9 +46,9 @@ fi
 AUDIT_LOG="$HOME/.claude/logs/audit.jsonl"
 if [[ -f "$AUDIT_LOG" ]]; then
   AUDIT_SIZE=$(stat -c %s "$AUDIT_LOG" 2>/dev/null || echo 0)
-  if (( AUDIT_SIZE > 10485760 )); then
+  if ((AUDIT_SIZE > 10485760)); then
     mv "$AUDIT_LOG" "${AUDIT_LOG}.$(date +%s).bak"
-    echo "[Audit] Log rotated (was $(( AUDIT_SIZE / 1048576 ))MB)" >&2
+    echo "[Audit] Log rotated (was $((AUDIT_SIZE / 1048576))MB)" >&2
   fi
 fi
 
@@ -58,7 +58,7 @@ if [[ -f "$MANIFEST" ]] && [[ -s "$MANIFEST" ]]; then
   echo "[Agents] Loaded slots:" >&2
   while IFS=$'\t' read -r slot agent _ts; do
     echo "  $slot: $agent" >&2
-  done < "$MANIFEST"
+  done <"$MANIFEST"
 fi
 
 # ─── Auto-patch CC thinking display (survives CC updates via hash check) ───

@@ -31,7 +31,7 @@ DIFF_STAT=$(git diff --stat 2>/dev/null | tail -5 || true)
 RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || true)
 
 # Write handoff file
-cat > "$HANDOFF" << EOF
+cat >"$HANDOFF" <<EOF
 ---
 timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 session_id: ${SESSION_ID}

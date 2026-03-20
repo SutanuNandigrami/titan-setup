@@ -87,7 +87,6 @@ if ! command -v node &>/dev/null; then
   run_q mise use -g node@lts && ok "node (via mise)" || warn "node install failed — bun postinstalls may need node"
 fi
 
-
 # ─── Docker ───
 if command -v docker &>/dev/null; then
   ok "docker already installed: $(docker --version)"
@@ -107,10 +106,9 @@ fi
 # ─── Letta resource check ───
 if ! $LETTA_SKIP; then
   _TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
-  if (( _TOTAL_RAM_MB < 3072 )); then
+  if ((_TOTAL_RAM_MB < 3072)); then
     warn "System has ${_TOTAL_RAM_MB}MB RAM — Letta+Ollama need ~2GB."
     echo "  Consider --letta-skip or adding swap:"
     echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
   fi
 fi
-

@@ -13,9 +13,9 @@ fi
 
 # ─── Cleanup stale artifacts from previous versions ───
 rm -rf "$HOME/.claude/plugins/cache/claude-plugins-official/hookify/" 2>/dev/null
-rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null    # replaced by cli-tools
-rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null      # replaced by security-scan
-rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null    # replaced by systematic-debugging
+rm -rf "$HOME/.claude/skills/tool-discovery/" 2>/dev/null # replaced by cli-tools
+rm -rf "$HOME/.claude/skills/security-ops/" 2>/dev/null   # replaced by security-scan
+rm -rf "$HOME/.claude/skills/debug-protocol/" 2>/dev/null # replaced by systematic-debugging
 
 # Backup existing
 if [ -d "$CLAUDE_DIR/skills" ] || [ -d "$CLAUDE_DIR/commands" ] || [ -d "$CLAUDE_DIR/agents" ]; then
@@ -70,27 +70,29 @@ python3 "$REPO_FILES/script/merge-settings.py" \
   "$CLAUDE_DIR/settings.json" \
   --engineer "$ENGINEER_NAME" \
   --path "$TITAN_PATH" \
-  "${_MERGE_INJECT[@]}" \
-  && ok "settings.json (atomic merge)" \
-  || { warn "settings.json merge failed — falling back to template overwrite"
-       install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-       sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
-       sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-       ok "settings.json (fallback — template overwrite)"; }
+  "${_MERGE_INJECT[@]}" &&
+  ok "settings.json (atomic merge)" ||
+  {
+    warn "settings.json merge failed — falling back to template overwrite"
+    install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+    sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+    sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+    ok "settings.json (fallback — template overwrite)"
+  }
 
 # Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
 if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
   jq '.enabledPlugins["semgrep@claude-plugins-official"] = true' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
-    && ok "settings.json (semgrep plugin enabled)" \
-    || warn "semgrep plugin enablement failed"
+    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
+    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
+    ok "settings.json (semgrep plugin enabled)" ||
+    warn "semgrep plugin enablement failed"
 fi
 
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
 if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
-  run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" \
-    || warn "rtk init -g failed — run manually: rtk init -g"
+  run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" ||
+    warn "rtk init -g failed — run manually: rtk init -g"
 fi
 
 # ─── cozempic — context bloat cleaner (global hooks) ───
@@ -147,9 +149,9 @@ with open(f, 'w') as fh:
     json.dump(cfg, fh, indent=2)
     fh.write('\n')
 PYEOF
-  [[ $? -eq 0 ]] \
-    && ok "cozempic: hooks wired globally in ~/.claude/settings.json" \
-    || warn "cozempic: hook injection failed — run manually from a project dir: cozempic init"
+  [[ $? -eq 0 ]] &&
+    ok "cozempic: hooks wired globally in ~/.claude/settings.json" ||
+    warn "cozempic: hook injection failed — run manually from a project dir: cozempic init"
 
   # Install /cozempic slash command from cozempic's own venv (avoids cozempic init's cwd problem)
   _COZEMPIC_PY="$(dirname "$(command -v cozempic)")/python3"
@@ -157,14 +159,14 @@ PYEOF
     _SLASH=$("$_COZEMPIC_PY" -c \
       "import importlib.resources as r; print(r.files('cozempic.data').joinpath('cozempic_slash_command.md'))" \
       2>/dev/null)
-    [[ -n "$_SLASH" ]] && install -Dm644 "$_SLASH" "$CLAUDE_DIR/commands/cozempic.md" \
-      && ok "cozempic: /cozempic slash command installed"
+    [[ -n "$_SLASH" ]] && install -Dm644 "$_SLASH" "$CLAUDE_DIR/commands/cozempic.md" &&
+      ok "cozempic: /cozempic slash command installed"
   fi
 fi
 
 # ─── ccstatusline config ───
-install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" \
-  && ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
+install -Dm644 "$REPO_FILES/config/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json" &&
+  ok "ccstatusline: config" || warn "ccstatusline config (missing from repo)"
 
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
@@ -254,8 +256,8 @@ install -Dm755 "$REPO_FILES/dot-claude/statusline-command.sh" "$CLAUDE_DIR/statu
 # If ccstatusline is installed, use it directly; else fall back to statusline-command.sh
 if command -v ccstatusline &>/dev/null; then
   jq '.statusLine = {"type": "command", "command": "ccstatusline", "padding": 0}' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
+    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
+    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
   ok "statusline: ccstatusline (native)"
 else
   ok "statusline: statusline-command.sh (fallback)"
@@ -351,11 +353,11 @@ if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
 else ok "trailofbits: modern-python (exists)"; fi
 # Fix SKILL.md path: plugin structure nests SKILL.md under skills/modern-python/, Claude expects root
 # Also add paths scoping so it only loads for Python files
-if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] \
-   && [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
+if [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" ] &&
+  [ ! -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ]; then
   sed '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
     "$CLAUDE_DIR/skills/trailofbits-modern-python/skills/modern-python/SKILL.md" \
-    > "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
+    >"$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md"
   ok "trailofbits: SKILL.md fixed at root with paths scoping"
 elif [ -f "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/trailofbits-modern-python/SKILL.md" 2>/dev/null; then
   sed -i '3a paths: "**/*.py,**/pyproject.toml,**/setup.py,**/setup.cfg,**/requirements*.txt,**/.python-version,**/uv.lock,**/Pipfile*"' \
@@ -374,7 +376,6 @@ if [ -d "$CLAUDE_DIR/skills/hashicorp" ]; then
   rm -rf "$CLAUDE_DIR/skills/hashicorp"
   ok "removed old hashicorp full clone (14 skills → covered by infra-deploy)"
 fi
-
 
 # ─── Commands ───
 install -Dm644 "$REPO_FILES/dot-claude/commands/catchup.md" "$CLAUDE_DIR/commands/catchup.md"
@@ -423,11 +424,11 @@ ok "agent: reviewer"
 
 # ─── On-Demand Agent Slots (slot-1..5) ───
 for _slot_i in 1 2 3 4 5; do
-  case $_slot_i in 1|2|3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
+  case $_slot_i in 1 | 2 | 3) _slot_model="haiku" ;; 4) _slot_model="sonnet" ;; 5) _slot_model="opus" ;; esac
   _slot_i="$_slot_i" _slot_model="$_slot_model" \
     envsubst '$_slot_i $_slot_model' \
-    < "$REPO_FILES/dot-claude/agents/slot-template.md" \
-    > "$CLAUDE_DIR/agents/slot-${_slot_i}.md"
+    <"$REPO_FILES/dot-claude/agents/slot-template.md" \
+    >"$CLAUDE_DIR/agents/slot-${_slot_i}.md"
   ok "agent: slot-${_slot_i} [${_slot_model}]"
 done
 # Clean up stale slots from previous installs (was 10, now 5)
@@ -456,8 +457,10 @@ touch "$AGT_STASH_DIR/_loaded/.lock" "$AGT_STASH_DIR/_loaded/.manifest"
 "$HOME/.local/bin/agt" build-index 2>/dev/null && ok "agent-stash: index built" || warn "agent-stash: index build failed"
 
 # ─── Cron: weekly agent stash refresh ───
-(crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh' || true; \
-  echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1") | crontab -
+(
+  crontab -l 2>/dev/null | grep -v 'agt build-index\|agt-refresh' || true
+  echo "0 3 * * 0 cd \$HOME/.claude/agent-stash && git pull --ff-only 2>/dev/null && \$HOME/.local/bin/agt build-index >> \$HOME/.claude/logs/agt-refresh.log 2>&1"
+) | crontab -
 ok "cron: weekly agent-stash refresh (Sun 03:00)"
 
 # CLIProxyAPI — proxy server for AI coding tools (clone, not a CLI install)
@@ -465,4 +468,3 @@ if [ ! -d ~/tools/CLIProxyAPI ]; then
   mkdir -p ~/tools
   git clone --depth 1 https://github.com/router-for-me/CLIProxyAPI.git ~/tools/CLIProxyAPI 2>/dev/null && ok "CLIProxyAPI (cloned to ~/tools/)" || warn "CLIProxyAPI"
 else ok "CLIProxyAPI (exists)"; fi
-

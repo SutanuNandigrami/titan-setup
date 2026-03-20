@@ -4,18 +4,18 @@ section "Phase 3/6 — 150+ CLI Tools"
 echo -e "  ${CYAN}Python tools (uv):${NC}"
 
 UV_TOOLS=(
-  "yq"              # yq — YAML/XML/TOML processor
-  "semgrep"         # semgrep — static analysis
-  "ansible-core"    # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
-  "ansible-lint"    # ansible-lint — linter for Ansible playbooks
-  "sqlmap"          # sqlmap — SQL injection testing
-  "pgcli"           # pgcli — Postgres with autocomplete
-  "ruff"            # ruff — Python linter (replaces flake8+black+isort+pyflakes)
-  "ast-grep-cli"    # ast-grep, sg — structural code search
-  "mitmproxy"       # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
-  "cookiecutter"    # cookiecutter — project scaffolding from templates
-  "notebooklm-mcp-cli"  # nlm — Google NotebookLM CLI + MCP server
-  "cozempic"            # cozempic — context bloat cleaner for Claude Code sessions
+  "yq"                 # yq — YAML/XML/TOML processor
+  "semgrep"            # semgrep — static analysis
+  "ansible-core"       # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
+  "ansible-lint"       # ansible-lint — linter for Ansible playbooks
+  "sqlmap"             # sqlmap — SQL injection testing
+  "pgcli"              # pgcli — Postgres with autocomplete
+  "ruff"               # ruff — Python linter (replaces flake8+black+isort+pyflakes)
+  "ast-grep-cli"       # ast-grep, sg — structural code search
+  "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
+  "cookiecutter"       # cookiecutter — project scaffolding from templates
+  "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
+  "cozempic"           # cozempic — context bloat cleaner for Claude Code sessions
 )
 
 if $FORCE_UPDATES; then
@@ -41,9 +41,9 @@ command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccu
 command -v sherlock &>/dev/null && ok "sherlock (exists)" || { uv tool install sherlock-project 2>/dev/null && ok "sherlock" || warn "sherlock"; }
 # claude-agent-sdk is a library (not a CLI tool) — needs --break-system-packages on Ubuntu 24.04 externally-managed Python
 _PYSITE="$HOME/.local/lib/python3.12/site-packages"
-python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" || \
-  { mkdir -p "$_PYSITE" && uv pip install --target "$_PYSITE" --quiet claude-agent-sdk 2>/dev/null \
-    && ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install --target ~/.local/lib/python3.12/site-packages claude-agent-sdk)"; }
+python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists)" ||
+  { mkdir -p "$_PYSITE" && uv pip install --target "$_PYSITE" --quiet claude-agent-sdk 2>/dev/null &&
+    ok "claude-agent-sdk" || warn "claude-agent-sdk (install manually: uv pip install --target ~/.local/lib/python3.12/site-packages claude-agent-sdk)"; }
 unset _PYSITE
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
@@ -53,7 +53,7 @@ echo -e "\n  ${CYAN}JS tools (bun):${NC}"
 
 # Trust postinstall scripts for packages that need them (esbuild, puppeteer, canvas, etc.)
 # Also skip puppeteer chromium download — we install chromium via playwright separately
-cat > "$HOME/.bunfig.toml" << 'BUNFIG'
+cat >"$HOME/.bunfig.toml" <<'BUNFIG'
 [install]
 trustedDependencies = ["puppeteer", "esbuild", "@swc/core", "canvas", "node-gyp", "sharp", "fsevents"]
 
@@ -87,12 +87,12 @@ if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   # Install chromium: apt deps need root, browser download runs as current user
   if command -v playwright &>/dev/null; then
     # install-deps uses apt-get; titan has NOPASSWD sudo so playwright's internal sudo call works
-    sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >> "$LOG_FILE" 2>&1 || true
+    sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >>"$LOG_FILE" 2>&1 || true
     # mise shims may not be on PATH in non-interactive context; ensure node is findable
     _PW_PATH="$PATH"
     command -v node &>/dev/null || _PW_PATH="$HOME/.local/share/mise/shims:$_PW_PATH"
-    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" \
-      || warn "playwright chromium (install manually: playwright install chromium)"
+    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" ||
+      warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
   ok "playwright (exists)"
@@ -108,9 +108,9 @@ if command -v docker &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
-  if docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1 \
-      || sg docker -c "docker pull n8nio/n8n:latest" >> "$LOG_FILE" 2>&1 \
-      || sudo docker pull n8nio/n8n:latest >> "$LOG_FILE" 2>&1; then
+  if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
+    sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
+    sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
     ok "n8n docker image"
   else
     warn "n8n docker pull failed (check: docker pull n8nio/n8n:latest)"
@@ -125,7 +125,7 @@ if command -v docker &>/dev/null; then
   # Create systemd user service for n8n
   mkdir -p "$HOME/.config/systemd/user"
   DOCKER_BIN=$(command -v docker)
-  cat > "$HOME/.config/systemd/user/n8n.service" << SERVICEEOF
+  cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
 [Unit]
 Description=n8n workflow automation
 After=default.target

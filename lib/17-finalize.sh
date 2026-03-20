@@ -57,26 +57,26 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
     # ── tailscale serve — expose local services on Tailscale network ───────
     if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
-      tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null \
-        && ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" \
-        || warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
+      tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
+        ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" ||
+        warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
     elif command -v docker &>/dev/null; then
       ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
     fi
     if ! $CCFLARE_SKIP; then
-      tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null \
-        && ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" \
-        || warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
+      tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null &&
+        ok "tailscale serve: ccflare → https://${TS_HOSTNAME}:${CCFLARE_PORT}" ||
+        warn "tailscale serve for ccflare failed — run: tailscale serve --https=${CCFLARE_PORT} http://localhost:${CCFLARE_PORT}"
     fi
     if ! $LETTA_SKIP; then
-      tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null \
-        && ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" \
-        || warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
+      tailscale serve --bg --https="${LETTA_PORT}" "http://localhost:${LETTA_PORT}" 2>/dev/null &&
+        ok "tailscale serve: letta → https://${TS_HOSTNAME}:${LETTA_PORT}" ||
+        warn "tailscale serve for letta failed — run: tailscale serve --https=${LETTA_PORT} http://localhost:${LETTA_PORT}"
     fi
     if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP; then
-      tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null \
-        && ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" \
-        || warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
+      tailscale serve --bg --https="${LETTA_CTRL_PORT}" "http://localhost:${LETTA_CTRL_PORT}" 2>/dev/null &&
+        ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" ||
+        warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
     fi
   fi
 
@@ -125,7 +125,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo -e "  ${CYAN}Services (Tailscale):${NC}"
   command -v docker &>/dev/null && echo "    n8n:            https://${TS_HOSTNAME}:5678"
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
-  $LETTA_SKIP   || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
+  $LETTA_SKIP || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
@@ -136,7 +136,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
   if ! $LETTA_CTRL_SKIP && ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/ctrl-token" ]]; then
     echo -e "  ${CYAN}LettaCtrl token:${NC}
-    Token:        $(tr -d '[:space:]' < "$HOME/.config/letta/ctrl-token")"
+    Token:        $(tr -d '[:space:]' <"$HOME/.config/letta/ctrl-token")"
   fi
   echo ""
   echo -e "  ${YELLOW}⚠  Public port 22 closed — next login: ssh ${CLAUDE_USER}@${TS_HOSTNAME}${NC}"
@@ -153,7 +153,7 @@ else
   echo -e "  ${CYAN}Services:${NC}
     n8n:              http://localhost:5678"
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
-  $LETTA_SKIP   || echo "    letta:            http://localhost:${LETTA_PORT}"
+  $LETTA_SKIP || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
   echo ""
 
@@ -215,6 +215,6 @@ if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   sudo ufw delete allow 22/tcp || true
   sudo ufw delete allow OpenSSH 2>/dev/null || true
   sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
   sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
 fi

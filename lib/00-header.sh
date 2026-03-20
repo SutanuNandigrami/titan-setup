@@ -13,7 +13,8 @@ if [[ ! -f "$0" ]]; then
   # Use bash+exit instead of exec to keep the process-substitution pipe open.
   # exec would close the pipe fd immediately, causing the original curl to fail
   # with "curl: (23) Failure writing output to destination".
-  bash "$_SELF" "$@"; _rc=$?
+  bash "$_SELF" "$@"
+  _rc=$?
   rm -f "$_SELF"
   exit "$_rc"
 fi
@@ -40,4 +41,3 @@ fi
 # ╚══════════════════════════════════════════════════════════════════╝
 
 SCRIPT_VERSION="v3.19"
-

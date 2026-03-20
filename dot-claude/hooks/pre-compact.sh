@@ -33,19 +33,19 @@ RECENT_COMMITS=$(git log --oneline -10 2>/dev/null || true)
 # Extract last 5 user+assistant exchanges (not just assistant) for richer context preservation
 RECENT_EXCHANGES=""
 if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
-  RECENT_EXCHANGES=$(tail -300 "$TRANSCRIPT" 2>/dev/null \
-    | jq -r 'select(.type == "user" or .type == "assistant")
+  RECENT_EXCHANGES=$(tail -300 "$TRANSCRIPT" 2>/dev/null |
+    jq -r 'select(.type == "user" or .type == "assistant")
       | .type + ": " + (
           (.message.content // [])[]?
           | select(.type == "text")
           | .text // empty
           | .[0:600]
-        )' 2>/dev/null \
-    | tail -c 5000 || true)
+        )' 2>/dev/null |
+    tail -c 5000 || true)
 fi
 
 # Write handoff file
-cat > "$HANDOFF" << EOF
+cat >"$HANDOFF" <<EOF
 ---
 timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 session_id: ${SESSION_ID}
@@ -126,7 +126,10 @@ _prune_plugin_cache() {
         vpath="${version%/}"
         is_active=false
         for ap in "${ACTIVE_PATHS[@]}"; do
-          [[ "$ap" == "$vpath" ]] && { is_active=true; break; }
+          [[ "$ap" == "$vpath" ]] && {
+            is_active=true
+            break
+          }
         done
         if ! $is_active; then
           rm -rf "$vpath" 2>/dev/null || true
