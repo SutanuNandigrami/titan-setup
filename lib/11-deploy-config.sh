@@ -23,26 +23,57 @@ install -Dm644 "$REPO_FILES/dot-claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/CLAUDE.md"
 ok "CLAUDE.md"
 
-# ─── settings.json ───
-install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+# ─── settings.json — atomic merge (replace what we own, preserve what's theirs) ───
 TITAN_PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
-  jq '.env.DISABLE_AUTOUPDATER = "1"' "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
-  ok "settings.json (DISABLE_AUTOUPDATER=1)"
-else
-  ok "settings.json"
+
+# Build --inject flags for runtime-detected state
+_MERGE_INJECT=()
+_MERGE_INJECT+=(--inject "NTFY_TOPIC=")
+_MERGE_INJECT+=(--inject "NTFY_URL=https://ntfy.sh")
+
+if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
+  _MERGE_INJECT+=(--inject "ANTHROPIC_BASE_URL=http://127.0.0.1:${CCFLARE_PORT}")
 fi
-# ─── Semgrep token injection ───
+
+if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
+  _LETTA_PASS=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
+  _MERGE_INJECT+=(--inject "LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}")
+  _MERGE_INJECT+=(--inject "LETTA_API_KEY=${_LETTA_PASS}")
+  _MERGE_INJECT+=(--inject "LETTA_MODEL=anthropic/claude-sonnet-4-6")
+  _MERGE_INJECT+=(--inject "LETTA_MODE=full")
+  _MERGE_INJECT+=(--inject "LETTA_SDK_TOOLS=read-only")
+fi
+
 if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-  jq --arg tok "$SEMGREP_TOKEN" \
-    '.env.SEMGREP_APP_TOKEN = $tok | .enabledPlugins["semgrep@claude-plugins-official"] = true' \
+  _MERGE_INJECT+=(--inject "SEMGREP_APP_TOKEN=${SEMGREP_TOKEN}")
+fi
+
+if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
+  _MERGE_INJECT+=(--inject "DISABLE_AUTOUPDATER=1")
+fi
+
+# Single atomic merge: template + live + runtime injections → settings.json
+python3 "$REPO_FILES/script/merge-settings.py" \
+  "$REPO_FILES/dot-claude/settings.json" \
+  "$CLAUDE_DIR/settings.json" \
+  "$CLAUDE_DIR/settings.json" \
+  --engineer "$ENGINEER_NAME" \
+  --path "$TITAN_PATH" \
+  "${_MERGE_INJECT[@]}" \
+  && ok "settings.json (atomic merge)" \
+  || { warn "settings.json merge failed — falling back to template overwrite"
+       install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+       sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+       sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+       ok "settings.json (fallback — template overwrite)"; }
+
+# Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
+if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
+  jq '.enabledPlugins["semgrep@claude-plugins-official"] = true' \
     "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
     && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
-    && ok "settings.json (SEMGREP_APP_TOKEN injected, plugin enabled)" \
-    || warn "semgrep token injection failed"
+    && ok "settings.json (semgrep plugin enabled)" \
+    || warn "semgrep plugin enablement failed"
 fi
 
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
@@ -50,40 +81,6 @@ if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
   run_q rtk init -g --auto-patch && ok "rtk global hook (token compression active)" \
     || warn "rtk init -g failed — run manually: rtk init -g"
 fi
-
-# Inject ANTHROPIC_BASE_URL if better-ccflare is installed (desktop and VPS)
-if ! $CCFLARE_SKIP && command -v better-ccflare &>/dev/null; then
-  jq --arg url "http://127.0.0.1:${CCFLARE_PORT}" '.env.ANTHROPIC_BASE_URL = $url' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
-  ok "settings.json (ANTHROPIC_BASE_URL → http://127.0.0.1:${CCFLARE_PORT})"
-fi
-
-# Inject Letta env vars if Letta is installed
-if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
-  _LETTA_PASS=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
-  jq --arg url "http://127.0.0.1:${LETTA_PORT}" \
-     --arg key "$_LETTA_PASS" \
-     --arg model "anthropic/claude-sonnet-4-6" \
-     --arg mode "full" \
-     --arg tools "read-only" \
-     '.env.LETTA_BASE_URL = $url |
-      .env.LETTA_API_KEY = $key |
-      .env.LETTA_MODEL = $model |
-      .env.LETTA_MODE = $mode |
-      .env.LETTA_SDK_TOOLS = $tools' \
-    "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-    && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
-  ok "settings.json (Letta env vars injected — LETTA_BASE_URL, LETTA_API_KEY, LETTA_MODEL, LETTA_MODE)"
-fi
-
-# ─── ntfy push notifications — set NTFY_TOPIC to enable ───
-# Injects NTFY_TOPIC and NTFY_URL into Claude Code env so session hooks can send push alerts.
-# Leave NTFY_TOPIC blank to disable. Set to any ntfy.sh topic name or self-hosted topic.
-jq '.env.NTFY_TOPIC = "" | .env.NTFY_URL = "https://ntfy.sh"' \
-  "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-  && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json"
-ok "settings.json (ntfy env vars added — set NTFY_TOPIC to enable push alerts)"
 
 # ─── cozempic — context bloat cleaner (global hooks) ───
 # Injects hooks directly into ~/.claude/settings.json — NOT via `cozempic init`,
