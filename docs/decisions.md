@@ -123,3 +123,27 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: Install takes 45-80 minutes. If it fails at Phase 3 and user re-runs, Phases 1-2 re-execute unnecessarily (5-20 minutes wasted). No state tracking existed.
 **Decision**: Write marker files to `~/.titan-progress/<phase>` after each phase completes. On re-run, skip completed phases unless `--force-updates` or `--fresh` is passed. Phase 1 (prerequisites) and Phase 2 (package managers) get checkpoints. Phase 3+ always runs (tool installs are already idempotent via `command -v` checks).
 **Consequences**: Re-runs after Phase 3 failure skip 5-20 minutes of redundant work. `--fresh` resets all checkpoints for clean re-install. Trade-off: if system state changes between runs (e.g., apt sources modified), stale checkpoint may skip needed updates — `--fresh` resolves this.
+
+## ADR-021: --minimal flag for reduced install (2026-03-20)
+**Status**: Accepted
+**Context**: Full install includes 150+ tools and 4 services (n8n, Letta, Ollama, ccflare). Many tools are nice-to-have but rarely used daily (sqlmap, mitmproxy, bore-cli, etc.). Services consume ~2GB RAM at idle. Fresh install takes 45-80 min.
+**Decision**: Add `--minimal` flag that installs ~50 core tools in ~25 min. Skips: Letta, Ollama, n8n, cozempic. Skips extended tool lists (sqlmap, mitmproxy, cookiecutter, bore-cli, websocat, hurl, jwt-cli, oha, mkcert, ffuf, grpcurl, security recon tools). Core tools always installed: ripgrep, fd, sd, bat, eza, delta, just, xh, jq, yq, semgrep, ruff, ansible, etc.
+**Consequences**: 50% faster install. 75% less idle RAM. Users who need specific tools can install on-demand (`uv tool install sqlmap`). Full install remains the default.
+
+## ADR-022: --secrets-file for credential passing (2026-03-20)
+**Status**: Accepted
+**Context**: Secrets (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD) were passed via CLI args, visible in `ps aux`, shell history, and install logs. An observer on the same machine during install could read all credentials.
+**Decision**: Add `--secrets-file PATH` flag. File format: `KEY=value` (one per line, # comments). Supported keys: TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD. File should be mode 0600. CLI arg passing still works (backward compatible).
+**Consequences**: Secrets no longer visible in process list or shell history. Log files still show commands but not the secret values. Trade-off: user must create a temp file.
+
+## ADR-023: Parallel Phase 3 — uv tools run concurrently with cargo (2026-03-20)
+**Status**: Accepted
+**Context**: Phase 3 installs tools sequentially: uv (10-15 min) → bun (3 min) → cargo (25-40 min) → go (8 min). uv and cargo use completely separate package managers with no shared state.
+**Decision**: Run uv tools in a background subshell while cargo compiles in the foreground. Background output goes to a log file; results are displayed after cargo finishes. This overlaps ~10-15 min of uv install time with cargo compile time.
+**Consequences**: ~10-15 min saved on fresh install. No output interleaving (background uses structured log format). Trade-off: uv errors are reported delayed (after cargo finishes, not in real-time).
+
+## ADR-024: Consolidate split plugin fragments (2026-03-20)
+**Status**: Accepted
+**Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
+**Decision**: Merge into single `lib/12-plugins.sh`. Renumber subsequent fragments (14→13, 15→14, 16→15, 17→16). Total fragments: 19→18.
+**Consequences**: All if/fi blocks are self-contained within a single file. No cross-fragment dependencies. Slightly larger file (~160 lines) but much easier to maintain.

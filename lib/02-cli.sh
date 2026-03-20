@@ -24,6 +24,7 @@ LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
 FORCE_UPDATES=false
+MINIMAL=false
 
 usage() {
   cat <<USAGE
@@ -213,6 +214,39 @@ while [[ $# -gt 0 ]]; do
     --fresh)
       phase_reset
       shift
+      ;;
+    --minimal)
+      MINIMAL=true
+      LETTA_SKIP=true
+      OLLAMA_SKIP=true
+      COZEMPIC_SKIP=true
+      LETTA_CTRL_SKIP=true
+      shift
+      ;;
+    --secrets-file)
+      [[ $# -ge 2 ]] || {
+        fail "--secrets-file requires a file path"
+        usage
+      }
+      if [[ -f "$2" ]]; then
+        # Read key=value pairs (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD)
+        while IFS='=' read -r key value; do
+          [[ -z "$key" || "$key" == \#* ]] && continue
+          key=$(echo "$key" | xargs)
+          value=$(echo "$value" | xargs)
+          case "$key" in
+            TAILSCALE_KEY) TAILSCALE_KEY="$value" ;;
+            SEMGREP_TOKEN) SEMGREP_TOKEN="$value" ;;
+            LETTA_PASSWORD) LETTA_PASSWORD="$value" ;;
+            *) warn "secrets-file: unknown key '$key' (ignored)" ;;
+          esac
+        done <"$2"
+        ok "Secrets loaded from $2"
+      else
+        fail "Secrets file not found: $2"
+        exit 1
+      fi
+      shift 2
       ;;
     --version)
       echo "titan-setup ${SCRIPT_VERSION}"

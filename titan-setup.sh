@@ -112,6 +112,7 @@ LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
 FORCE_UPDATES=false
+MINIMAL=false
 
 usage() {
   cat <<USAGE
@@ -301,6 +302,39 @@ while [[ $# -gt 0 ]]; do
     --fresh)
       phase_reset
       shift
+      ;;
+    --minimal)
+      MINIMAL=true
+      LETTA_SKIP=true
+      OLLAMA_SKIP=true
+      COZEMPIC_SKIP=true
+      LETTA_CTRL_SKIP=true
+      shift
+      ;;
+    --secrets-file)
+      [[ $# -ge 2 ]] || {
+        fail "--secrets-file requires a file path"
+        usage
+      }
+      if [[ -f "$2" ]]; then
+        # Read key=value pairs (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD)
+        while IFS='=' read -r key value; do
+          [[ -z "$key" || "$key" == \#* ]] && continue
+          key=$(echo "$key" | xargs)
+          value=$(echo "$value" | xargs)
+          case "$key" in
+            TAILSCALE_KEY) TAILSCALE_KEY="$value" ;;
+            SEMGREP_TOKEN) SEMGREP_TOKEN="$value" ;;
+            LETTA_PASSWORD) LETTA_PASSWORD="$value" ;;
+            *) warn "secrets-file: unknown key '$key' (ignored)" ;;
+          esac
+        done <"$2"
+        ok "Secrets loaded from $2"
+      else
+        fail "Secrets file not found: $2"
+        exit 1
+      fi
+      shift 2
       ;;
     --version)
       echo "titan-setup ${SCRIPT_VERSION}"
@@ -1017,41 +1051,54 @@ if [[ -z "$REPO_FILES" ]]; then
 fi
 section "Phase 3/6 — 150+ CLI Tools"
 
+# ── Parallel strategy: uv + bun install in background while cargo compiles in foreground ──
+# uv, bun, and cargo use separate package managers with no shared state.
+# Cargo is the bottleneck (~25-40 min); running uv/bun concurrently saves ~10-15 min.
+_PHASE3_UV_LOG="$WORKDIR/phase3-uv.log"
+_PHASE3_BUN_LOG="$WORKDIR/phase3-bun.log"
+
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
 echo -e "  ${CYAN}Python tools (uv):${NC}"
 
+# Core Python tools (always installed)
 UV_TOOLS=(
-  "yq"                 # yq — YAML/XML/TOML processor
-  "semgrep"            # semgrep — static analysis
-  "ansible-core"       # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
-  "ansible-lint"       # ansible-lint — linter for Ansible playbooks
-  "sqlmap"             # sqlmap — SQL injection testing
-  "pgcli"              # pgcli — Postgres with autocomplete
-  "ruff"               # ruff — Python linter (replaces flake8+black+isort+pyflakes)
-  "ast-grep-cli"       # ast-grep, sg — structural code search
-  "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
-  "cookiecutter"       # cookiecutter — project scaffolding from templates
-  "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
-  "cozempic"           # cozempic — context bloat cleaner for Claude Code sessions
+  "yq"           # yq — YAML/XML/TOML processor
+  "semgrep"      # semgrep — static analysis
+  "ansible-core" # ansible, ansible-playbook, ansible-galaxy + more
+  "ansible-lint" # ansible-lint — linter for Ansible playbooks
+  "pgcli"        # pgcli — Postgres with autocomplete
+  "ruff"         # ruff — Python linter (replaces flake8+black+isort+pyflakes)
+  "ast-grep-cli" # ast-grep, sg — structural code search
+  "cozempic"     # cozempic — context bloat cleaner for Claude Code sessions
 )
-
-if $FORCE_UPDATES; then
-  echo -e "  ${YELLOW}Force-updating all Python tools...${NC}"
-  uv tool upgrade --all 2>/dev/null && ok "uv tool upgrade --all" || warn "uv tool upgrade --all failed"
+# Extended Python tools (skipped with --minimal)
+if ! $MINIMAL; then
+  UV_TOOLS+=(
+    "sqlmap"             # sqlmap — SQL injection testing
+    "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
+    "cookiecutter"       # cookiecutter — project scaffolding from templates
+    "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
+  )
 fi
 
-for tool in "${UV_TOOLS[@]}"; do
-  if uv tool list 2>/dev/null | grep -q "^${tool} "; then
-    ok "$tool (already installed)"
-  else
-    echo -n "  Installing $tool..."
-    if uv tool install --force "$tool" &>/dev/null; then
-      echo -e " ${GREEN}✓${NC}"
-    else
-      echo -e " ${YELLOW}⚠ failed (try: uv tool install $tool)${NC}"
-    fi
+# Run uv tools in background (output to log, results shown after cargo phase)
+(
+  if $FORCE_UPDATES; then
+    uv tool upgrade --all 2>/dev/null && echo "UV_UPGRADE=ok" || echo "UV_UPGRADE=warn"
   fi
-done
+  _uv_list=$(uv tool list 2>/dev/null)
+  for tool in "${UV_TOOLS[@]}"; do
+    if echo "$_uv_list" | grep -q "^${tool} "; then
+      echo "UV_OK=$tool"
+    elif uv tool install --force "$tool" &>/dev/null; then
+      echo "UV_INSTALLED=$tool"
+    else
+      echo "UV_FAIL=$tool"
+    fi
+  done
+) >"$_PHASE3_UV_LOG" 2>&1 &
+_UV_PID=$!
+echo "  uv tools installing in background (${#UV_TOOLS[@]} tools)..."
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
@@ -1116,8 +1163,10 @@ else
 fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
-check_port 5678 "n8n" || true
-if command -v docker &>/dev/null; then
+if $MINIMAL; then
+  ok "n8n (skipped — minimal mode)"
+elif command -v docker &>/dev/null; then
+  check_port 5678 "n8n" || true
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true
@@ -1568,13 +1617,17 @@ if [[ ! -f "$HOME/.cargo/binstall.toml" ]]; then
   printf '[telemetry]\nenabled = false\n' >"$HOME/.cargo/binstall.toml"
 fi
 
+# Core cargo crates (always installed)
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat xsv htmlq
   git-absorb git-delta difftastic typos-cli
-  websocat bore-cli procs hyperfine
-  pueue watchexec-cli just choose
-  xh ouch hurl jwt-cli oha
+  procs hyperfine pueue watchexec-cli just choose
+  xh ouch
 )
+# Extended cargo crates (skipped with --minimal)
+if ! $MINIMAL; then
+  CARGO_CRATES+=(websocat bore-cli hurl jwt-cli oha)
+fi
 
 # ── Parallel strategy: start RTK clone+patch while binstall runs ──────────
 # RTK needs source build (patched); start clone in background, compile after binstall finishes.
@@ -1825,26 +1878,32 @@ command -v act &>/dev/null && ok "act (exists)" ||
 
 # ── Parallel go install for remaining tools ──────────────────────────────────
 # These are lighter tools — run them all in parallel with background jobs.
+# Core Go tools (always installed)
 declare -A GO_MAP=(
   ["dive"]="github.com/wagoodman/dive@latest"
   ["stern"]="github.com/stern/stern@latest"
   ["glow"]="github.com/charmbracelet/glow@latest"
-  ["mkcert"]="filippo.io/mkcert@latest"
   ["task"]="github.com/go-task/task/v3/cmd/task@latest"
-  ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
   ["usql"]="github.com/xo/usql@latest"
-  ["grpcurl"]="github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
   ["actionlint"]="github.com/rhysd/actionlint/cmd/actionlint@latest"
   ["hcloud"]="github.com/hetznercloud/cli/cmd/hcloud@latest"
   ["doggo"]="github.com/mr-karan/doggo/cmd/doggo@latest"
   ["shfmt"]="mvdan.cc/sh/v3/cmd/shfmt@latest"
-  ["gron"]="github.com/tomnomnom/gron@latest"
-  ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
-  ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-  ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
-  ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
   ["scc"]="github.com/boyter/scc/v3@latest"
 )
+# Extended Go tools (skipped with --minimal)
+if ! $MINIMAL; then
+  GO_MAP+=(
+    ["mkcert"]="filippo.io/mkcert@latest"
+    ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
+    ["grpcurl"]="github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
+    ["gron"]="github.com/tomnomnom/gron@latest"
+    ["httpx"]="github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    ["subfinder"]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+    ["dnsx"]="github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+    ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
+  )
+fi
 
 _GO_PIDS=()
 _GO_NAMES=()
@@ -2072,6 +2131,20 @@ if [[ "$ARCH_AMD" == "amd64" ]]; then
       ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
 else warn "comby: skipped (amd64 only, detected ${ARCH_AMD})"; fi
+
+# ── Wait for background uv tools + show results ──────────────────────────
+if [[ -n "${_UV_PID:-}" ]]; then
+  echo -e "\n  ${CYAN}Background uv tools results:${NC}"
+  wait "$_UV_PID" 2>/dev/null || true
+  while IFS='=' read -r status tool; do
+    case "$status" in
+      UV_OK) ok "$tool (already installed)" ;;
+      UV_INSTALLED) ok "$tool" ;;
+      UV_FAIL) warn "$tool (uv install failed)" ;;
+      UV_UPGRADE) [[ "$tool" == "ok" ]] && ok "uv tool upgrade --all" || warn "uv tool upgrade failed" ;;
+    esac
+  done <"$_PHASE3_UV_LOG"
+fi
 section "Phase 4/6 — Claude Code CLI"
 
 # Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
@@ -2752,7 +2825,7 @@ else
   fi
 
 fi
-# ── end claude auth guard (opened in 12-plugins-install.sh) ──
+# ── end claude auth guard ──
 
 # ─── LettaCtrl GUI — web dashboard for Letta management ───
 # NOTE: runs outside claude auth guard — letta-ctrl is standalone (no Claude auth needed)

@@ -1,40 +1,53 @@
 section "Phase 3/6 — 150+ CLI Tools"
 
+# ── Parallel strategy: uv + bun install in background while cargo compiles in foreground ──
+# uv, bun, and cargo use separate package managers with no shared state.
+# Cargo is the bottleneck (~25-40 min); running uv/bun concurrently saves ~10-15 min.
+_PHASE3_UV_LOG="$WORKDIR/phase3-uv.log"
+_PHASE3_BUN_LOG="$WORKDIR/phase3-bun.log"
+
 # ─── Python tools via uv (isolated venvs, zero system pollution) ───
 echo -e "  ${CYAN}Python tools (uv):${NC}"
 
+# Core Python tools (always installed)
 UV_TOOLS=(
-  "yq"                 # yq — YAML/XML/TOML processor
-  "semgrep"            # semgrep — static analysis
-  "ansible-core"       # ansible, ansible-playbook, ansible-galaxy + more (NOT 'ansible' — that's the meta-pkg)
-  "ansible-lint"       # ansible-lint — linter for Ansible playbooks
-  "sqlmap"             # sqlmap — SQL injection testing
-  "pgcli"              # pgcli — Postgres with autocomplete
-  "ruff"               # ruff — Python linter (replaces flake8+black+isort+pyflakes)
-  "ast-grep-cli"       # ast-grep, sg — structural code search
-  "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
-  "cookiecutter"       # cookiecutter — project scaffolding from templates
-  "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
-  "cozempic"           # cozempic — context bloat cleaner for Claude Code sessions
+  "yq"           # yq — YAML/XML/TOML processor
+  "semgrep"      # semgrep — static analysis
+  "ansible-core" # ansible, ansible-playbook, ansible-galaxy + more
+  "ansible-lint" # ansible-lint — linter for Ansible playbooks
+  "pgcli"        # pgcli — Postgres with autocomplete
+  "ruff"         # ruff — Python linter (replaces flake8+black+isort+pyflakes)
+  "ast-grep-cli" # ast-grep, sg — structural code search
+  "cozempic"     # cozempic — context bloat cleaner for Claude Code sessions
 )
-
-if $FORCE_UPDATES; then
-  echo -e "  ${YELLOW}Force-updating all Python tools...${NC}"
-  uv tool upgrade --all 2>/dev/null && ok "uv tool upgrade --all" || warn "uv tool upgrade --all failed"
+# Extended Python tools (skipped with --minimal)
+if ! $MINIMAL; then
+  UV_TOOLS+=(
+    "sqlmap"             # sqlmap — SQL injection testing
+    "mitmproxy"          # mitmproxy, mitmdump — HTTP/HTTPS proxy for debugging
+    "cookiecutter"       # cookiecutter — project scaffolding from templates
+    "notebooklm-mcp-cli" # nlm — Google NotebookLM CLI + MCP server
+  )
 fi
 
-for tool in "${UV_TOOLS[@]}"; do
-  if uv tool list 2>/dev/null | grep -q "^${tool} "; then
-    ok "$tool (already installed)"
-  else
-    echo -n "  Installing $tool..."
-    if uv tool install --force "$tool" &>/dev/null; then
-      echo -e " ${GREEN}✓${NC}"
-    else
-      echo -e " ${YELLOW}⚠ failed (try: uv tool install $tool)${NC}"
-    fi
+# Run uv tools in background (output to log, results shown after cargo phase)
+(
+  if $FORCE_UPDATES; then
+    uv tool upgrade --all 2>/dev/null && echo "UV_UPGRADE=ok" || echo "UV_UPGRADE=warn"
   fi
-done
+  _uv_list=$(uv tool list 2>/dev/null)
+  for tool in "${UV_TOOLS[@]}"; do
+    if echo "$_uv_list" | grep -q "^${tool} "; then
+      echo "UV_OK=$tool"
+    elif uv tool install --force "$tool" &>/dev/null; then
+      echo "UV_INSTALLED=$tool"
+    else
+      echo "UV_FAIL=$tool"
+    fi
+  done
+) >"$_PHASE3_UV_LOG" 2>&1 &
+_UV_PID=$!
+echo "  uv tools installing in background (${#UV_TOOLS[@]} tools)..."
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools (uv):${NC}"
 command -v ccusage &>/dev/null && ok "ccusage (exists)" || { uv tool install ccusage 2>/dev/null && ok "ccusage" || warn "ccusage"; }
@@ -99,8 +112,10 @@ else
 fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
-check_port 5678 "n8n" || true
-if command -v docker &>/dev/null; then
+if $MINIMAL; then
+  ok "n8n (skipped — minimal mode)"
+elif command -v docker &>/dev/null; then
+  check_port 5678 "n8n" || true
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true
