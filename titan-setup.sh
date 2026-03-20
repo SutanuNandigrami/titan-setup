@@ -51,6 +51,14 @@ section() { echo -e "\n${CYAN}═══ $1 ═══${NC}\n"; }
 ok() { echo -e "  ${GREEN}✓${NC} $1"; }
 warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
+
+# Cached apt-get update — runs once per session, skips on subsequent calls
+_APT_UPDATED=false
+apt_update() {
+  if ! $_APT_UPDATED; then
+    run_q sudo apt-get update -qq && _APT_UPDATED=true
+  fi
+}
 # ─── CLI Options ───
 ENGINEER_NAME=""
 INSTALL_MODE=""
@@ -371,6 +379,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $LETTA_CTRL_SKIP && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
     $COZEMPIC_SKIP && _VPS_REEXEC_ARGS+=(--no-cozempic)
+    $FORCE_UPDATES && _VPS_REEXEC_ARGS+=(--force-updates)
     # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.
@@ -514,7 +523,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
-  run_q sudo apt-get update
+  apt_update
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins
@@ -751,7 +760,7 @@ if [[ -d /etc/needrestart ]]; then
     sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
 fi
 
-run_q sudo apt-get update -qq
+apt_update
 run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
   -o Dpkg::Options::="--force-confold"
 
@@ -1674,8 +1683,22 @@ _gh_latest_tag() {
   basename "$url" 2>/dev/null
 }
 
+# ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
+_VER_DIR=$(mktemp -d)
+_gh_latest_tag "projectdiscovery/nuclei" >"$_VER_DIR/nuclei" &
+_gh_latest_tag "gitleaks/gitleaks" >"$_VER_DIR/gitleaks" &
+_gh_latest_tag "getsops/sops" >"$_VER_DIR/sops" &
+_gh_latest_tag "google/osv-scanner" >"$_VER_DIR/osv-scanner" &
+_gh_latest_tag "nektos/act" >"$_VER_DIR/act" &
+wait
+_NUCLEI_VER=$(<"$_VER_DIR/nuclei")
+_GITLEAKS_VER=$(<"$_VER_DIR/gitleaks")
+_SOPS_VER=$(<"$_VER_DIR/sops")
+_OSV_VER=$(<"$_VER_DIR/osv-scanner")
+_ACT_VER=$(<"$_VER_DIR/act")
+rm -rf "$_VER_DIR"
+
 # nuclei (357 deps, ~7 min compile) — binary download
-_NUCLEI_VER=$(_gh_latest_tag "projectdiscovery/nuclei")
 if [[ -n "$_NUCLEI_VER" && "$_NUCLEI_VER" != "latest" ]]; then
   _go_binary_install "nuclei" \
     "https://github.com/projectdiscovery/nuclei/releases/download/${_NUCLEI_VER}/nuclei_${_NUCLEI_VER#v}_linux_${ARCH_GO}.zip" ||
@@ -1685,7 +1708,6 @@ command -v nuclei &>/dev/null && ok "nuclei (exists)" ||
   { run_q go install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" && ok "nuclei (compiled)" || warn "nuclei"; }
 
 # gitleaks (64 deps) — binary download
-_GITLEAKS_VER=$(_gh_latest_tag "gitleaks/gitleaks")
 if [[ -n "$_GITLEAKS_VER" && "$_GITLEAKS_VER" != "latest" ]]; then
   # gitleaks uses x64/arm64 naming
   _GL_ARCH="x64"
@@ -1698,7 +1720,6 @@ command -v gitleaks &>/dev/null && ok "gitleaks (exists)" ||
   { run_q go install "github.com/zricethezav/gitleaks/v8@latest" && ok "gitleaks (compiled)" || warn "gitleaks"; }
 
 # sops (89 deps) — standalone binary download
-_SOPS_VER=$(_gh_latest_tag "getsops/sops")
 if [[ -n "$_SOPS_VER" && "$_SOPS_VER" != "latest" ]] && ! command -v sops &>/dev/null; then
   echo -n "  sops (binary)..."
   if curl -fsSL "https://github.com/getsops/sops/releases/download/${_SOPS_VER}/sops-${_SOPS_VER}.linux.${ARCH_GO}" -o "$HOME/go/bin/sops" 2>>"$LOG_FILE"; then
@@ -1710,7 +1731,6 @@ command -v sops &>/dev/null && ok "sops (exists)" ||
   { run_q go install "github.com/getsops/sops/v3/cmd/sops@latest" && ok "sops (compiled)" || warn "sops"; }
 
 # osv-scanner (51 deps) — standalone binary download
-_OSV_VER=$(_gh_latest_tag "google/osv-scanner")
 if [[ -n "$_OSV_VER" && "$_OSV_VER" != "latest" ]] && ! command -v osv-scanner &>/dev/null; then
   echo -n "  osv-scanner (binary)..."
   if curl -fsSL "https://github.com/google/osv-scanner/releases/download/${_OSV_VER}/osv-scanner_linux_${ARCH_GO}" -o "$HOME/go/bin/osv-scanner" 2>>"$LOG_FILE"; then
@@ -1722,7 +1742,6 @@ command -v osv-scanner &>/dev/null && ok "osv-scanner (exists)" ||
   { run_q go install "github.com/google/osv-scanner/cmd/osv-scanner@latest" && ok "osv-scanner (compiled)" || warn "osv-scanner"; }
 
 # act (46 deps) — binary download
-_ACT_VER=$(_gh_latest_tag "nektos/act")
 if [[ -n "$_ACT_VER" && "$_ACT_VER" != "latest" ]]; then
   _go_binary_install "act" \
     "https://github.com/nektos/act/releases/download/${_ACT_VER}/act_Linux_${ARCH_FULL}.tar.gz" ||
@@ -1848,7 +1867,7 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
+  apt_update && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
 
@@ -1856,7 +1875,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq terraform packer
+  apt_update && sudo apt-get install -y -qq terraform packer
   ok "terraform + packer"
 else ok "terraform (exists)"; fi
 
@@ -1890,7 +1909,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq trivy
+  apt_update && sudo apt-get install -y -qq trivy
   ok "trivy"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -1915,7 +1934,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq gh
+  apt_update && sudo apt-get install -y -qq gh
   ok "gh"
 else ok "gh (exists)"; fi
 
@@ -2091,11 +2110,15 @@ python3 "$REPO_FILES/script/merge-settings.py" \
   "${_MERGE_INJECT[@]}" &&
   ok "settings.json (atomic merge)" ||
   {
-    warn "settings.json merge failed — falling back to template overwrite"
-    install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
-    sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
-    ok "settings.json (fallback — template overwrite)"
+    if [[ -f "$CLAUDE_DIR/settings.json" ]]; then
+      warn "settings.json merge failed — preserving existing user config (fix manually)"
+    else
+      warn "settings.json merge failed — installing template (no existing config found)"
+      install -Dm644 "$REPO_FILES/dot-claude/settings.json" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_ENGINEER_NAME' "$ENGINEER_NAME" "$CLAUDE_DIR/settings.json"
+      sd 'TITAN_PATH_PLACEHOLDER' "$TITAN_PATH" "$CLAUDE_DIR/settings.json"
+      ok "settings.json (template — first install)"
+    fi
   }
 
 # Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
@@ -2314,10 +2337,24 @@ ok "command: /recall"
 install -Dm644 "$REPO_FILES/dot-claude/commands/remember.md" "$CLAUDE_DIR/commands/remember.md"
 ok "command: /remember"
 
+# ── Parallel git clones for external skills (saves ~15s vs sequential) ──────
+_NEED_SUPERPOWERS=false
+_NEED_VIBESEC=false
+_NEED_TRAILOFBITS=false
+[ ! -d "$CLAUDE_DIR/skills/tdd" ] && _NEED_SUPERPOWERS=true
+[ ! -d "$CLAUDE_DIR/skills/vibesec" ] && _NEED_VIBESEC=true
+[ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ] && _NEED_TRAILOFBITS=true
+
+if $_NEED_SUPERPOWERS || $_NEED_VIBESEC || $_NEED_TRAILOFBITS; then
+  $_NEED_SUPERPOWERS && git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null &
+  $_NEED_VIBESEC && git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null &
+  $_NEED_TRAILOFBITS && git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null &
+  wait
+fi
+
 # obra/superpowers (multiple useful skills)
-if [ ! -d "$CLAUDE_DIR/skills/tdd" ]; then
-  git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null || true
-  if [ -d /tmp/superpowers/skills ]; then
+if $_NEED_SUPERPOWERS; then
+  if [ -d "/tmp/superpowers/skills" ]; then
     cp -r /tmp/superpowers/skills/test-driven-development "$CLAUDE_DIR/skills/tdd" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/systematic-debugging "$CLAUDE_DIR/skills/systematic-debugging" 2>/dev/null || true
     cp -r /tmp/superpowers/skills/brainstorming "$CLAUDE_DIR/skills/brainstorming" 2>/dev/null || true
@@ -2349,8 +2386,8 @@ else
 fi
 
 # Security skills
-if [ ! -d "$CLAUDE_DIR/skills/vibesec" ]; then
-  git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null && ok "vibesec" || warn "vibesec"
+if $_NEED_VIBESEC; then
+  [ -d "$CLAUDE_DIR/skills/vibesec" ] && ok "vibesec" || warn "vibesec"
 else ok "vibesec (exists)"; fi
 # Add paths scoping to vibesec (758 lines — only load for web/security files)
 if [ -f "$CLAUDE_DIR/skills/vibesec/SKILL.md" ] && ! grep -q '^paths:' "$CLAUDE_DIR/skills/vibesec/SKILL.md" 2>/dev/null; then
@@ -2360,8 +2397,7 @@ fi
 # Trail of Bits — selective install (modern-python only, not the full 60-skill repo)
 # Full clone was 71K lines / 60 SKILL.md files — most never triggered (blockchain, fuzzing, etc.)
 # Individual plugins can be installed on-demand via: claude plugin marketplace add trailofbits/skills
-if [ ! -d "$CLAUDE_DIR/skills/trailofbits-modern-python" ]; then
-  git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null
+if $_NEED_TRAILOFBITS; then
   if [ -d /tmp/trailofbits-skills/plugins/modern-python ]; then
     cp -r /tmp/trailofbits-skills/plugins/modern-python "$CLAUDE_DIR/skills/trailofbits-modern-python" 2>/dev/null && ok "trailofbits: modern-python" || warn "trailofbits: modern-python"
   else
@@ -2734,8 +2770,10 @@ if command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   INSTALLED_JSON="$CLAUDE_DIR/plugins/installed_plugins.json"
   if [[ -f "$INSTALLED_JSON" ]]; then
     CACHE_ROOT="$CLAUDE_DIR/plugins/cache"
-    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath' "$INSTALLED_JSON" 2>/dev/null)
-    if [[ -d "$CACHE_ROOT" ]]; then
+    mapfile -t ACTIVE_PATHS < <(jq -r '.plugins | to_entries[] | .value[] | .installPath // empty' "$INSTALLED_JSON" 2>/dev/null)
+    if [[ ${#ACTIVE_PATHS[@]} -eq 0 ]]; then
+      warn "plugin cache cleanup skipped — no active plugins found (jq may have failed)"
+    elif [[ -d "$CACHE_ROOT" ]]; then
       while IFS= read -r -d '' vpath; do
         vpath="${vpath%/}"
         is_active=false
@@ -2993,9 +3031,19 @@ echo -e "
 # so the install session stays alive throughout. This will drop the public
 # SSH connection; reconnect via Tailscale: ssh CLAUDE_USER@TS_HOSTNAME
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
-  sudo ufw delete allow 22/tcp || true
-  sudo ufw delete allow OpenSSH 2>/dev/null || true
-  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
-  sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+  if [[ -z "${TS_IP:-}" ]]; then
+    warn "Tailscale IP empty — skipping SSH lockdown (run manually after tailscale up)"
+  else
+    sudo ufw delete allow 22/tcp || true
+    sudo ufw delete allow OpenSSH 2>/dev/null || true
+    sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+    echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
+    # Validate config before restart to avoid SSH lockout
+    if sudo sshd -t 2>/dev/null; then
+      sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+    else
+      warn "sshd_config validation failed — reverting ListenAddress change"
+      sudo sed -i '/^ListenAddress /d' /etc/ssh/sshd_config
+    fi
+  fi
 fi

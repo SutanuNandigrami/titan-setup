@@ -212,9 +212,19 @@ echo -e "
 # so the install session stays alive throughout. This will drop the public
 # SSH connection; reconnect via Tailscale: ssh CLAUDE_USER@TS_HOSTNAME
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
-  sudo ufw delete allow 22/tcp || true
-  sudo ufw delete allow OpenSSH 2>/dev/null || true
-  sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
-  echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
-  sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+  if [[ -z "${TS_IP:-}" ]]; then
+    warn "Tailscale IP empty — skipping SSH lockdown (run manually after tailscale up)"
+  else
+    sudo ufw delete allow 22/tcp || true
+    sudo ufw delete allow OpenSSH 2>/dev/null || true
+    sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+    echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
+    # Validate config before restart to avoid SSH lockout
+    if sudo sshd -t 2>/dev/null; then
+      sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+    else
+      warn "sshd_config validation failed — reverting ListenAddress change"
+      sudo sed -i '/^ListenAddress /d' /etc/ssh/sshd_config
+    fi
+  fi
 fi

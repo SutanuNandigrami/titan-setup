@@ -23,7 +23,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   fi
 
   # ── Security packages ──────────────────────────────────────────────────
-  run_q sudo apt-get update
+  apt_update
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins

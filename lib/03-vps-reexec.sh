@@ -37,6 +37,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $LETTA_CTRL_SKIP && _VPS_REEXEC_ARGS+=(--letta-ctrl-skip)
     _VPS_REEXEC_ARGS+=(--letta-ctrl-port "$LETTA_CTRL_PORT")
     $COZEMPIC_SKIP && _VPS_REEXEC_ARGS+=(--no-cozempic)
+    $FORCE_UPDATES && _VPS_REEXEC_ARGS+=(--force-updates)
     # Propagate tmux context through the user-switch: exec sudo strips $TMUX,
     # so the re-executed script would see itself as "not in tmux" and try to
     # launch another session, causing the nested-tmux / duplicate-session error.

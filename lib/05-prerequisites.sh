@@ -9,7 +9,7 @@ if [[ -d /etc/needrestart ]]; then
     sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
 fi
 
-run_q sudo apt-get update -qq
+apt_update
 run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
   -o Dpkg::Options::="--force-confold"
 

@@ -8,3 +8,11 @@ section() { echo -e "\n${CYAN}═══ $1 ═══${NC}\n"; }
 ok() { echo -e "  ${GREEN}✓${NC} $1"; }
 warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
+
+# Cached apt-get update — runs once per session, skips on subsequent calls
+_APT_UPDATED=false
+apt_update() {
+  if ! $_APT_UPDATED; then
+    run_q sudo apt-get update -qq && _APT_UPDATED=true
+  fi
+}

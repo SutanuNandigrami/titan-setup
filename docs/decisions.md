@@ -63,3 +63,27 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: titan-setup.sh was designed as a first-run installer, not an updater. Re-running causes stale caches, config overwrites, and service misconfiguration.
 **Decision**: Four categories: REPLACE (files we own — always overwrite), MERGE (shared state like settings.json — atomic merge), SKIP (tools — install only if missing), CLEANUP (known stale artifacts — targeted removal, not manifest diffing).
 **Consequences**: Safe re-runs. No manifest diffing complexity. Cleanup is explicit (add entries as items are removed). `--force-updates` for tool upgrades, `--clean-cache` for aggressive cleanup.
+
+## ADR-011: Parallel network operations (2026-03-20)
+**Status**: Accepted
+**Context**: Version detection for binary downloads (nuclei, gitleaks, sops, osv-scanner, act) ran sequentially — each `_gh_latest_tag` call is ~3s, totaling ~15s. External skill repos (superpowers, vibesec, trailofbits) also cloned sequentially (~15s total). Both are pure I/O with no dependencies.
+**Decision**: Batch all GitHub version fetches into parallel background jobs, wait once. Clone all external skill repos in parallel, then process results sequentially. Use temp dir for version results to avoid variable scoping issues with background jobs.
+**Consequences**: ~30s saved on fresh install. No risk of write conflicts (version fetches are read-only; skill clones go to separate directories). Pattern can be extended to future network-heavy operations.
+
+## ADR-012: Settings merge must never clobber user config (2026-03-20)
+**Status**: Accepted
+**Context**: When `merge-settings.py` fails (Python error, malformed JSON, etc.), the fallback was `install -Dm644` which overwrites `~/.claude/settings.json` with the template. This destroys: user's model choice (violates ADR-003), user-owned env vars, user-installed plugins, any runtime state.
+**Decision**: If merge fails AND a settings.json already exists, preserve the existing file and warn. Only use template overwrite on truly fresh installs (no existing file). Never silently clobber user configuration.
+**Consequences**: A failed merge requires manual intervention rather than silent data loss. Fresh installs still get the template. Users see a clear warning explaining what happened.
+
+## ADR-013: SSH lockdown must validate before restart (2026-03-20)
+**Status**: Accepted
+**Context**: VPS mode locks SSH to Tailscale IP by writing `ListenAddress $TS_IP` to sshd_config and restarting sshd. If `$TS_IP` is empty (Tailscale failed) or sshd_config is invalid, the restart could lock the user out permanently.
+**Decision**: Validate `$TS_IP` is non-empty before any SSH changes. Run `sshd -t` to validate config before restarting. If validation fails, revert the ListenAddress change.
+**Consequences**: No SSH lockouts from invalid config. Users see a warning if Tailscale IP is missing. Trade-off: one extra sshd -t call (~100ms).
+
+## ADR-014: Cached apt-get update (2026-03-20)
+**Status**: Accepted
+**Context**: `apt-get update` was called 4-6 times across phases (prerequisites, VPS hardening, gcloud, terraform, trivy, gh). Each call adds 5-10s even when the cache is fresh from the previous call seconds ago.
+**Decision**: Single `apt_update()` helper that runs `apt-get update -qq` once and sets a flag. Subsequent calls are no-ops. Defined in lib/01-common.sh, available to all fragments.
+**Consequences**: ~20-40s saved on fresh install. Trade-off: if a new apt source is added mid-script, the cache won't refresh automatically (acceptable — new sources are added before their first use, and the initial update runs before any source additions).
