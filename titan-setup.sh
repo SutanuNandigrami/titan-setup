@@ -1346,6 +1346,11 @@ else
   ok "cargo-binstall (exists)"
 fi
 
+# Suppress interactive telemetry prompt on first cargo-binstall run
+if [[ ! -f "$HOME/.cargo/binstall.toml" ]]; then
+  printf '[telemetry]\nenabled = false\n' > "$HOME/.cargo/binstall.toml"
+fi
+
 CARGO_CRATES=(
   ripgrep fd-find sd eza du-dust bat xsv htmlq
   git-absorb git-delta difftastic typos-cli
@@ -1411,8 +1416,9 @@ _CARGO_GIT_NAMES=()
 
 _cargo_git_bg() {
   local name="$1" url="$2"
+  shift 2
   if ! command -v "$name" &>/dev/null; then
-    cargo install --git "$url" --quiet >>"$LOG_FILE" 2>&1 &
+    cargo install --git "$url" --quiet "$@" >>"$LOG_FILE" 2>&1 &
     _CARGO_GIT_PIDS+=($!)
     _CARGO_GIT_NAMES+=("$name")
   else
@@ -1421,7 +1427,7 @@ _cargo_git_bg() {
 }
 
 _cargo_git_bg "recall" "https://github.com/zippoxer/recall"
-_cargo_git_bg "parry-guard" "https://github.com/vaporif/parry"
+_cargo_git_bg "parry-guard" "https://github.com/vaporif/parry" --bin parry-guard
 
 # Wait for all parallel cargo builds
 for _i in "${!_CARGO_GIT_PIDS[@]}"; do
@@ -1653,24 +1659,20 @@ if command -v ctop &>/dev/null; then
   ok "ctop (exists)"
 else
   echo -n "  Installing ctop (binary)..."
-  sudo wget -qO /usr/local/bin/ctop "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" 2>/dev/null \
-    && sudo chmod +x /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+  curl -fsSL "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-${ARCH_AMD}" -o "$WORKDIR/ctop" 2>>"$LOG_FILE" \
+    && sudo install -m 0755 "$WORKDIR/ctop" /usr/local/bin/ctop && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
 fi
 
 
 echo -e "\n  ${CYAN}Claude Code ecosystem tools:${NC}"
 # claude-tmux — Rust TUI for managing Claude Code tmux sessions
 if ! command -v claude-tmux &>/dev/null; then
-  cargo install --git https://github.com/nielsgroen/claude-tmux 2>/dev/null && ok "claude-tmux" || warn "claude-tmux"
+  cargo install --git https://github.com/nielsgroen/claude-tmux --locked 2>>"$LOG_FILE" && ok "claude-tmux" || warn "claude-tmux"
 else ok "claude-tmux (exists)"; fi
 # claude-esp
 if ! command -v claude-esp &>/dev/null; then
   go install github.com/phiat/claude-esp@latest 2>/dev/null && ok "claude-esp" || warn "claude-esp"
 else ok "claude-esp (exists)"; fi
-# ccstatusline — Claude Code status line (npm/bun package, NOT cargo)
-if ! command -v ccstatusline &>/dev/null; then
-  run_q bun install -g ccstatusline && ok "ccstatusline" || warn "ccstatusline"
-else ok "ccstatusline (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
 # Note: go install fails due to go.mod module path mismatch — use binary release instead
 if ! command -v claude-squad &>/dev/null; then
@@ -1707,7 +1709,7 @@ if ! command -v gcloud &>/dev/null; then
     | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
     | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  sudo apt update -qq && sudo apt install -y -qq google-cloud-cli
+  sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli
   ok "gcloud"
 else ok "gcloud (exists)"; fi
 
@@ -1715,7 +1717,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  sudo apt update -qq && sudo apt install -y -qq terraform packer
+  sudo apt-get update -qq && sudo apt-get install -y -qq terraform packer
   ok "terraform + packer"
 else ok "terraform (exists)"; fi
 
@@ -1749,7 +1751,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  sudo apt update -qq && sudo apt install -y -qq trivy
+  sudo apt-get update -qq && sudo apt-get install -y -qq trivy
   ok "trivy"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -1774,7 +1776,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  sudo apt update -qq && sudo apt install -y -qq gh
+  sudo apt-get update -qq && sudo apt-get install -y -qq gh
   ok "gh"
 else ok "gh (exists)"; fi
 
@@ -1797,7 +1799,7 @@ if ! command -v dippy &>/dev/null && ! [ -f "$HOME/.local/bin/dippy" ]; then
   else
     if [ ! -d "$HOME/tools/dippy" ]; then
       mkdir -p "$HOME/tools"
-      git clone --depth 1 https://github.com/ldayton/Dippy.git "$HOME/tools/dippy" 2>/dev/null
+      git clone --depth 1 https://github.com/ldayton/Dippy.git "$HOME/tools/dippy" 2>>"$LOG_FILE"
     fi
     if [ -f "$HOME/tools/dippy/bin/dippy-hook" ]; then
       chmod +x "$HOME/tools/dippy/bin/dippy-hook"
@@ -1836,7 +1838,7 @@ else ok "step-cli (exists)"; fi
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
-    sudo apt install -y libpcre3-dev libev4 2>/dev/null
+    sudo apt-get install -y libpcre3-dev libev4 2>/dev/null
     echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null \
       && ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
@@ -1860,7 +1862,7 @@ if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
     echo "  Installing Claude Desktop..."
     curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
-    sudo apt install -y claude-desktop-bin
+    sudo apt-get install -y claude-desktop-bin
     ok "Claude Desktop"
   else
     ok "Claude Desktop (exists)"
@@ -1870,7 +1872,7 @@ if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
     echo "  Installing Claude Cowork Service..."
     curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
-    sudo apt install -y claude-cowork-service
+    sudo apt-get install -y claude-cowork-service
     ok "Claude Cowork Service"
   else
     ok "Claude Cowork Service (exists)"

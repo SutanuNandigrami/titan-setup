@@ -14,7 +14,7 @@ if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
     echo "  Installing Claude Desktop..."
     curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
-    sudo apt install -y claude-desktop-bin
+    sudo apt-get install -y claude-desktop-bin
     ok "Claude Desktop"
   else
     ok "Claude Desktop (exists)"
@@ -24,7 +24,7 @@ if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
     echo "  Installing Claude Cowork Service..."
     curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
-    sudo apt install -y claude-cowork-service
+    sudo apt-get install -y claude-cowork-service
     ok "Claude Cowork Service"
   else
     ok "Claude Cowork Service (exists)"
