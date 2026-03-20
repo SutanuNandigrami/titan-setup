@@ -153,7 +153,7 @@ else
   # Phase A: Install from source with patches
   # Upstream bugs: NULL constraint on refresh_token for kilo/zai/minimax/console CLI modes
   # See: https://github.com/tombii/better-ccflare/issues/83
-  if ! command -v better-ccflare &>/dev/null; then
+  if $FORCE_UPDATES || ! command -v better-ccflare &>/dev/null; then
     _BCF_SRC=$(mktemp -d -t bcf-src-XXXXXX)
     _CLEANUP_DIRS+=("$_BCF_SRC")
     if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then

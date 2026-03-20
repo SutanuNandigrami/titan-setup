@@ -87,3 +87,21 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: `apt-get update` was called 4-6 times across phases (prerequisites, VPS hardening, gcloud, terraform, trivy, gh). Each call adds 5-10s even when the cache is fresh from the previous call seconds ago.
 **Decision**: Single `apt_update()` helper that runs `apt-get update -qq` once and sets a flag. Subsequent calls are no-ops. Defined in lib/01-common.sh, available to all fragments.
 **Consequences**: ~20-40s saved on fresh install. Trade-off: if a new apt source is added mid-script, the cache won't refresh automatically (acceptable — new sources are added before their first use, and the initial update runs before any source additions).
+
+## ADR-015: Hooks must never use set -euo pipefail (2026-03-20)
+**Status**: Accepted
+**Context**: Claude Code hooks run as subprocesses. `set -euo pipefail` causes hooks to abort on ANY non-zero exit, including `grep` not matching (exit 1), piped commands failing midway, and unset variables. Three hooks (session-start, session-end, pre-compact) were using `set -euo pipefail`, causing spurious hook errors in production.
+**Decision**: Hooks must NOT use `set -euo pipefail`. Instead, guard individual commands: `cmd || _rc=$?` or `cmd || true`. Hooks must always exit 0 unless they need to signal a fatal condition.
+**Consequences**: Hooks are resilient to partial failures. Trade-off: bugs may be silent — use explicit error logging (`echo "[Hook] error: ..." >&2`) for critical paths.
+
+## ADR-016: Temp files must use WORKDIR or mktemp, never hardcoded /tmp paths (2026-03-20)
+**Status**: Accepted
+**Context**: Multiple jq mutations in plugin config used hardcoded paths like `/tmp/_cc_settings.json`. If two script instances run concurrently, they overwrite each other's temp files, corrupting JSON configs.
+**Decision**: All temp files must use either `$WORKDIR` (per-session unique directory) or `mktemp`. Never use hardcoded `/tmp/filename` patterns.
+**Consequences**: Safe concurrent execution. Trade-off: slightly more verbose code.
+
+## ADR-017: Destructive operations must be atomic (2026-03-20)
+**Status**: Accepted
+**Context**: Go installation deleted `/usr/local/go` before extracting the new tar. If extraction failed (disk full, corrupted download), the system was left without Go and no recovery path.
+**Decision**: Extract/build to a temp location first, then atomic swap (rm old + mv new). Applied to: Go installation, settings.json merge, binary downloads.
+**Consequences**: System state is never left broken mid-operation. Trade-off: requires temp disk space for the new version alongside the old one during swap.

@@ -872,17 +872,22 @@ export PATH="$HOME/.bun/bin:$PATH"
 # ─── Go ───
 GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
 GO_NEED_INSTALL=false
-if command -v go &>/dev/null; then
-  GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+')
+if command -v go &>/dev/null && ! $FORCE_UPDATES; then
+  GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+' || true)
   GO_LATEST_VER=${GO_LATEST#go}
-  # Compare major.minor — upgrade if current < latest major.minor
-  GO_CUR_MINOR=$(echo "$GO_CURRENT" | cut -d. -f1-2)
-  GO_LAT_MINOR=$(echo "$GO_LATEST_VER" | cut -d. -f1-2)
-  if [ "$(printf '%s\n%s' "$GO_CUR_MINOR" "$GO_LAT_MINOR" | sort -V | head -1)" != "$GO_LAT_MINOR" ]; then
-    echo "  Go $GO_CURRENT is outdated (latest: $GO_LATEST_VER) — upgrading..."
+  if [[ -z "$GO_CURRENT" ]]; then
+    warn "go version parse failed — reinstalling"
     GO_NEED_INSTALL=true
   else
-    ok "go already installed: $(go version)"
+    # Compare major.minor — upgrade if current < latest major.minor
+    GO_CUR_MINOR=$(echo "$GO_CURRENT" | cut -d. -f1-2)
+    GO_LAT_MINOR=$(echo "$GO_LATEST_VER" | cut -d. -f1-2)
+    if [ "$(printf '%s\n%s' "$GO_CUR_MINOR" "$GO_LAT_MINOR" | sort -V | head -1)" != "$GO_LAT_MINOR" ]; then
+      echo "  Go $GO_CURRENT is outdated (latest: $GO_LATEST_VER) — upgrading..."
+      GO_NEED_INSTALL=true
+    else
+      ok "go already installed: $(go version)"
+    fi
   fi
 else
   echo "  Installing Go..."
@@ -893,7 +898,10 @@ if [ "$GO_NEED_INSTALL" = true ]; then
     warn "Failed to fetch Go version — skipping"
   else
     wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
-    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
+    # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
+    sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+      sudo rm -rf /usr/local/go &&
+      sudo mv "$WORKDIR/go" /usr/local/go
     export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
     ok "go installed: $(go version)"
   fi
@@ -1262,7 +1270,7 @@ else
   # Phase A: Install from source with patches
   # Upstream bugs: NULL constraint on refresh_token for kilo/zai/minimax/console CLI modes
   # See: https://github.com/tombii/better-ccflare/issues/83
-  if ! command -v better-ccflare &>/dev/null; then
+  if $FORCE_UPDATES || ! command -v better-ccflare &>/dev/null; then
     _BCF_SRC=$(mktemp -d -t bcf-src-XXXXXX)
     _CLEANUP_DIRS+=("$_BCF_SRC")
     if run_q git clone --depth=1 https://github.com/tombii/better-ccflare.git "$_BCF_SRC"; then
@@ -2579,8 +2587,8 @@ else
       _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
       if [[ -f "$_SEMGREP_HOOKS" ]]; then
         jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
-          "$_SEMGREP_HOOKS" > /tmp/_semgrep_hooks.json \
-          && mv /tmp/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
+          "$_SEMGREP_HOOKS" > ${WORKDIR}/_semgrep_hooks.json \
+          && mv ${WORKDIR}/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
           && ok "semgrep: hooks patched (git-repo guard added)" \
           || warn "semgrep hooks patch failed"
       fi
@@ -2645,8 +2653,8 @@ else
           .agents[0].llm_config.provider_name = "anthropic" |
           .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
           .agents[0].llm_config.context_window = 200000
-        ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-          && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+        ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+          && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
           && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
           || warn "subconscious: .af LLM patch failed"
 
@@ -2658,8 +2666,8 @@ else
             .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
             .agents[0].embedding_config.embedding_dim = 768 |
             .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
-          ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-            && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+          ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+            && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
             && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
             || warn "subconscious: .af embedding patch failed"
         fi
@@ -2669,8 +2677,8 @@ else
 
       # Enable plugin in settings.json
       jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
-        "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-        && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
+        "$CLAUDE_DIR/settings.json" > ${WORKDIR}/_cc_settings.json \
+        && mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" \
         && ok "subconscious: enabled in settings.json" \
         || warn "subconscious: settings.json update failed"
     else
@@ -2794,7 +2802,7 @@ fi
 section "Phase 6/6 — Shell Integration"
 
 # Build the shell config block
-SHELL_BLOCK='
+_BASH_BLOCK='
 # ══════ Titan CLI Arsenal ══════
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
 eval "$(direnv hook bash)"
@@ -2803,11 +2811,27 @@ export GIT_PAGER="delta"
 command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
 # ══════════════════════════════'
 
-if ! grep -q "Titan CLI Arsenal" ~/.bashrc 2>/dev/null; then
-  echo "$SHELL_BLOCK" >>~/.bashrc
+_ZSH_BLOCK='
+# ══════ Titan CLI Arsenal ══════
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
+eval "$(direnv hook zsh)"
+eval "$(mise activate zsh)"
+export GIT_PAGER="delta"
+command -v pueued &>/dev/null && pueued -d 2>/dev/null  # task queue daemon
+# ══════════════════════════════'
+
+if ! grep -q "Titan CLI Arsenal" "$HOME/.bashrc" 2>/dev/null; then
+  echo "$_BASH_BLOCK" >>"$HOME/.bashrc"
   ok "Shell integration added to ~/.bashrc"
 else
-  ok "Shell integration already present"
+  ok "Shell integration already in ~/.bashrc"
+fi
+
+if [[ -f "$HOME/.zshrc" ]] && ! grep -q "Titan CLI Arsenal" "$HOME/.zshrc" 2>/dev/null; then
+  echo "$_ZSH_BLOCK" >>"$HOME/.zshrc"
+  ok "Shell integration added to ~/.zshrc"
+elif [[ -f "$HOME/.zshrc" ]]; then
+  ok "Shell integration already in ~/.zshrc"
 fi
 
 # Git pager config

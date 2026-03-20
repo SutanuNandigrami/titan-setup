@@ -3,8 +3,8 @@
       _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
       if [[ -f "$_SEMGREP_HOOKS" ]]; then
         jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
-          "$_SEMGREP_HOOKS" > /tmp/_semgrep_hooks.json \
-          && mv /tmp/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
+          "$_SEMGREP_HOOKS" > ${WORKDIR}/_semgrep_hooks.json \
+          && mv ${WORKDIR}/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
           && ok "semgrep: hooks patched (git-repo guard added)" \
           || warn "semgrep hooks patch failed"
       fi
@@ -69,8 +69,8 @@
           .agents[0].llm_config.provider_name = "anthropic" |
           .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
           .agents[0].llm_config.context_window = 200000
-        ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-          && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+        ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+          && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
           && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
           || warn "subconscious: .af LLM patch failed"
 
@@ -82,8 +82,8 @@
             .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
             .agents[0].embedding_config.embedding_dim = 768 |
             .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
-          ' "$_SUBCON_AF" > /tmp/_subcon_af.json \
-            && mv /tmp/_subcon_af.json "$_SUBCON_AF" \
+          ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
+            && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
             && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
             || warn "subconscious: .af embedding patch failed"
         fi
@@ -93,8 +93,8 @@
 
       # Enable plugin in settings.json
       jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
-        "$CLAUDE_DIR/settings.json" > /tmp/_cc_settings.json \
-        && mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" \
+        "$CLAUDE_DIR/settings.json" > ${WORKDIR}/_cc_settings.json \
+        && mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" \
         && ok "subconscious: enabled in settings.json" \
         || warn "subconscious: settings.json update failed"
     else
