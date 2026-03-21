@@ -283,11 +283,15 @@ SERVICEEOF
         _BCF_NOW=$(date +%s%3N)
         _BCF_UUID=$(cat /proc/sys/kernel/random/uuid)
         systemctl --user stop better-ccflare 2>/dev/null || true
-        sleep 1
+        # Wait for service to fully stop and release the port
+        for _wi in $(seq 1 15); do
+          systemctl --user is-active better-ccflare 2>/dev/null | grep -q inactive && break
+          sleep 1
+        done
         duckdb "$_BCF_DB" "INSERT INTO accounts (id, name, provider, refresh_token, access_token, expires_at, created_at, last_used, request_count, total_requests, priority, paused, auto_fallback_enabled, auto_refresh_enabled) VALUES ('$_BCF_UUID', 'claude-auto', 'anthropic', '$_BCF_REFRESH', '$_BCF_ACCESS', $_BCF_EXPIRES, $_BCF_NOW, $_BCF_NOW, 0, 0, 0, 0, 1, 1);" 2>/dev/null &&
           ok "better-ccflare: claude-auto account injected from Claude credentials" ||
           warn "better-ccflare: account injection failed"
-        systemctl --user start better-ccflare 2>/dev/null || true
+        systemctl --user restart better-ccflare 2>/dev/null || true
       fi
     else
       ok "better-ccflare: $_BCF_COUNT account(s) configured"
