@@ -310,9 +310,12 @@ _NEED_TRAILOFBITS=false
 
 if $_NEED_SUPERPOWERS || $_NEED_VIBESEC || $_NEED_TRAILOFBITS; then
   $_NEED_SUPERPOWERS && git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null &
+  _SP1=$!
   $_NEED_VIBESEC && git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null &
+  _SP2=$!
   $_NEED_TRAILOFBITS && git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null &
-  wait
+  _SP3=$!
+  wait "$_SP1" "$_SP2" "$_SP3" 2>/dev/null || true
 fi
 
 # obra/superpowers (multiple useful skills)

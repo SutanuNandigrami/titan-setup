@@ -30,7 +30,7 @@ Run `<tool> --help` before first use. Never guess flags.
 `terraform`, `ansible`, `packer`, `tflint`, `infracost` (cost est), `sops`/`age` (encryption), `infisical` (secrets)
 
 ## Network & HTTP
-`xh` (HTTP), `doggo` (DNS), `mtr` (trace), `bandwhich` (bw monitor), `websocat` (WS), `grpcurl` (gRPC), `oha` (load test), `hurl` (HTTP test chains), `bore`/`cloudflared` (tunnels), `mitmproxy` (intercept), `tailscale` (VPN)
+`xh` (HTTP), `doggo` (DNS), `mtr` (trace), `bandwhich` (bw monitor), `websocat` (WS), `grpcurl` (gRPC), `oha` (load test), `bore`/`cloudflared` (tunnels), `mitmproxy` (intercept), `tailscale` (VPN)
 
 ## Security
 `nmap`, `nuclei` (vuln scan), `trivy` (container/IaC scan), `osv-scanner` (deps), `nikto` (web scan), `ffuf` (fuzzing), `trufflehog` (secret history), `lynis` (system audit), `sqlmap` (SQLi), `parry` (LLM injection), `syft`/`grype` (SBOM+vuln), `step`/`jwt` (certs/JWT), `httpx`/`subfinder`/`dnsx`/`katana` (recon), `shannon-audit` (AI pentester)
