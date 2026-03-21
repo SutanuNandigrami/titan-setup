@@ -117,6 +117,34 @@ VAR=$(curl -s https://api.example.com | jq -r '.tag' || true)
 
 Run `just test` — the `set-e-safety.bats` tests will catch violations automatically.
 
+## Bug Fix Protocol — Regression Prevention is Mandatory
+When you fix a bug in this project — especially one involving `set -e` safety, silent
+failures, or commands that can abort the script — you MUST also write or update a test
+that would have caught it. No exceptions.
+
+**After every bug fix:**
+1. **Write a regression test first.** Before committing the fix, add a test to
+   `test/set-e-safety.bats` (for `set -e` / shell safety issues) or the appropriate
+   `test/*.bats` file that reproduces the class of bug you just fixed.
+2. **Reduce false positives.** Run the new test against the current codebase *before*
+   your fix to confirm it catches the bug, then run it *after* to confirm it passes.
+   If it flags safe code, refine the pattern — grep filters should exclude guarded
+   lines (lines with `||`, `&&`, inside `if`/`while`, continuations ending in `|` or `\`).
+3. **Test the full suite.** Run `just test` (or `vendor/bats/bin/bats test/*.bats`)
+   and confirm zero regressions before committing. The one allowed skip is
+   `shellcheck: command not found` in environments without shellcheck.
+4. **Commit test + fix together.** The test and the fix go in the same commit so
+   `git bisect` always sees them as one unit.
+
+**What counts as a regression test:**
+- A `set-e-safety.bats` test that greps lib/ for the unsafe pattern you just fixed
+- A `session-review.bats` `@test` asserting the specific invariant that broke
+- A `smoke.bats` test if the bug was visible in `--dry-run` output
+
+**Why this matters:** Claude writes all the code in this project. Without automated
+guards, the same class of bug recurs across sessions because each session starts
+with no memory of past mistakes. Tests are the only durable defense.
+
 ## Do NOT Touch
 `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
 
