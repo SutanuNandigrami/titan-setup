@@ -72,7 +72,7 @@ fi
 # claude auth login is broken outside the TUI (upstream bug). Install the
 # binary early, then pause so the user can auth via 'claude' TUI in a
 # second SSH session before tmux takes over.
-if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
+if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
   if ! command -v claude &>/dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
     echo -e "\n  ${CYAN}Installing Claude Code (needed for auth before tmux)...${NC}"
