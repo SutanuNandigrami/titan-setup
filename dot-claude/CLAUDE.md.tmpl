@@ -15,6 +15,12 @@
 If the project has an existing test suite, include a regression test with every bug fix.
 Commit fix + test together. If there are no tests, describe how to verify the fix manually.
 
+## Architecture Decision Records
+When making a significant architectural choice (database, framework, auth method,
+deployment model, major dependency), create `docs/adr/NNN-title.md` before implementing.
+Format: context, decision, consequences — keep it under 30 lines.
+Read existing ADRs in `docs/adr/` before proposing changes that contradict them.
+
 ## CLI Tools (beyond built-in capabilities)
 Many CLI tools are pre-installed via cargo, uv, go, and bun.
 If a tool isn't found, check `type <tool>` before asking. If unsure about flags, run `<tool> --help` first.
