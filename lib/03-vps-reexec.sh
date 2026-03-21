@@ -109,7 +109,19 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     # Kill any stale session from a previous run before creating a new one.
     # Without this, re-running the script fails with "duplicate session: titan-setup".
     tmux kill-session -t titan-setup 2>/dev/null || true
-    exec tmux new-session -s titan-setup "bash $_TMUX_WRAPPER"
+    # Use detached mode (-d) when no terminal is available (non-interactive SSH, cloud-init)
+    # then wait for the session to complete; otherwise attach interactively
+    if [[ -t 0 ]]; then
+      exec tmux new-session -s titan-setup "bash $_TMUX_WRAPPER"
+    else
+      tmux new-session -d -s titan-setup "bash $_TMUX_WRAPPER"
+      echo -e "  ${CYAN}Running detached (no terminal). Monitor:${NC}"
+      echo -e "    ssh $USER@\$(hostname) 'tmux attach -t titan-setup'"
+      echo -e "    tail -f $_TMUX_LOG"
+      # Wait for the tmux session to finish
+      while tmux has-session -t titan-setup 2>/dev/null; do sleep 5; done
+      exit 0
+    fi
   fi
 fi
 
