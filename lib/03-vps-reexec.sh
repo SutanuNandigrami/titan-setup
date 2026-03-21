@@ -1,6 +1,6 @@
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   if [[ -z "$CLAUDE_USER" ]]; then
-    read -rp "  Username for Claude Code (created if absent): " CLAUDE_USER
+    read -rp "  Username for Claude Code (created if absent): " CLAUDE_USER || true
     [[ -z "$CLAUDE_USER" ]] && {
       fail "Username required for VPS mode"
       exit 1

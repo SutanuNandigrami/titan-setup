@@ -340,6 +340,16 @@ setup() {
   grep -A3 'fm_field()' "$REPO/dot-claude/bin/agt" | grep -qE '\|\| true'
 }
 
+@test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {
+  # read returns 1 on EOF (e.g. </dev/null or cloud-init) — kills script under set -e
+  local unguarded
+  unguarded=$(grep -rn 'read -r[sp]*' "$REPO"/lib/*.sh \
+    | grep -v '|| true' \
+    | grep -v 'while.*read\|IFS.*read' \
+    || true)
+  [ -z "$unguarded" ]
+}
+
 # ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════

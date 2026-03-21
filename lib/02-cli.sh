@@ -276,7 +276,7 @@ if [[ -z "$INSTALL_MODE" ]]; then
   echo -e "\n${CYAN}Select installation profile:${NC}"
   echo "  1) Desktop  — full workstation setup"
   echo "  2) VPS      — workstation + server extras"
-  read -rp "  Choice [1/2]: " _mode_choice
+  read -rp "  Choice [1/2]: " _mode_choice || true
   case "$_mode_choice" in
     1) INSTALL_MODE="desktop" ;;
     2) INSTALL_MODE="vps" ;;
@@ -290,10 +290,10 @@ echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
 # ─── Claude Code version + autoupdate ───
 if [[ -z "$CC_VERSION" ]] && ! $CC_ASKED; then
-  read -rp "  Claude Code version to install (blank = latest): " CC_VERSION
+  read -rp "  Claude Code version to install (blank = latest): " CC_VERSION || true
 fi
 if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
-  read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans
+  read -rp "  Disable Claude Code auto-updates? [y/N]: " _au_ans || true
   case "${_au_ans,,}" in
     y | yes) CC_NO_AUTOUPDATE="true" ;;
     *) CC_NO_AUTOUPDATE="" ;;
@@ -306,7 +306,7 @@ fi
 if ! $SEMGREP_SKIP && [[ -z "$SEMGREP_TOKEN" ]]; then
   echo -e "\n  ${CYAN}Semgrep (static analysis in Claude Code):${NC}"
   echo "  Get a free token at semgrep.dev → Settings → Tokens"
-  read -rp "  Semgrep App Token (Enter to skip): " SEMGREP_TOKEN
+  read -rp "  Semgrep App Token (Enter to skip): " SEMGREP_TOKEN || true
   [[ -z "$SEMGREP_TOKEN" ]] && SEMGREP_SKIP=true
 fi
 if $SEMGREP_SKIP; then
