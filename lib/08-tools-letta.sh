@@ -269,7 +269,31 @@ SERVICEEOF
   systemctl --user enable better-ccflare 2>/dev/null || true
   systemctl --user start better-ccflare 2>/dev/null || true
   ok "better-ccflare service (http://${CCFLARE_HOST}:${CCFLARE_PORT})"
-  echo "  Add accounts after install:"
+
+  # Auto-inject Claude OAuth account if credentials exist and no accounts configured
+  _BCF_DB="$HOME/.config/better-ccflare/better-ccflare.db"
+  _CC_CREDS="$HOME/.claude/.credentials.json"
+  if [[ -f "$_CC_CREDS" ]] && command -v duckdb &>/dev/null && [[ -f "$_BCF_DB" ]]; then
+    _BCF_COUNT=$(duckdb "$_BCF_DB" "SELECT count(*) FROM accounts;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo "0")
+    if [[ "$_BCF_COUNT" == "0" ]]; then
+      _BCF_ACCESS=$(jq -r '.claudeAiOauth.accessToken // empty' "$_CC_CREDS")
+      _BCF_REFRESH=$(jq -r '.claudeAiOauth.refreshToken // empty' "$_CC_CREDS")
+      _BCF_EXPIRES=$(jq -r '.claudeAiOauth.expiresAt // 0' "$_CC_CREDS")
+      if [[ -n "$_BCF_ACCESS" && -n "$_BCF_REFRESH" ]]; then
+        _BCF_NOW=$(date +%s%3N)
+        _BCF_UUID=$(cat /proc/sys/kernel/random/uuid)
+        systemctl --user stop better-ccflare 2>/dev/null || true
+        sleep 1
+        duckdb "$_BCF_DB" "INSERT INTO accounts (id, name, provider, refresh_token, access_token, expires_at, created_at, last_used, request_count, total_requests, priority, paused, auto_fallback_enabled, auto_refresh_enabled) VALUES ('$_BCF_UUID', 'claude-auto', 'anthropic', '$_BCF_REFRESH', '$_BCF_ACCESS', $_BCF_EXPIRES, $_BCF_NOW, $_BCF_NOW, 0, 0, 0, 0, 1, 1);" 2>/dev/null &&
+          ok "better-ccflare: claude-auto account injected from Claude credentials" ||
+          warn "better-ccflare: account injection failed"
+        systemctl --user start better-ccflare 2>/dev/null || true
+      fi
+    else
+      ok "better-ccflare: $_BCF_COUNT account(s) configured"
+    fi
+  fi
+  echo "  Add more accounts:"
   echo "    better-ccflare --add-account NAME --mode claude-oauth"
   echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
   echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"
