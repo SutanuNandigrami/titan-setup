@@ -70,7 +70,7 @@ else
   if ! grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf 2>/dev/null; then
     echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
     echo "fs.inotify.max_user_instances=1024" | sudo tee -a /etc/sysctl.conf
-    sudo sysctl -p
+    sudo sysctl -p || true
     ok "Increased inotify watchers to 524288"
   else
     ok "inotify watchers already configured"

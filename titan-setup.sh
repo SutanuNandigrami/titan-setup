@@ -594,13 +594,13 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
-  # ── SSH hardening — DEFERRED to lib/17-finalize.sh ───────────────────
+  # ── SSH hardening — DEFERRED to lib/16-finalize.sh ───────────────────
   # Config changes AND reload are both deferred until after Tailscale SSH
   # provides alternative access. Writing config here is unsafe because apt
   # package installs (openssh-server upgrades, fail2ban) trigger dpkg
   # postinst hooks that restart sshd, which picks up the hardened config
   # and locks out password-based SSH before Tailscale is ready.
-  ok "SSH hardening deferred until Tailscale is verified (lib/17-finalize.sh)"
+  ok "SSH hardening deferred until Tailscale is verified (lib/16-finalize.sh)"
 
   # ── UFW — NOT used (Tailscale handles network isolation) ─────────────
   # UFW conflicts with Tailscale routing. Tailscale provides network-level
@@ -620,7 +620,7 @@ port     = ssh
 logpath  = %(sshd_log)s
 backend  = %(sshd_backend)s
 FAIL2BAN_EOF
-  sudo systemctl enable fail2ban --now
+  sudo systemctl enable fail2ban --now || true
   ok "fail2ban active (SSH: 5 retries → 1h ban)"
 
   # ── unattended-upgrades — security patches only ───────────────────────
@@ -631,7 +631,7 @@ Unattended-Upgrade::Allowed-Origins {
 Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 UU_EOF
-  sudo systemctl enable unattended-upgrades --now
+  sudo systemctl enable unattended-upgrades --now || true
   ok "unattended-upgrades active (security patches only, no auto-reboot)"
 
   # ── auditd — privilege escalation monitoring ──────────────────────────
@@ -641,7 +641,7 @@ UU_EOF
 -w /etc/sudoers -p wa -k sudoers_changes
 -w /etc/sudoers.d/ -p wa -k sudoers_changes
 AUDIT_EOF
-  sudo systemctl enable auditd --now
+  sudo systemctl enable auditd --now || true
   ok "auditd active (privesc monitoring, passwd/sudoers watch)"
 
   # ── Repo supply chain guard ───────────────────────────────────────────
@@ -681,7 +681,7 @@ shopt -u nullglob
 apt-get update
 GUARD_EOF
   sudo chmod 755 /usr/local/sbin/repo_supply_chain_guard.sh
-  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh
+  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh || warn "repo supply chain guard had errors (non-fatal)"
   ok "Repo supply chain guard installed and run"
 
   # ── Compliance check script ───────────────────────────────────────────
@@ -809,8 +809,8 @@ Persistent=true
 WantedBy=timers.target
 TIMER_EOF
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now compliance-check.timer
+  sudo systemctl daemon-reload || true
+  sudo systemctl enable --now compliance-check.timer || true
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
 fi
@@ -886,7 +886,7 @@ else
   if ! grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf 2>/dev/null; then
     echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
     echo "fs.inotify.max_user_instances=1024" | sudo tee -a /etc/sysctl.conf
-    sudo sysctl -p
+    sudo sysctl -p || true
     ok "Increased inotify watchers to 524288"
   else
     ok "inotify watchers already configured"
@@ -1982,9 +1982,9 @@ echo -e "\n  ${CYAN}Binary installs:${NC}"
 
 # kubectl
 if ! command -v kubectl &>/dev/null; then
-  curl -sL -o "$WORKDIR/kubectl" "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH_AMD}/kubectl"
-  sudo install -o root -g root -m 0755 "$WORKDIR/kubectl" /usr/local/bin/kubectl
-  ok "kubectl"
+  curl -sL -o "$WORKDIR/kubectl" "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH_AMD}/kubectl" &&
+    sudo install -o root -g root -m 0755 "$WORKDIR/kubectl" /usr/local/bin/kubectl &&
+    ok "kubectl" || warn "kubectl install failed"
 else ok "kubectl (exists)"; fi
 
 # helm
@@ -1999,28 +1999,28 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  apt_update && sudo apt-get install -y -qq google-cloud-cli
-  ok "gcloud"
+  apt_update && sudo apt-get install -y -qq google-cloud-cli &&
+    ok "gcloud" || warn "gcloud install failed"
 else ok "gcloud (exists)"; fi
 
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  apt_update && sudo apt-get install -y -qq terraform packer
-  ok "terraform + packer"
+  apt_update && sudo apt-get install -y -qq terraform packer &&
+    ok "terraform + packer" || warn "terraform/packer install failed"
 else ok "terraform (exists)"; fi
 
 # tflint
 if ! command -v tflint &>/dev/null; then
-  curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash 2>/dev/null
-  ok "tflint"
+  curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash 2>/dev/null &&
+    ok "tflint" || warn "tflint install failed"
 else ok "tflint (exists)"; fi
 
 # infracost
 if ! command -v infracost &>/dev/null; then
-  curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh 2>/dev/null
-  ok "infracost"
+  curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh 2>/dev/null &&
+    ok "infracost" || warn "infracost install failed"
 else ok "infracost (exists)"; fi
 
 # hadolint
@@ -2032,17 +2032,17 @@ else ok "hadolint (exists)"; fi
 
 # duckdb
 if ! command -v duckdb &>/dev/null; then
-  curl -sL -o "$WORKDIR/duckdb.zip" "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${ARCH_AMD}.zip"
-  unzip -qo "$WORKDIR/duckdb.zip" -d "$WORKDIR" && sudo mv "$WORKDIR/duckdb" /usr/local/bin/
-  ok "duckdb"
+  curl -sL -o "$WORKDIR/duckdb.zip" "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${ARCH_AMD}.zip" &&
+    unzip -qo "$WORKDIR/duckdb.zip" -d "$WORKDIR" && sudo mv "$WORKDIR/duckdb" /usr/local/bin/ &&
+    ok "duckdb" || warn "duckdb install failed"
 else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  apt_update && sudo apt-get install -y -qq trivy
-  ok "trivy"
+  apt_update && sudo apt-get install -y -qq trivy &&
+    ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
@@ -2056,9 +2056,9 @@ fi
 
 # mc (MinIO client)
 if ! command -v mc &>/dev/null; then
-  curl -sL -o "$WORKDIR/mc" "https://dl.min.io/client/mc/release/linux-${ARCH_AMD}/mc"
-  chmod +x "$WORKDIR/mc" && sudo mv "$WORKDIR/mc" /usr/local/bin/
-  ok "mc"
+  curl -sL -o "$WORKDIR/mc" "https://dl.min.io/client/mc/release/linux-${ARCH_AMD}/mc" &&
+    chmod +x "$WORKDIR/mc" && sudo mv "$WORKDIR/mc" /usr/local/bin/ &&
+    ok "mc" || warn "mc (MinIO client) install failed"
 else ok "mc (exists)"; fi
 
 # GitHub CLI
@@ -2066,8 +2066,8 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  apt_update && sudo apt-get install -y -qq gh
-  ok "gh"
+  apt_update && sudo apt-get install -y -qq gh &&
+    ok "gh" || warn "gh install failed"
 else ok "gh (exists)"; fi
 
 # ShellCheck linter (latest binary, apt version is ancient)
@@ -2103,7 +2103,7 @@ else ok "dippy (exists)"; fi
 
 # Infisical — secret management CLI
 if ! command -v infisical &>/dev/null; then
-  curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash 2>/dev/null
+  curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash 2>/dev/null || true
   sudo apt-get install -y infisical 2>/dev/null && ok "infisical" || warn "infisical"
 else ok "infisical (exists)"; fi
 
@@ -2126,7 +2126,7 @@ else ok "step-cli (exists)"; fi
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
-    sudo apt-get install -y libpcre3-dev libev4 2>/dev/null
+    sudo apt-get install -y libpcre3-dev libev4 2>/dev/null || true
     echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null &&
       ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi
@@ -2150,19 +2150,26 @@ section "Phase 4/6 — Claude Code CLI"
 # Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
 echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
 if [[ -n "$CC_VERSION" ]]; then
-  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION"
+  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
 else
-  curl -fsSL https://claude.ai/install.sh | bash
+  curl -fsSL https://claude.ai/install.sh | bash || true
 fi
-ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
+if command -v claude &>/dev/null; then
+  ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
+else
+  warn "Claude Code install failed — install manually: curl -fsSL https://claude.ai/install.sh | bash"
+fi
 
 # ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
 if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v claude-desktop &>/dev/null && ! dpkg -l claude-desktop-bin &>/dev/null 2>&1; then
     echo "  Installing Claude Desktop..."
-    curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash
-    sudo apt-get install -y claude-desktop-bin
-    ok "Claude Desktop"
+    if curl -fsSL https://patrickjaja.github.io/claude-desktop-bin/install.sh | sudo bash &&
+      sudo apt-get install -y claude-desktop-bin; then
+      ok "Claude Desktop"
+    else
+      warn "Claude Desktop install failed"
+    fi
   else
     ok "Claude Desktop (exists)"
   fi
@@ -2170,9 +2177,12 @@ if [[ "$INSTALL_MODE" == "desktop" ]] && [[ "$ARCH_AMD" == "amd64" ]]; then
   # ─── Claude Cowork Service (desktop only — community package, x86_64 only) ───
   if ! dpkg -l claude-cowork-service &>/dev/null 2>&1; then
     echo "  Installing Claude Cowork Service..."
-    curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash
-    sudo apt-get install -y claude-cowork-service
-    ok "Claude Cowork Service"
+    if curl -fsSL https://patrickjaja.github.io/claude-cowork-service/install.sh | sudo bash &&
+      sudo apt-get install -y claude-cowork-service; then
+      ok "Claude Cowork Service"
+    else
+      warn "Claude Cowork Service install failed"
+    fi
   else
     ok "Claude Cowork Service (exists)"
   fi
