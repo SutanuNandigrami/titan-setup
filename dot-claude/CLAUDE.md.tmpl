@@ -1,72 +1,74 @@
 # TITAN_ENGINEER_NAME — Global Operating Manual
 
-## This Project
-Titan is a modular bash installer that transforms fresh Ubuntu into a complete AI dev workstation.
-- **Entrypoint:** `titan-setup.sh` (assembled from `lib/*.sh` fragments via `just build`)
-- **Fragments:** `lib/00-header.sh` through `lib/15-shell-integration.sh` — each owns one domain
-- **Config deployed to targets:** `dot-claude/` → `~/.claude/` (settings, hooks, skills, rules, agents)
-- **Tests:** `test/*.bats` (bats-core). Run with `just test`. CI runs `just check` (lint+fmt+build+test+smoke)
-- **Task runner:** `just` — see `justfile` for all recipes
-- **Key helpers** (defined in `lib/01-common.sh`): `ok()`, `warn()`, `fail()`, `section()`, `phase_done()`, `phase_mark()`, `apt_update()`, `check_port()`
-- **Phases are idempotent** — each checks `~/.titan-progress/` before re-running. Use `--force-updates` to override.
-
-## set -e Safety — MOST IMPORTANT RULE
-This project uses `set -euo pipefail`. **Every command that can fail MUST be guarded.**
-Unguarded `curl`, `wget`, `apt-get install`, `systemctl`, or `$(cmd | cmd)` will silently
-kill the entire script. This has caused regressions repeatedly.
-
-```bash
-# SAFE — use these patterns:
-curl -fsSL ... | bash || true                              # non-critical: swallow failure
-curl -fsSL ... && ok "done" || warn "failed"               # report outcome
-VAR=$(curl -s ... | jq -r '.tag' || true)                  # guard pipeline substitution
-if curl -fsSL ... | bash; then ok "yes"; else warn "no"; fi # conditional
-
-# DEADLY — never write these:
-curl -fsSL ... | bash                     # network fail = script dies
-sudo apt-get install -y pkg               # missing pkg = script dies
-VAR=$(curl -s ... | jq -r '.tag')         # pipefail = script dies
-```
-
-**Never call `api.github.com` directly** — 60 req/hr rate limit. Use `_gh_latest_tag()`.
-Run `just test` — `set-e-safety.bats` catches violations automatically.
-
-## Bug Fixes Require Regression Tests
-Every bug fix MUST include a test in `test/*.bats` that would have caught it.
-Commit fix + test together. Run `just test` before committing — zero failures allowed.
-Verify the test catches the bug *before* your fix, passes *after*. Reduce false positives
-by excluding guarded lines (`||`, `&&`, `if`, continuations ending in `|` or `\`).
-
 ## Preferences
-- Be direct. Skip preambles. When I ask "how", give the command.
+- Be direct. Skip preambles. When I ask "how", give the command, not a tutorial.
+- If unsure, say so. Never hallucinate.
+- Python 3.10+ with type hints. Bash must pass shellcheck.
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
-- Python 3.10+ with type hints. Bash must pass `shellcheck`.
+
+## Tool Philosophy
+You have 100+ CLI tools installed via Titan. They replace MCPs at zero context cost.
+Never guess flags — discover on demand:
+1. Check existence: `type <tool>` or `which <tool>`
+2. Learn usage: `<tool> --help` or `tldr <tool>`
+3. Browse installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`
+
+Prefer modern tools in bash commands:
+| Task | Use | Not |
+|------|-----|-----|
+| Search text | `rg` | grep |
+| Find files | `fd` | find |
+| View files | `bat` | cat |
+| Find & replace | `sd` | sed |
+| HTTP requests | `xh` | curl |
+| JSON | `jq` | python -c |
+| YAML | `yq` | python -c |
+| CSV | `xsv` or `miller` | awk |
+| Format shell | `shfmt` | manual |
+| Structural replace | `comby` | regex sed |
+| Compress/extract | `ouch` | tar/unzip/7z |
+
+Use CLIs instead of MCPs — they cost zero context tokens:
+| Domain | CLI | Replaces |
+|--------|-----|----------|
+| GitHub | `gh` | GitHub MCP |
+| Docker | `docker`, `lazydocker` | Docker MCP |
+| Postgres | `pgcli` | Postgres MCP |
+| SQLite | `litecli` | SQLite MCP |
+| Redis | `redis-cli` | Redis MCP |
+| Any DB | `usql` | Database MCPs |
+| HTTP/APIs | `xh` | Fetch MCP |
+| AWS | `aws` | AWS MCP |
+| Kubernetes | `kubectl`, `helm` | K8s MCP |
+| Secrets scan | `gitleaks`, `trufflehog` | — |
+| Vuln scan | `trivy`, `nuclei`, `grype` | — |
+| Static analysis | `semgrep`, `comby` | — |
+| Certificates | `step`, `mkcert` | — |
 
 ## Workflow
-1. **Branch first** — never commit to `main`
-2. **Search before create** — `rg` the codebase before adding functions
+1. **Branch first** — never commit directly to `main`
+2. **Search before create** — `rg` the codebase before adding new functions/classes
 3. **Check history** — `git log --oneline -5 <file>` before editing
 4. **Lint** — `shellcheck` for .sh, `ruff check` for .py, `hadolint` for Dockerfile
-5. **Scan before push** — `gitleaks detect` before `git push`
-6. **3-strike rule** — same error 3× → stop, write to `_scratchpad.md`, ask me
-
-## Tools
-100+ CLI tools installed. They replace MCPs at zero context cost.
-Never guess flags — discover on demand: `<tool> --help`, `tldr <tool>`.
-Prefer modern tools in bash: `rg` over grep, `fd` over find, `bat` over cat, `xh` over curl.
-Browse installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`.
-Use CLIs, not MCPs: `gh` for GitHub, `pgcli` for Postgres, `docker` for containers, `aws` for AWS.
+5. **Scan before push** — `gitleaks detect` before any `git push`
+6. **Commit often** — after every working change, conventional commit
+7. **Diff before commit** — `git diff --stat` — revert unrelated changes
 
 ## When Stuck
 - Tool missing? Check alternatives with `type <tool>` before asking.
 - Tests fail after your change? Fix the code, not the test. Read the actual error.
-- Same error 3 times? Stop looping. Write what you tried to `_scratchpad.md` and ask.
+- Same error 3 times? Stop looping. Write what you tried to `_scratchpad.md` and ask me.
 - Unsure about approach? Read the existing code first. Check `git log` for prior decisions.
 
-## Do NOT Touch
-Never read, edit, or commit: `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`
+## Bug Fixes Always Need Tests
+Every bug fix MUST include a regression test that would have caught it.
+Commit fix + test together. Run the project's test suite before committing.
+If writing a new test, verify it catches the bug *before* your fix, passes *after*.
+
+## Protected Files
+Never read, edit, or commit: `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
 
 ## Memory
 - Write to auto memory when: user says "remember", you find a non-obvious fix, a key decision is made, user corrects you.
-- Do NOT write: speculative conclusions, session-specific state (use `_scratchpad.md`), anything already in CLAUDE.md.
+- Do NOT write: speculative conclusions from reading one file, session-specific temp state (use `_scratchpad.md`), anything already in CLAUDE.md.
 - At session start, read `_scratchpad.md` and `~/.claude/memory/handoff.md` if they exist.
