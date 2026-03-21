@@ -68,6 +68,27 @@ if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || sudo loginctl enable-linger "$USER" 2>/dev/null || true
 fi
 
+# ─── Early Claude Code install + auth (VPS only, before tmux) ────────────
+# Auth needs an interactive terminal for OAuth paste-back. Once inside tmux
+# (detached for cloud-init / </dev/null), paste-back won't work.  ADR-025.
+if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
+  if ! command -v claude &>/dev/null; then
+    export PATH="$HOME/.local/bin:$PATH"
+    echo -e "\n  ${CYAN}Installing Claude Code (auth needs interactive terminal)...${NC}"
+    if [[ -n "${CC_VERSION:-}" ]]; then
+      curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+    else
+      curl -fsSL https://claude.ai/install.sh | bash || true
+    fi
+  fi
+  if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+    echo -e "\n  ${CYAN}Claude Code auth (paste the code after authorizing in browser):${NC}"
+    claude auth login < /dev/tty || true
+  elif command -v claude &>/dev/null; then
+    ok "Claude Code already authenticated"
+  fi
+fi
+
 # ─── Disconnect resilience: re-exec inside tmux if not already there ───
 # Install takes 30-60 min; SSH drops must not kill it.
 if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then

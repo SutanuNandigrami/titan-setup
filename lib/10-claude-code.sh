@@ -1,16 +1,29 @@
 section "Phase 4/6 — Claude Code CLI"
 
-# Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
-echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
-if [[ -n "$CC_VERSION" ]]; then
-  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+# Skip re-download if already installed by early VPS auth step (lib/03-vps-reexec.sh)
+if command -v claude &>/dev/null && ! $FORCE_UPDATES; then
+  ok "Claude Code: $(claude --version 2>/dev/null || echo 'installed') (early install)"
 else
-  curl -fsSL https://claude.ai/install.sh | bash || true
+  # Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
+  echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
+  if [[ -n "$CC_VERSION" ]]; then
+    curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+  else
+    curl -fsSL https://claude.ai/install.sh | bash || true
+  fi
+  if command -v claude &>/dev/null; then
+    ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
+  else
+    warn "Claude Code install failed — install manually: curl -fsSL https://claude.ai/install.sh | bash"
+  fi
 fi
-if command -v claude &>/dev/null; then
-  ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
-else
-  warn "Claude Code install failed — install manually: curl -fsSL https://claude.ai/install.sh | bash"
+
+# Auth prompt — only if interactive terminal available and not already authed (ADR-025)
+if [[ -t 0 ]] && command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+  echo -e "\n  ${CYAN}Claude Code auth (paste the code after authorizing in browser):${NC}"
+  claude auth login < /dev/tty || true
+elif command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
+  ok "Claude Code authenticated"
 fi
 
 # ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
