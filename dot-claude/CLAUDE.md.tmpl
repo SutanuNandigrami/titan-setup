@@ -1,63 +1,58 @@
 # TITAN_ENGINEER_NAME — Global Operating Manual
 
 ## Workflow
-1. **Search before create** — search the codebase before adding new functions, files, or classes
-2. **Understand before changing** — read the file; if the structure seems intentional but unclear, check `git log --oneline -10 <file>` for context
-3. **Verify after changes** — run the project's test/build commands after every change; fix failures before moving on
-4. **Diff before commit** — `git diff --stat` to confirm only intended files are staged; drop unrelated changes
-5. **Scan before push** — run `gitleaks detect --no-banner` before any push; if secrets found, stop and report the file and line
+1. **Understand before changing** — read the file before editing; if the structure seems intentional but unclear, check `git log --oneline -10 <file>` for context
+2. **Verify after changes** — find and run the project's test command (`just test`, `npm test`, `pytest`, `make test`, or check Makefile/package.json/justfile); fix failures before moving on
+3. **Multi-file changes** — when a change spans multiple files, make all edits before running tests; intermediate states will false-fail
+4. **Scan before push** — if `type gitleaks &>/dev/null`, run `gitleaks detect --no-banner` on staged files before pushing; if secrets found, stop and report the file and line
 
 ## Recovery
-- **Test failure after your change?** Read the full error. Usually the code is wrong. If the test assertion itself is clearly incorrect (wrong expected value, testing removed behavior), fix the test and explain why.
-- **Same error 3 times?** Stop. Write what you tried to `_scratchpad.md` and ask the user how to proceed.
-- **Tool missing?** `type <tool>` to check, then try alternatives from the table below before asking.
+- **Test failure after your change?** Read the full error. Usually the code is wrong. If the test assertion is clearly incorrect (wrong expected value, testing removed behavior), fix the test and explain why.
+- **Stuck on the same error?** If your last two attempts at fixing an issue failed the same way, stop and ask the user how to proceed. Summarize what you tried in your message.
 - **Unsure about approach?** Read existing code patterns and `git log` before proposing a new one.
 
 ## Bug Fixes
-Every bug fix includes a regression test that would have caught it.
-Commit fix + test together. Run the project's test suite before committing.
+If the project has an existing test suite, include a regression test with every bug fix.
+Commit fix + test together. If there are no tests, describe how to verify the fix manually.
 
-## CLI Tools (Titan-Installed)
-100+ CLI tools are installed. They replace MCPs at zero context cost.
-For unfamiliar tools, check `<tool> --help` or `tldr <tool>` before guessing flags.
-For well-known tools (git, jq, docker), use flags you're confident about directly.
-Browse what's installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`.
+## CLI Tools (beyond built-in capabilities)
+Many CLI tools are pre-installed via cargo, uv, go, and bun.
+If a tool isn't found, check `type <tool>` before asking. If unsure about flags, run `<tool> --help` first.
 
-Modern alternatives available on this system (use whichever fits best):
+Use Claude Code's native Grep/Edit/Read/Glob tools for search and file operations.
+Use these CLI tools for tasks the built-in tools can't handle:
 
 | Task | Tool | Notes |
 |------|------|-------|
-| HTTP requests | `xh` | Simpler syntax than curl for REST APIs; use curl for pipe-to-bash or complex auth |
-| Find & replace | `sd` | Good for literal replacements; use sed for complex regex |
 | JSON | `jq` | Preferred over python -c for JSON pipelines |
 | YAML | `yq` | Same query syntax as jq |
 | CSV | `xsv` or `miller` | Typed column ops without awk one-liners |
-| SQL on files | `duckdb` | SQL over CSV/Parquet/JSON; replaces sqlite3 for analytics |
-| HTML extraction | `htmlq` | CSS selectors on HTML; safer than regex extraction |
-| Compress/extract | `ouch` | Auto-detects format; replaces tar/unzip/7z |
-| Structural replace | `comby` | Language-aware find/replace across files |
-| API test chains | `hurl` | Declarative HTTP test sequences |
+| SQL on files | `duckdb` | SQL over CSV/Parquet/JSON |
+| HTML extraction | `htmlq` | CSS selectors on HTML; safer than regex |
+| Compress/extract | `ouch` | Auto-detects format |
+| Structural replace | `comby` | `comby 'old :[x]' 'new :[x]' .py` — check `comby --help` for pattern syntax |
+| API test chains | `hurl` | Check `hurl --help` before writing .hurl files; syntax is non-obvious |
 | Code stats | `scc` | Fast line counts with complexity estimates |
+| HTTP requests | `xh` | Simpler syntax than curl for REST APIs; use curl for piping or complex auth |
+| Find & replace | `sd` | Good for literal string replacements in Bash; use Edit tool for code files |
 
-CLIs that replace MCPs (zero context tokens): `gh` (GitHub), `pgcli`/`litecli`/`usql` (databases),
-`docker`/`lazydocker` (containers), `aws` (AWS), `kubectl`/`helm` (K8s),
-`gitleaks`/`trufflehog` (secrets), `trivy`/`grype` (vulns), `semgrep` (SAST).
+Also installed: `gh`, `pgcli`/`litecli`/`usql`, `docker`/`lazydocker`, `kubectl`/`helm`,
+`gitleaks`/`trufflehog`, `trivy`/`grype`, `semgrep`.
 
 ## Git
 - Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`)
 - Create feature branches for changes; push feature branches, not main
 
 ## Memory
-Write to `~/.claude/memory/` when: user says "remember", you discover a non-obvious fix,
-a key decision is made, or the user corrects you. Keep `MEMORY.md` under 150 lines.
+Write to `~/.claude/memory/MEMORY.md` when the user says "remember", you discover a non-obvious fix,
+or the user corrects you. Append new entries at the bottom. If the file exceeds 150 lines,
+summarize the oldest 50 lines into a single paragraph before appending.
 Write facts and decisions, not hypotheses. If uncertain, prefix with "Unconfirmed:".
-Temp session state goes in `_scratchpad.md`, not memory.
 
 ## Style
-- Start responses with the answer, command, or action — not "Sure", "Great question", or restatements.
+- Start responses with the answer, command, or action — not restatements of the question.
 - For operational "how" questions, lead with the command, then explain if non-obvious.
 - For design/architecture questions, explain the approach first.
-- Python: 3.10+ with type hints.
 
-Project-local CLAUDE.md overrides this file when they conflict.
-Verify after changes. Run tests before committing. Search before creating.
+User instructions override project-local CLAUDE.md, which overrides this global file.
+Verify after changes. Run tests before committing.
