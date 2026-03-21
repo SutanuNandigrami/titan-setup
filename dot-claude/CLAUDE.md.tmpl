@@ -1,183 +1,72 @@
 # TITAN_ENGINEER_NAME — Global Operating Manual
 
+## This Project
+Titan is a modular bash installer that transforms fresh Ubuntu into a complete AI dev workstation.
+- **Entrypoint:** `titan-setup.sh` (assembled from `lib/*.sh` fragments via `just build`)
+- **Fragments:** `lib/00-header.sh` through `lib/15-shell-integration.sh` — each owns one domain
+- **Config deployed to targets:** `dot-claude/` → `~/.claude/` (settings, hooks, skills, rules, agents)
+- **Tests:** `test/*.bats` (bats-core). Run with `just test`. CI runs `just check` (lint+fmt+build+test+smoke)
+- **Task runner:** `just` — see `justfile` for all recipes
+- **Key helpers** (defined in `lib/01-common.sh`): `ok()`, `warn()`, `fail()`, `section()`, `phase_done()`, `phase_mark()`, `apt_update()`, `check_port()`
+- **Phases are idempotent** — each checks `~/.titan-progress/` before re-running. Use `--force-updates` to override.
+
+## set -e Safety — MOST IMPORTANT RULE
+This project uses `set -euo pipefail`. **Every command that can fail MUST be guarded.**
+Unguarded `curl`, `wget`, `apt-get install`, `systemctl`, or `$(cmd | cmd)` will silently
+kill the entire script. This has caused regressions repeatedly.
+
+```bash
+# SAFE — use these patterns:
+curl -fsSL ... | bash || true                              # non-critical: swallow failure
+curl -fsSL ... && ok "done" || warn "failed"               # report outcome
+VAR=$(curl -s ... | jq -r '.tag' || true)                  # guard pipeline substitution
+if curl -fsSL ... | bash; then ok "yes"; else warn "no"; fi # conditional
+
+# DEADLY — never write these:
+curl -fsSL ... | bash                     # network fail = script dies
+sudo apt-get install -y pkg               # missing pkg = script dies
+VAR=$(curl -s ... | jq -r '.tag')         # pipefail = script dies
+```
+
+**Never call `api.github.com` directly** — 60 req/hr rate limit. Use `_gh_latest_tag()`.
+Run `just test` — `set-e-safety.bats` catches violations automatically.
+
+## Bug Fixes Require Regression Tests
+Every bug fix MUST include a test in `test/*.bats` that would have caught it.
+Commit fix + test together. Run `just test` before committing — zero failures allowed.
+Verify the test catches the bug *before* your fix, passes *after*. Reduce false positives
+by excluding guarded lines (`||`, `&&`, `if`, continuations ending in `|` or `\`).
+
 ## Preferences
-- Be direct. Skip preambles.
-- When I ask "how", give the command, not a tutorial.
-- If unsure, say so. Never hallucinate.
-- Python 3.10+ with type hints. Bash must pass shellcheck.
+- Be direct. Skip preambles. When I ask "how", give the command.
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
+- Python 3.10+ with type hints. Bash must pass `shellcheck`.
 
-## Tool Philosophy
-You have 100+ CLI tools installed. They replace most MCPs at zero context cost.
-NEVER guess flags. Discover tools on demand:
-1. Check existence: `type <tool>` or `which <tool>`
-2. Learn usage: `<tool> --help` or `<tool> -h`
-3. Quick reference: `tldr <tool>`
-4. Browse installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`
+## Workflow
+1. **Branch first** — never commit to `main`
+2. **Search before create** — `rg` the codebase before adding functions
+3. **Check history** — `git log --oneline -5 <file>` before editing
+4. **Lint** — `shellcheck` for .sh, `ruff check` for .py, `hadolint` for Dockerfile
+5. **Scan before push** — `gitleaks detect` before `git push`
+6. **3-strike rule** — same error 3× → stop, write to `_scratchpad.md`, ask me
 
-## Tool Routing — use the right tool, not the familiar one
-| Task | Tool | NOT this |
-|------|------|----------|
-| Search text | `rg` | grep |
-| Find files | `fd` | find |
-| View files | `bat` | cat |
-| List files | `eza` | ls |
-| Find & replace | `sd` | sed |
-| HTTP requests | `xh` | curl |
-| Process listing | `procs` | ps |
-| Disk usage | `dust` | du |
-| DNS lookup | `doggo` | dig |
-| JSON | `jq` | python -c |
-| YAML | `yq` | python -c |
-| CSV | `xsv` or `miller` | awk |
-| SQL on files | `duckdb` | sqlite3 |
-| HTML extraction | `htmlq` | regex |
-| Compress/extract | `ouch` | tar/unzip/7z |
-| Format shell | `shfmt` | manual |
-| Format web files | `prettier` | manual |
-| Structural replace | `comby` | regex sed |
-| Greppable JSON | `gron` | manual jq |
-| Code stats | `scc` | tokei/cloc |
-| Multi-format query | `dasel` | format-specific |
-| API test chains | `hurl` | curl scripts |
-| JWT inspect | `jwt` | python/openssl |
-| HTTP load test | `oha` | ab/wrk |
-| Repo → AI context | `repomix` | manual |
+## Tools
+100+ CLI tools installed. They replace MCPs at zero context cost.
+Never guess flags — discover on demand: `<tool> --help`, `tldr <tool>`.
+Prefer modern tools in bash: `rg` over grep, `fd` over find, `bat` over cat, `xh` over curl.
+Browse installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`.
+Use CLIs, not MCPs: `gh` for GitHub, `pgcli` for Postgres, `docker` for containers, `aws` for AWS.
 
-## CLI Tools That Replace MCPs — use these instead
-| Domain | CLI tool | Replaces MCP |
-|--------|----------|-------------|
-| GitHub | `gh` | GitHub MCP |
-| Git | `git` (built-in) | Git MCP |
-| AWS | `aws` | AWS MCP |
-| Hetzner | `hcloud` | — |
-| Kubernetes | `kubectl`, `helm` | K8s MCP |
-| Docker | `docker`, `lazydocker` | Docker MCP |
-| Postgres | `pgcli` | Postgres MCP |
-| SQLite | `litecli` | SQLite MCP |
-| Redis | `redis-cli` | Redis MCP |
-| Any DB | `usql` | Database MCPs |
-| SQL on files | `duckdb` | — |
-| HTTP/APIs | `xh` | Fetch MCP |
-| Secrets scan | `gitleaks`, `trufflehog` | — |
-| Vuln scan | `trivy`, `nuclei`, `grype` | — |
-| SBOM | `syft` | — |
-| Static analysis | `semgrep`, `comby` | — |
-| Certificates | `step`, `mkcert` | — |
-| Recon | `subfinder`, `httpx`, `dnsx`, `katana` | — |
-| Container registry | `crane`, `cosign` | — |
-| Code indexing | `ctags`, `tree-sitter` | — |
-
-## Workflow Rules — IMPORTANT
-1. **Branch first**: Never commit directly to `main`.
-2. **Search before create**: `rg` the codebase before creating new functions/classes.
-3. **Check history before modify**: `git log --oneline -5 <file>` before editing.
-4. **Lint everything**: `shellcheck` for .sh, `ruff check` for .py, `hadolint` for Dockerfile.
-5. **Scan before push**: `gitleaks detect` before any `git push`.
-6. **Commit often**: After every working change, conventional commit.
-7. **Diff before commit**: `git diff --stat` — revert unrelated changes.
-8. **3-strike rule**: Same error 3 times → stop, write to `_scratchpad.md`, ask me.
-
-## set -e Safety — CRITICAL for titan-setup.sh and lib/*.sh
-This project uses `set -euo pipefail`. Every command that can fail MUST be guarded.
-Unguarded commands silently kill the entire script. This has caused regressions 3 times.
-
-**NEVER write bare commands that touch the network, packages, or services:**
-```bash
-# DEADLY — script dies silently if curl/apt/systemctl fails:
-curl -fsSL https://example.com/install.sh | bash
-sudo apt-get install -y somepkg
-sudo systemctl enable foo --now
-VAR=$(curl -s https://api.example.com | jq -r '.tag')
-```
-
-**ALWAYS use one of these safe patterns:**
-```bash
-# Pattern 1: && chain with || fallback
-curl -fsSL ... && ok "tool" || warn "tool install failed"
-
-# Pattern 2: || true for non-critical commands
-curl -fsSL ... | bash || true
-sudo systemctl enable foo --now || true
-
-# Pattern 3: if/then for critical installs (verify outcome, not exit code)
-curl -fsSL https://example.com/install.sh | bash || true
-if command -v tool &>/dev/null; then
-  ok "tool installed"
-else
-  warn "tool install failed"
-fi
-
-# Pattern 4: guard pipeline substitutions (pipefail kills these)
-VAR=$(curl -s https://api.example.com | jq -r '.tag' || true)
-[[ -n "$VAR" && "$VAR" != "null" ]] || { warn "fetch failed"; }
-```
-
-**NEVER use api.github.com** — 60 req/hr rate limit. Use `_gh_latest_tag()` instead.
-
-Run `just test` — the `set-e-safety.bats` tests will catch violations automatically.
-
-## Bug Fix Protocol — Regression Prevention is Mandatory
-When you fix a bug in this project — especially one involving `set -e` safety, silent
-failures, or commands that can abort the script — you MUST also write or update a test
-that would have caught it. No exceptions.
-
-**After every bug fix:**
-1. **Write a regression test first.** Before committing the fix, add a test to
-   `test/set-e-safety.bats` (for `set -e` / shell safety issues) or the appropriate
-   `test/*.bats` file that reproduces the class of bug you just fixed.
-2. **Reduce false positives.** Run the new test against the current codebase *before*
-   your fix to confirm it catches the bug, then run it *after* to confirm it passes.
-   If it flags safe code, refine the pattern — grep filters should exclude guarded
-   lines (lines with `||`, `&&`, inside `if`/`while`, continuations ending in `|` or `\`).
-3. **Test the full suite.** Run `just test` (or `vendor/bats/bin/bats test/*.bats`)
-   and confirm zero regressions before committing. The one allowed skip is
-   `shellcheck: command not found` in environments without shellcheck.
-4. **Commit test + fix together.** The test and the fix go in the same commit so
-   `git bisect` always sees them as one unit.
-
-**What counts as a regression test:**
-- A `set-e-safety.bats` test that greps lib/ for the unsafe pattern you just fixed
-- A `session-review.bats` `@test` asserting the specific invariant that broke
-- A `smoke.bats` test if the bug was visible in `--dry-run` output
-
-**Why this matters:** Claude writes all the code in this project. Without automated
-guards, the same class of bug recurs across sessions because each session starts
-with no memory of past mistakes. Tests are the only durable defense.
+## When Stuck
+- Tool missing? Check alternatives with `type <tool>` before asking.
+- Tests fail after your change? Fix the code, not the test. Read the actual error.
+- Same error 3 times? Stop looping. Write what you tried to `_scratchpad.md` and ask.
+- Unsure about approach? Read the existing code first. Check `git log` for prior decisions.
 
 ## Do NOT Touch
-`.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
+Never read, edit, or commit: `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`
 
-## Context Hygiene
-- Use subagents for research to keep main context clean.
-- Write plans to `_scratchpad.md`, not just chat.
-- At session start, check `~/.claude/memory/handoff.md` — it contains auto-saved state from the previous session.
-
-## Auto Memory Protocol — MANDATORY
-You have a persistent memory directory. Use it. This is not optional.
-
-**MUST write to auto memory when:**
-1. User says "remember this" or uses `/remember` — immediately
-2. You discover a project convention or architecture pattern — after confirming it
-3. A debugging session reveals a non-obvious fix — after the fix works
-4. User corrects you on something — immediately update/remove the wrong memory
-5. You learn a user preference from their feedback — after 2+ consistent signals
-6. A key decision is made (tool choice, architecture, workflow) — after the decision
-
-**MUST NOT write to memory:**
-- Speculative conclusions from reading one file
-- Session-specific temporary state (use `_scratchpad.md` instead)
-- Anything that duplicates CLAUDE.md or project CLAUDE.md
-
-**How:** Use the Write/Edit tools on files in your auto memory directory.
-Keep `MEMORY.md` under 150 lines. Create topic files for details.
-
-## Compaction Protocol
-When context is being compacted, ALWAYS preserve in the summary:
-1. **Current task** — what you are working on and why
-2. **Branch name** — the active git branch
-3. **Modified files** — all files changed in this session
-4. **Test status** — last test commands and pass/fail results
-5. **Blockers** — any unresolved errors or open questions
-6. **Key decisions** — architectural or design choices made
-7. **Next steps** — what needs to happen next
+## Memory
+- Write to auto memory when: user says "remember", you find a non-obvious fix, a key decision is made, user corrects you.
+- Do NOT write: speculative conclusions, session-specific state (use `_scratchpad.md`), anything already in CLAUDE.md.
+- At session start, read `_scratchpad.md` and `~/.claude/memory/handoff.md` if they exist.
