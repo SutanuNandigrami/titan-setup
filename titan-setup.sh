@@ -1968,13 +1968,17 @@ else ok "claude-esp (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
 # Note: go install fails due to go.mod module path mismatch — use binary release instead
 if ! command -v claude-squad &>/dev/null; then
-  CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name')
-  mkdir -p "$HOME/.local/bin"
-  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
-    tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
-    chmod +x "$HOME/.local/bin/claude-squad" &&
-    rm -f /tmp/cs.tar.gz &&
-    ok "claude-squad" || warn "claude-squad"
+  CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name' || true)
+  if [[ -n "$CSVER" && "$CSVER" != "null" ]]; then
+    mkdir -p "$HOME/.local/bin"
+    curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
+      tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
+      chmod +x "$HOME/.local/bin/claude-squad" &&
+      rm -f /tmp/cs.tar.gz &&
+      ok "claude-squad" || warn "claude-squad"
+  else
+    warn "claude-squad (failed to fetch version)"
+  fi
 else ok "claude-squad (exists)"; fi
 
 # ─── Binary installs (no package manager available) ───
