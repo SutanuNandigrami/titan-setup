@@ -136,6 +136,14 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else ok "spotify_player (exists)"; fi
 fi
 
+# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
+# Defined here (before nushell) because it's first used below and again in the Go section.
+_gh_latest_tag() {
+  local url
+  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
+  basename "$url" 2>/dev/null
+}
+
 # nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
@@ -215,13 +223,6 @@ _go_binary_install() {
 }
 
 mkdir -p "$HOME/go/bin"
-
-# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
-_gh_latest_tag() {
-  local url
-  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
-  basename "$url" 2>/dev/null
-}
 
 # ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
 _VER_DIR=$(mktemp -d)
