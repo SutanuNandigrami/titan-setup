@@ -69,12 +69,13 @@ if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
 fi
 
 # ─── Early Claude Code install + auth (VPS only, before tmux) ────────────
-# Auth needs an interactive terminal for OAuth paste-back. Once inside tmux
-# (detached for cloud-init / </dev/null), paste-back won't work.  ADR-025.
+# claude auth login is broken outside the TUI (upstream bug). Install the
+# binary early, then pause so the user can auth via 'claude' TUI in a
+# second SSH session before tmux takes over.
 if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
   if ! command -v claude &>/dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
-    echo -e "\n  ${CYAN}Installing Claude Code (auth needs interactive terminal)...${NC}"
+    echo -e "\n  ${CYAN}Installing Claude Code (needed for auth before tmux)...${NC}"
     if [[ -n "${CC_VERSION:-}" ]]; then
       curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
     else
@@ -82,8 +83,18 @@ if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
     fi
   fi
   if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
-    echo -e "\n  ${CYAN}Claude Code auth (paste the code after authorizing in browser):${NC}"
-    claude auth login < /dev/tty || true
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second SSH session${NC} to this server and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+    if claude auth status &>/dev/null 2>&1; then
+      ok "Claude Code authenticated"
+    else
+      warn "Claude Code not authenticated — plugins will be skipped"
+    fi
   elif command -v claude &>/dev/null; then
     ok "Claude Code already authenticated"
   fi

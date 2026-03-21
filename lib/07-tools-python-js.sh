@@ -114,7 +114,7 @@ fi
 if $MINIMAL; then
   ok "n8n (skipped — minimal mode)"
 elif command -v docker &>/dev/null; then
-  check_port 5678 "n8n" || true
+  check_port 5678 "n8n" "n8n" || true
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true

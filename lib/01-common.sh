@@ -36,10 +36,17 @@ apt_update() {
   fi
 }
 
-# Port pre-flight check — warn if a port is already in use
+# Port pre-flight check — warn if a port is already in use by another service.
+# Accepts optional 3rd arg: docker container name to check before warning.
+# Idempotent: if the expected container/service already owns the port, skip.
 check_port() {
-  local port="$1" service="$2"
+  local port="$1" service="$2" container="${3:-}"
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+    # If a docker container name is given, check if it's already running on this port
+    if [[ -n "$container" ]] && command -v docker &>/dev/null &&
+      docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+      return 0  # our container already owns this port — idempotent
+    fi
     local owner
     owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
     warn "${service}: port ${port} already in use by ${owner}"

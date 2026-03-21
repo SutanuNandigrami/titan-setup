@@ -79,10 +79,17 @@ apt_update() {
   fi
 }
 
-# Port pre-flight check — warn if a port is already in use
+# Port pre-flight check — warn if a port is already in use by another service.
+# Accepts optional 3rd arg: docker container name to check before warning.
+# Idempotent: if the expected container/service already owns the port, skip.
 check_port() {
-  local port="$1" service="$2"
+  local port="$1" service="$2" container="${3:-}"
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+    # If a docker container name is given, check if it's already running on this port
+    if [[ -n "$container" ]] && command -v docker &>/dev/null &&
+      docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+      return 0  # our container already owns this port — idempotent
+    fi
     local owner
     owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
     warn "${service}: port ${port} already in use by ${owner}"
@@ -480,12 +487,13 @@ if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
 fi
 
 # ─── Early Claude Code install + auth (VPS only, before tmux) ────────────
-# Auth needs an interactive terminal for OAuth paste-back. Once inside tmux
-# (detached for cloud-init / </dev/null), paste-back won't work.  ADR-025.
+# claude auth login is broken outside the TUI (upstream bug). Install the
+# binary early, then pause so the user can auth via 'claude' TUI in a
+# second SSH session before tmux takes over.
 if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
   if ! command -v claude &>/dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
-    echo -e "\n  ${CYAN}Installing Claude Code (auth needs interactive terminal)...${NC}"
+    echo -e "\n  ${CYAN}Installing Claude Code (needed for auth before tmux)...${NC}"
     if [[ -n "${CC_VERSION:-}" ]]; then
       curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
     else
@@ -493,8 +501,18 @@ if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]]; then
     fi
   fi
   if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
-    echo -e "\n  ${CYAN}Claude Code auth (paste the code after authorizing in browser):${NC}"
-    claude auth login < /dev/tty || true
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second SSH session${NC} to this server and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+    if claude auth status &>/dev/null 2>&1; then
+      ok "Claude Code authenticated"
+    else
+      warn "Claude Code not authenticated — plugins will be skipped"
+    fi
   elif command -v claude &>/dev/null; then
     ok "Claude Code already authenticated"
   fi
@@ -1224,7 +1242,7 @@ fi
 if $MINIMAL; then
   ok "n8n (skipped — minimal mode)"
 elif command -v docker &>/dev/null; then
-  check_port 5678 "n8n" || true
+  check_port 5678 "n8n" "n8n" || true
   # Add user to docker group and ensure daemon is running
   sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true
@@ -2241,10 +2259,23 @@ else
   fi
 fi
 
-# Auth prompt — only if interactive terminal available and not already authed (ADR-025)
+# Auth check — claude auth login is broken outside the TUI (upstream bug).
+# VPS: auth handled in lib/03 pre-tmux pause. Desktop: prompt here.
 if [[ -t 0 ]] && command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
-  echo -e "\n  ${CYAN}Claude Code auth (paste the code after authorizing in browser):${NC}"
-  claude auth login < /dev/tty || true
+  if [[ "$INSTALL_MODE" == "desktop" ]]; then
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second terminal${NC} and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+  fi
+  if claude auth status &>/dev/null 2>&1; then
+    ok "Claude Code authenticated"
+  else
+    warn "Claude Code not authenticated — plugins will be skipped"
+  fi
 elif command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
   ok "Claude Code authenticated"
 fi
