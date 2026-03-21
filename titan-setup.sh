@@ -840,8 +840,11 @@ else
   if [[ -d /etc/needrestart ]]; then
     sudo mkdir -p /etc/needrestart/conf.d
     # restart='a' → auto-restart services; kernelhints=-1 → suppress "Pending kernel upgrade" dialog
-    printf '\$nrconf{restart} = '"'"'a'"'"';\n\$nrconf{kernelhints} = -1;\n\$nrconf{ucodehints} = 0;\n' |
-      sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null
+    sudo tee /etc/needrestart/conf.d/titan-auto.conf >/dev/null <<'NEEDRESTART'
+$nrconf{restart} = 'a';
+$nrconf{kernelhints} = -1;
+$nrconf{ucodehints} = 0;
+NEEDRESTART
   fi
 
   # Cap journald disk usage — prevents n8n/Ollama/Letta logs from filling disk
