@@ -227,11 +227,18 @@ mkdir -p "$HOME/go/bin"
 # ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
 _VER_DIR=$(mktemp -d)
 _gh_latest_tag "projectdiscovery/nuclei" >"$_VER_DIR/nuclei" &
+_VF1=$!
 _gh_latest_tag "gitleaks/gitleaks" >"$_VER_DIR/gitleaks" &
+_VF2=$!
 _gh_latest_tag "getsops/sops" >"$_VER_DIR/sops" &
+_VF3=$!
 _gh_latest_tag "google/osv-scanner" >"$_VER_DIR/osv-scanner" &
+_VF4=$!
 _gh_latest_tag "nektos/act" >"$_VER_DIR/act" &
-wait
+_VF5=$!
+# Wait only for version-fetch PIDs — bare 'wait' catches ALL background jobs
+# including the UV background install from lib/07, which can crash set -e
+wait "$_VF1" "$_VF2" "$_VF3" "$_VF4" "$_VF5" 2>/dev/null || true
 _NUCLEI_VER=$(<"$_VER_DIR/nuclei")
 _GITLEAKS_VER=$(<"$_VER_DIR/gitleaks")
 _SOPS_VER=$(<"$_VER_DIR/sops")

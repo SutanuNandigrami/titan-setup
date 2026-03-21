@@ -340,6 +340,12 @@ setup() {
   grep -A3 'fm_field()' "$REPO/dot-claude/bin/agt" | grep -qE '\|\| true'
 }
 
+@test "HZ: no bare 'wait' in lib/ (catches unrelated background jobs under set -e)" {
+  local bare
+  bare=$(grep -rn '^\s*wait$' "$REPO"/lib/*.sh || true)
+  [ -z "$bare" ]
+}
+
 @test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {
   # read returns 1 on EOF (e.g. </dev/null or cloud-init) — kills script under set -e
   local unguarded

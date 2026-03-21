@@ -1848,11 +1848,18 @@ mkdir -p "$HOME/go/bin"
 # ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
 _VER_DIR=$(mktemp -d)
 _gh_latest_tag "projectdiscovery/nuclei" >"$_VER_DIR/nuclei" &
+_VF1=$!
 _gh_latest_tag "gitleaks/gitleaks" >"$_VER_DIR/gitleaks" &
+_VF2=$!
 _gh_latest_tag "getsops/sops" >"$_VER_DIR/sops" &
+_VF3=$!
 _gh_latest_tag "google/osv-scanner" >"$_VER_DIR/osv-scanner" &
+_VF4=$!
 _gh_latest_tag "nektos/act" >"$_VER_DIR/act" &
-wait
+_VF5=$!
+# Wait only for version-fetch PIDs — bare 'wait' catches ALL background jobs
+# including the UV background install from lib/07, which can crash set -e
+wait "$_VF1" "$_VF2" "$_VF3" "$_VF4" "$_VF5" 2>/dev/null || true
 _NUCLEI_VER=$(<"$_VER_DIR/nuclei")
 _GITLEAKS_VER=$(<"$_VER_DIR/gitleaks")
 _SOPS_VER=$(<"$_VER_DIR/sops")
@@ -2543,9 +2550,12 @@ _NEED_TRAILOFBITS=false
 
 if $_NEED_SUPERPOWERS || $_NEED_VIBESEC || $_NEED_TRAILOFBITS; then
   $_NEED_SUPERPOWERS && git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers 2>/dev/null &
+  _SP1=$!
   $_NEED_VIBESEC && git clone --depth 1 https://github.com/BehiSecc/VibeSec-Skill.git "$CLAUDE_DIR/skills/vibesec" 2>/dev/null &
+  _SP2=$!
   $_NEED_TRAILOFBITS && git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/trailofbits-skills 2>/dev/null &
-  wait
+  _SP3=$!
+  wait "$_SP1" "$_SP2" "$_SP3" 2>/dev/null || true
 fi
 
 # obra/superpowers (multiple useful skills)
