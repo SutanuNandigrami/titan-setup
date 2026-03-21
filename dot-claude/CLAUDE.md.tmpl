@@ -78,6 +78,45 @@ NEVER guess flags. Discover tools on demand:
 7. **Diff before commit**: `git diff --stat` — revert unrelated changes.
 8. **3-strike rule**: Same error 3 times → stop, write to `_scratchpad.md`, ask me.
 
+## set -e Safety — CRITICAL for titan-setup.sh and lib/*.sh
+This project uses `set -euo pipefail`. Every command that can fail MUST be guarded.
+Unguarded commands silently kill the entire script. This has caused regressions 3 times.
+
+**NEVER write bare commands that touch the network, packages, or services:**
+```bash
+# DEADLY — script dies silently if curl/apt/systemctl fails:
+curl -fsSL https://example.com/install.sh | bash
+sudo apt-get install -y somepkg
+sudo systemctl enable foo --now
+VAR=$(curl -s https://api.example.com | jq -r '.tag')
+```
+
+**ALWAYS use one of these safe patterns:**
+```bash
+# Pattern 1: && chain with || fallback
+curl -fsSL ... && ok "tool" || warn "tool install failed"
+
+# Pattern 2: || true for non-critical commands
+curl -fsSL ... | bash || true
+sudo systemctl enable foo --now || true
+
+# Pattern 3: if/then for critical installs (verify outcome, not exit code)
+curl -fsSL https://example.com/install.sh | bash || true
+if command -v tool &>/dev/null; then
+  ok "tool installed"
+else
+  warn "tool install failed"
+fi
+
+# Pattern 4: guard pipeline substitutions (pipefail kills these)
+VAR=$(curl -s https://api.example.com | jq -r '.tag' || true)
+[[ -n "$VAR" && "$VAR" != "null" ]] || { warn "fetch failed"; }
+```
+
+**NEVER use api.github.com** — 60 req/hr rate limit. Use `_gh_latest_tag()` instead.
+
+Run `just test` — the `set-e-safety.bats` tests will catch violations automatically.
+
 ## Do NOT Touch
 `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
 

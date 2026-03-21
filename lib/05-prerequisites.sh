@@ -52,13 +52,16 @@ else
       FONT_DIR="$HOME/.local/share/fonts"
       mkdir -p "$FONT_DIR"
       TMPFONT=$(mktemp -d)
-      curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
-        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
-      tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
-      cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
-      fc-cache -f "$FONT_DIR" 2>/dev/null
+      if curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"; then
+        tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
+        cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
+        fc-cache -f "$FONT_DIR" 2>/dev/null
+        ok "JetBrainsMono Nerd Font installed"
+      else
+        warn "JetBrainsMono Nerd Font download failed"
+      fi
       rm -rf "$TMPFONT"
-      ok "JetBrainsMono Nerd Font installed"
     fi
     # Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
   fi
