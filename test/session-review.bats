@@ -292,6 +292,65 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
+# HETZNER VPS RUN FIXES (2026-03-21)
+# ════════════════════════════════════════════════════════════════════
+
+@test "HZ: apt_update supports --force flag to re-fetch after adding new repos" {
+  grep -q '\-\-force' "$REPO/lib/01-common.sh"
+}
+
+@test "HZ: gcloud repo uses apt_update --force (not cached)" {
+  grep -A5 'google-cloud-sdk.list' "$REPO/lib/09-tools-rust-go.sh" | grep -q 'apt_update --force'
+}
+
+@test "HZ: terraform repo uses apt_update --force (not cached)" {
+  grep -A3 'hashicorp.list' "$REPO/lib/09-tools-rust-go.sh" | grep -q 'apt_update --force'
+}
+
+@test "HZ: trivy repo uses apt_update --force (not cached)" {
+  grep -A3 'trivy.list' "$REPO/lib/09-tools-rust-go.sh" | grep -q 'apt_update --force'
+}
+
+@test "HZ: gh repo uses apt_update --force (not cached)" {
+  grep -A3 'github-cli.list' "$REPO/lib/09-tools-rust-go.sh" | grep -q 'apt_update --force'
+}
+
+@test "HZ: Tailscale install uses sudo bash not bare sh (pipe safe)" {
+  grep -q 'tailscale.com/install.sh.*sudo bash' "$REPO/lib/16-finalize.sh"
+}
+
+@test "HZ: Tailscale install is guarded (not bare pipe)" {
+  # Must have && or || guard on the install line
+  grep 'tailscale.com/install.sh' "$REPO/lib/16-finalize.sh" | grep -qE '\|\||&&'
+}
+
+@test "HZ: mise shims added to PATH before playwright install" {
+  # The mise shims PATH export must appear before the playwright install block
+  local shims_line pw_line
+  shims_line=$(grep -n 'mise/shims' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  pw_line=$(grep -n 'bun install -g playwright' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  [ "$shims_line" -lt "$pw_line" ]
+}
+
+@test "HZ: docker fallback uses /usr/bin/sg not bare sg (ast-grep conflict)" {
+  grep 'sg docker' "$REPO/lib/07-tools-python-js.sh" | grep -q '/usr/bin/sg'
+}
+
+@test "HZ: agt fm_field guards grep exit code (pipefail safe)" {
+  grep -A3 'fm_field()' "$REPO/dot-claude/bin/agt" | grep -qE '\|\| true'
+}
+
+@test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {
+  # read returns 1 on EOF (e.g. </dev/null or cloud-init) — kills script under set -e
+  local unguarded
+  unguarded=$(grep -rn 'read -r[sp]*' "$REPO"/lib/*.sh \
+    | grep -v '|| true' \
+    | grep -v 'while.*read\|IFS.*read' \
+    || true)
+  [ -z "$unguarded" ]
+}
+
+# ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
 

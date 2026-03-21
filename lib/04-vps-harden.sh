@@ -5,7 +5,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Require Tailscale auth key ─────────────────────────────────────────
   if [[ -z "$TAILSCALE_KEY" ]]; then
     echo -e "  ${CYAN}Tailscale auth key${NC} (required — generate at login.tailscale.com/admin/settings/keys):"
-    read -rsp "  Key: " TAILSCALE_KEY
+    read -rsp "  Key: " TAILSCALE_KEY || true
     echo ""
     [[ -z "$TAILSCALE_KEY" ]] && {
       fail "Tailscale key required for VPS mode"
@@ -15,7 +15,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Require non-root Claude user ───────────────────────────────────────
   if [[ -z "$CLAUDE_USER" ]]; then
-    read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER
+    read -rp "  Non-root user for Claude Code (created if absent): " CLAUDE_USER || true
     [[ -z "$CLAUDE_USER" ]] && {
       fail "--claude-user required for VPS mode"
       exit 1
