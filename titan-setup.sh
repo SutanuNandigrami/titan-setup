@@ -1211,6 +1211,11 @@ elif command -v docker &>/dev/null; then
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
+  # Restart user systemd manager so it picks up the new docker group membership.
+  # Without this, user services (n8n, letta) crash-loop on "permission denied" to
+  # the docker socket because group changes only take effect on new sessions.
+  sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+
   # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
   # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
   if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
@@ -2920,6 +2925,7 @@ Type=simple
 ExecStart=${_BUN_BIN} run %h/.config/letta/letta-ctrl-server.js
 Environment="LETTA_CTRL_PORT=${LETTA_CTRL_PORT}"
 Environment="LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}"
+$( [[ "$INSTALL_MODE" == "vps" ]] && echo 'Environment="LETTA_CTRL_TOKEN=disable"' )
 Restart=on-failure
 RestartSec=5
 
@@ -3101,12 +3107,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 
     # ── tailscale serve — expose local services on Tailscale network ───────
-    if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
+    # tailscale serve is a proxy config — backend doesn't need to be running yet
+    if command -v docker &>/dev/null; then
       tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
         ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" ||
         warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
-    elif command -v docker &>/dev/null; then
-      ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
     fi
     if ! $CCFLARE_SKIP; then
       tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null &&

@@ -57,12 +57,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 
     # ── tailscale serve — expose local services on Tailscale network ───────
-    if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q n8n; then
+    # tailscale serve is a proxy config — backend doesn't need to be running yet
+    if command -v docker &>/dev/null; then
       tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
         ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" ||
         warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
-    elif command -v docker &>/dev/null; then
-      ok "tailscale serve: n8n skipped (container not running — run tailscale serve manually once n8n starts)"
     fi
     if ! $CCFLARE_SKIP; then
       tailscale serve --bg --https="${CCFLARE_PORT}" "http://localhost:${CCFLARE_PORT}" 2>/dev/null &&

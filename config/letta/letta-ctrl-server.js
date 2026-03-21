@@ -10,9 +10,11 @@ const LETTA_URL = process.env.LETTA_BASE_URL || "http://127.0.0.1:8283";
 const HTML_FILE = join(homedir(), ".config/letta/letta-ctrl.html");
 
 // ── Auth token ──────────────────────────────────────────────────────────────
+// Set LETTA_CTRL_TOKEN=disable to skip auth (safe when behind tailscale serve)
 const TOKEN_FILE = join(homedir(), ".config/letta/ctrl-token");
-let AUTH_TOKEN = process.env.LETTA_CTRL_TOKEN || "";
-if (!AUTH_TOKEN) {
+const AUTH_DISABLED = process.env.LETTA_CTRL_TOKEN === "disable";
+let AUTH_TOKEN = AUTH_DISABLED ? "" : (process.env.LETTA_CTRL_TOKEN || "");
+if (!AUTH_DISABLED && !AUTH_TOKEN) {
   if (existsSync(TOKEN_FILE)) {
     AUTH_TOKEN = readFileSync(TOKEN_FILE, "utf8").trim();
   }
@@ -26,8 +28,10 @@ if (!AUTH_TOKEN) {
     console.log(`Token saved to: ${TOKEN_FILE}`);
   }
 }
+if (AUTH_DISABLED) console.log("Auth disabled (LETTA_CTRL_TOKEN=disable)");
 
 function checkAuth(req) {
+  if (AUTH_DISABLED) return true;
   const hdr = req.headers.get("authorization") || "";
   const prefix = "Bearer ";
   if (!hdr.startsWith(prefix)) return false;
