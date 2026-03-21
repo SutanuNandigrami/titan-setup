@@ -61,7 +61,7 @@ fi
 # ─── 3. dot-claude file presence ────────────────────────────────────────────
 section "dot-claude required files"
 DOT_CLAUDE_REQUIRED=(
-  "CLAUDE.md"
+  "CLAUDE.md.tmpl"
   "settings.json"
   "skills/cli-tools/SKILL.md"
   "skills/security-scan/SKILL.md"

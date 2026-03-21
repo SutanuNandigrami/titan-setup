@@ -139,7 +139,7 @@ fi
 # nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  _NU_VER=$(curl -sf https://api.github.com/repos/nushell/nushell/releases/latest | jq -r '.tag_name // empty' || true)
+  _NU_VER=$(_gh_latest_tag "nushell/nushell")
   _NU_INSTALLED=false
   if [[ -n "$_NU_VER" ]]; then
     _NU_URL="https://github.com/nushell/nushell/releases/download/${_NU_VER}/nu-${_NU_VER}-${ARCH_RUST}-unknown-linux-musl.tar.gz"
@@ -382,13 +382,17 @@ else ok "claude-esp (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
 # Note: go install fails due to go.mod module path mismatch — use binary release instead
 if ! command -v claude-squad &>/dev/null; then
-  CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name')
-  mkdir -p "$HOME/.local/bin"
-  curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
-    tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
-    chmod +x "$HOME/.local/bin/claude-squad" &&
-    rm -f /tmp/cs.tar.gz &&
-    ok "claude-squad" || warn "claude-squad"
+  CSVER=$(_gh_latest_tag "smtg-ai/claude-squad")
+  if [[ -n "$CSVER" && "$CSVER" != "null" ]]; then
+    mkdir -p "$HOME/.local/bin"
+    curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
+      tar -xzf /tmp/cs.tar.gz -C "$HOME/.local/bin" claude-squad &&
+      chmod +x "$HOME/.local/bin/claude-squad" &&
+      rm -f /tmp/cs.tar.gz &&
+      ok "claude-squad" || warn "claude-squad"
+  else
+    warn "claude-squad (failed to fetch version)"
+  fi
 else ok "claude-squad (exists)"; fi
 
 # ─── Binary installs (no package manager available) ───
@@ -396,9 +400,9 @@ echo -e "\n  ${CYAN}Binary installs:${NC}"
 
 # kubectl
 if ! command -v kubectl &>/dev/null; then
-  curl -sL -o "$WORKDIR/kubectl" "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH_AMD}/kubectl"
-  sudo install -o root -g root -m 0755 "$WORKDIR/kubectl" /usr/local/bin/kubectl
-  ok "kubectl"
+  curl -sL -o "$WORKDIR/kubectl" "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH_AMD}/kubectl" &&
+    sudo install -o root -g root -m 0755 "$WORKDIR/kubectl" /usr/local/bin/kubectl &&
+    ok "kubectl" || warn "kubectl install failed"
 else ok "kubectl (exists)"; fi
 
 # helm
@@ -413,28 +417,28 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  apt_update && sudo apt-get install -y -qq google-cloud-cli
-  ok "gcloud"
+  apt_update && sudo apt-get install -y -qq google-cloud-cli &&
+    ok "gcloud" || warn "gcloud install failed"
 else ok "gcloud (exists)"; fi
 
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  apt_update && sudo apt-get install -y -qq terraform packer
-  ok "terraform + packer"
+  apt_update && sudo apt-get install -y -qq terraform packer &&
+    ok "terraform + packer" || warn "terraform/packer install failed"
 else ok "terraform (exists)"; fi
 
 # tflint
 if ! command -v tflint &>/dev/null; then
-  curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash 2>/dev/null
-  ok "tflint"
+  curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash 2>/dev/null &&
+    ok "tflint" || warn "tflint install failed"
 else ok "tflint (exists)"; fi
 
 # infracost
 if ! command -v infracost &>/dev/null; then
-  curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh 2>/dev/null
-  ok "infracost"
+  curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh 2>/dev/null &&
+    ok "infracost" || warn "infracost install failed"
 else ok "infracost (exists)"; fi
 
 # hadolint
@@ -446,17 +450,17 @@ else ok "hadolint (exists)"; fi
 
 # duckdb
 if ! command -v duckdb &>/dev/null; then
-  curl -sL -o "$WORKDIR/duckdb.zip" "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${ARCH_AMD}.zip"
-  unzip -qo "$WORKDIR/duckdb.zip" -d "$WORKDIR" && sudo mv "$WORKDIR/duckdb" /usr/local/bin/
-  ok "duckdb"
+  curl -sL -o "$WORKDIR/duckdb.zip" "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${ARCH_AMD}.zip" &&
+    unzip -qo "$WORKDIR/duckdb.zip" -d "$WORKDIR" && sudo mv "$WORKDIR/duckdb" /usr/local/bin/ &&
+    ok "duckdb" || warn "duckdb install failed"
 else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  apt_update && sudo apt-get install -y -qq trivy
-  ok "trivy"
+  apt_update && sudo apt-get install -y -qq trivy &&
+    ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
@@ -470,9 +474,9 @@ fi
 
 # mc (MinIO client)
 if ! command -v mc &>/dev/null; then
-  curl -sL -o "$WORKDIR/mc" "https://dl.min.io/client/mc/release/linux-${ARCH_AMD}/mc"
-  chmod +x "$WORKDIR/mc" && sudo mv "$WORKDIR/mc" /usr/local/bin/
-  ok "mc"
+  curl -sL -o "$WORKDIR/mc" "https://dl.min.io/client/mc/release/linux-${ARCH_AMD}/mc" &&
+    chmod +x "$WORKDIR/mc" && sudo mv "$WORKDIR/mc" /usr/local/bin/ &&
+    ok "mc" || warn "mc (MinIO client) install failed"
 else ok "mc (exists)"; fi
 
 # GitHub CLI
@@ -480,13 +484,13 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  apt_update && sudo apt-get install -y -qq gh
-  ok "gh"
+  apt_update && sudo apt-get install -y -qq gh &&
+    ok "gh" || warn "gh install failed"
 else ok "gh (exists)"; fi
 
 # ShellCheck linter (latest binary, apt version is ancient)
 
-SHELLCHECK_VERSION=$(curl -s https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq -r .tag_name)
+SHELLCHECK_VERSION=$(_gh_latest_tag "koalaman/shellcheck")
 if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
   warn "shellcheck — failed to fetch version, keeping existing"
 elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
@@ -517,7 +521,7 @@ else ok "dippy (exists)"; fi
 
 # Infisical — secret management CLI
 if ! command -v infisical &>/dev/null; then
-  curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash 2>/dev/null
+  curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash 2>/dev/null || true
   sudo apt-get install -y infisical 2>/dev/null && ok "infisical" || warn "infisical"
 else ok "infisical (exists)"; fi
 
@@ -540,7 +544,7 @@ else ok "step-cli (exists)"; fi
 # comby — structural code search/replace that understands syntax (amd64 only — no aarch64 binary)
 if [[ "$ARCH_AMD" == "amd64" ]]; then
   if ! command -v comby &>/dev/null; then
-    sudo apt-get install -y libpcre3-dev libev4 2>/dev/null
+    sudo apt-get install -y libpcre3-dev libev4 2>/dev/null || true
     echo "y" | bash <(curl -sL get.comby.dev) 2>/dev/null &&
       ok "comby" || warn "comby install failed"
   else ok "comby (exists)"; fi

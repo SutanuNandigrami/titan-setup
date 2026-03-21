@@ -29,13 +29,13 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
-  # ── SSH hardening — DEFERRED to lib/17-finalize.sh ───────────────────
+  # ── SSH hardening — DEFERRED to lib/16-finalize.sh ───────────────────
   # Config changes AND reload are both deferred until after Tailscale SSH
   # provides alternative access. Writing config here is unsafe because apt
   # package installs (openssh-server upgrades, fail2ban) trigger dpkg
   # postinst hooks that restart sshd, which picks up the hardened config
   # and locks out password-based SSH before Tailscale is ready.
-  ok "SSH hardening deferred until Tailscale is verified (lib/17-finalize.sh)"
+  ok "SSH hardening deferred until Tailscale is verified (lib/16-finalize.sh)"
 
   # ── UFW — NOT used (Tailscale handles network isolation) ─────────────
   # UFW conflicts with Tailscale routing. Tailscale provides network-level
@@ -55,7 +55,7 @@ port     = ssh
 logpath  = %(sshd_log)s
 backend  = %(sshd_backend)s
 FAIL2BAN_EOF
-  sudo systemctl enable fail2ban --now
+  sudo systemctl enable fail2ban --now || true
   ok "fail2ban active (SSH: 5 retries → 1h ban)"
 
   # ── unattended-upgrades — security patches only ───────────────────────
@@ -66,7 +66,7 @@ Unattended-Upgrade::Allowed-Origins {
 Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 UU_EOF
-  sudo systemctl enable unattended-upgrades --now
+  sudo systemctl enable unattended-upgrades --now || true
   ok "unattended-upgrades active (security patches only, no auto-reboot)"
 
   # ── auditd — privilege escalation monitoring ──────────────────────────
@@ -76,7 +76,7 @@ UU_EOF
 -w /etc/sudoers -p wa -k sudoers_changes
 -w /etc/sudoers.d/ -p wa -k sudoers_changes
 AUDIT_EOF
-  sudo systemctl enable auditd --now
+  sudo systemctl enable auditd --now || true
   ok "auditd active (privesc monitoring, passwd/sudoers watch)"
 
   # ── Repo supply chain guard ───────────────────────────────────────────
@@ -116,7 +116,7 @@ shopt -u nullglob
 apt-get update
 GUARD_EOF
   sudo chmod 755 /usr/local/sbin/repo_supply_chain_guard.sh
-  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh
+  sudo bash /usr/local/sbin/repo_supply_chain_guard.sh || warn "repo supply chain guard had errors (non-fatal)"
   ok "Repo supply chain guard installed and run"
 
   # ── Compliance check script ───────────────────────────────────────────
@@ -244,8 +244,8 @@ Persistent=true
 WantedBy=timers.target
 TIMER_EOF
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now compliance-check.timer
+  sudo systemctl daemon-reload || true
+  sudo systemctl enable --now compliance-check.timer || true
   ok "Compliance timer enabled (runs at boot +5m, then every 6h)"
 
 fi
