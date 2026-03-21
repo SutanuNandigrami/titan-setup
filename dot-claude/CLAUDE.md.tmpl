@@ -1,116 +1,64 @@
 # TITAN_ENGINEER_NAME — Global Operating Manual
 
-## Preferences
-- Be direct. Skip preambles.
-- When I ask "how", give the command, not a tutorial.
-- If unsure, say so. Never hallucinate.
-- Python 3.10+ with type hints. Bash must pass shellcheck.
-- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
+## Workflow
+1. **Understand before changing** — read the file before editing; if the structure seems intentional but unclear, check `git log --oneline -10 <file>` for context
+2. **Verify after changes** — find and run the project's test command (`just test`, `npm test`, `pytest`, `make test`, or check Makefile/package.json/justfile); fix failures before moving on
+3. **Multi-file changes** — when a change spans multiple files, make all edits before running tests; intermediate states will false-fail
+4. **Scan before push** — if `type gitleaks &>/dev/null`, run `gitleaks detect --no-banner` on staged files before pushing; if secrets found, stop and report the file and line
 
-## Tool Philosophy
-You have 100+ CLI tools installed. They replace most MCPs at zero context cost.
-NEVER guess flags. Discover tools on demand:
-1. Check existence: `type <tool>` or `which <tool>`
-2. Learn usage: `<tool> --help` or `<tool> -h`
-3. Quick reference: `tldr <tool>`
-4. Browse installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`
+## Recovery
+- **Test failure after your change?** Read the full error. Usually the code is wrong. If the test assertion is clearly incorrect (wrong expected value, testing removed behavior), fix the test and explain why.
+- **Stuck on the same error?** If your last two attempts at fixing an issue failed the same way, stop and ask the user how to proceed. Summarize what you tried in your message.
+- **Unsure about approach?** Read existing code patterns and `git log` before proposing a new one.
 
-## Tool Routing — use the right tool, not the familiar one
-| Task | Tool | NOT this |
-|------|------|----------|
-| Search text | `rg` | grep |
-| Find files | `fd` | find |
-| View files | `bat` | cat |
-| List files | `eza` | ls |
-| Find & replace | `sd` | sed |
-| HTTP requests | `xh` | curl |
-| Process listing | `procs` | ps |
-| Disk usage | `dust` | du |
-| DNS lookup | `doggo` | dig |
-| JSON | `jq` | python -c |
-| YAML | `yq` | python -c |
-| CSV | `xsv` or `miller` | awk |
-| SQL on files | `duckdb` | sqlite3 |
-| HTML extraction | `htmlq` | regex |
-| Compress/extract | `ouch` | tar/unzip/7z |
-| Format shell | `shfmt` | manual |
-| Format web files | `prettier` | manual |
-| Structural replace | `comby` | regex sed |
-| Greppable JSON | `gron` | manual jq |
-| Code stats | `scc` | tokei/cloc |
-| Multi-format query | `dasel` | format-specific |
-| API test chains | `hurl` | curl scripts |
-| JWT inspect | `jwt` | python/openssl |
-| HTTP load test | `oha` | ab/wrk |
-| Repo → AI context | `repomix` | manual |
+## Bug Fixes
+If the project has an existing test suite, include a regression test with every bug fix.
+Commit fix + test together. If there are no tests, describe how to verify the fix manually.
 
-## CLI Tools That Replace MCPs — use these instead
-| Domain | CLI tool | Replaces MCP |
-|--------|----------|-------------|
-| GitHub | `gh` | GitHub MCP |
-| Git | `git` (built-in) | Git MCP |
-| AWS | `aws` | AWS MCP |
-| Hetzner | `hcloud` | — |
-| Kubernetes | `kubectl`, `helm` | K8s MCP |
-| Docker | `docker`, `lazydocker` | Docker MCP |
-| Postgres | `pgcli` | Postgres MCP |
-| SQLite | `litecli` | SQLite MCP |
-| Redis | `redis-cli` | Redis MCP |
-| Any DB | `usql` | Database MCPs |
-| SQL on files | `duckdb` | — |
-| HTTP/APIs | `xh` | Fetch MCP |
-| Secrets scan | `gitleaks`, `trufflehog` | — |
-| Vuln scan | `trivy`, `nuclei`, `grype` | — |
-| SBOM | `syft` | — |
-| Static analysis | `semgrep`, `comby` | — |
-| Certificates | `step`, `mkcert` | — |
-| Recon | `subfinder`, `httpx`, `dnsx`, `katana` | — |
-| Container registry | `crane`, `cosign` | — |
-| Code indexing | `ctags`, `tree-sitter` | — |
+## Architecture Decision Records
+When making a significant architectural choice (database, framework, auth method,
+deployment model, major dependency), create `docs/adr/NNN-title.md` before implementing.
+Format: context, decision, consequences — keep it under 30 lines.
+Read existing ADRs in `docs/adr/` before proposing changes that contradict them.
 
-## Workflow Rules — IMPORTANT
-1. **Branch first**: Never commit directly to `main`.
-2. **Search before create**: `rg` the codebase before creating new functions/classes.
-3. **Check history before modify**: `git log --oneline -5 <file>` before editing.
-4. **Lint everything**: `shellcheck` for .sh, `ruff check` for .py, `hadolint` for Dockerfile.
-5. **Scan before push**: `gitleaks detect` before any `git push`.
-6. **Commit often**: After every working change, conventional commit.
-7. **Diff before commit**: `git diff --stat` — revert unrelated changes.
-8. **3-strike rule**: Same error 3 times → stop, write to `_scratchpad.md`, ask me.
+## CLI Tools (beyond built-in capabilities)
+Many CLI tools are pre-installed via cargo, uv, go, and bun.
+If a tool isn't found, check `type <tool>` before asking. If unsure about flags, run `<tool> --help` first.
 
-## Do NOT Touch
-`.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
+Use Claude Code's native Grep/Edit/Read/Glob tools for search and file operations.
+Use these CLI tools for tasks the built-in tools can't handle:
 
-## Context Hygiene
-- Use subagents for research to keep main context clean.
-- Write plans to `_scratchpad.md`, not just chat.
-- At session start, check `~/.claude/memory/handoff.md` — it contains auto-saved state from the previous session.
+| Task | Tool | Notes |
+|------|------|-------|
+| JSON | `jq` | Preferred over python -c for JSON pipelines |
+| YAML | `yq` | Same query syntax as jq |
+| CSV | `xsv` or `miller` | Typed column ops without awk one-liners |
+| SQL on files | `duckdb` | SQL over CSV/Parquet/JSON |
+| HTML extraction | `htmlq` | CSS selectors on HTML; safer than regex |
+| Compress/extract | `ouch` | Auto-detects format |
+| Structural replace | `comby` | `comby 'old :[x]' 'new :[x]' .py` — check `comby --help` for pattern syntax |
+| API test chains | `hurl` | Check `hurl --help` before writing .hurl files; syntax is non-obvious |
+| Code stats | `scc` | Fast line counts with complexity estimates |
+| HTTP requests | `xh` | Simpler syntax than curl for REST APIs; use curl for piping or complex auth |
+| Find & replace | `sd` | Good for literal string replacements in Bash; use Edit tool for code files |
 
-## Auto Memory Protocol — MANDATORY
-You have a persistent memory directory. Use it. This is not optional.
+Also installed: `gh`, `pgcli`/`litecli`/`usql`, `docker`/`lazydocker`, `kubectl`/`helm`,
+`gitleaks`/`trufflehog`, `trivy`/`grype`, `semgrep`.
 
-**MUST write to auto memory when:**
-1. User says "remember this" or uses `/remember` — immediately
-2. You discover a project convention or architecture pattern — after confirming it
-3. A debugging session reveals a non-obvious fix — after the fix works
-4. User corrects you on something — immediately update/remove the wrong memory
-5. You learn a user preference from their feedback — after 2+ consistent signals
-6. A key decision is made (tool choice, architecture, workflow) — after the decision
+## Git
+- Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`)
+- Create feature branches for changes; push feature branches, not main
 
-**MUST NOT write to memory:**
-- Speculative conclusions from reading one file
-- Session-specific temporary state (use `_scratchpad.md` instead)
-- Anything that duplicates CLAUDE.md or project CLAUDE.md
+## Memory
+Write to `~/.claude/memory/MEMORY.md` when the user says "remember", you discover a non-obvious fix,
+or the user corrects you. Append new entries at the bottom. If the file exceeds 150 lines,
+summarize the oldest 50 lines into a single paragraph before appending.
+Write facts and decisions, not hypotheses. If uncertain, prefix with "Unconfirmed:".
 
-**How:** Use the Write/Edit tools on files in your auto memory directory.
-Keep `MEMORY.md` under 150 lines. Create topic files for details.
+## Style
+- Start responses with the answer, command, or action — not restatements of the question.
+- For operational "how" questions, lead with the command, then explain if non-obvious.
+- For design/architecture questions, explain the approach first.
 
-## Compaction Protocol
-When context is being compacted, ALWAYS preserve in the summary:
-1. **Current task** — what you are working on and why
-2. **Branch name** — the active git branch
-3. **Modified files** — all files changed in this session
-4. **Test status** — last test commands and pass/fail results
-5. **Blockers** — any unresolved errors or open questions
-6. **Key decisions** — architectural or design choices made
-7. **Next steps** — what needs to happen next
+User instructions override project-local CLAUDE.md, which overrides this global file.
+Verify after changes. Run tests before committing.

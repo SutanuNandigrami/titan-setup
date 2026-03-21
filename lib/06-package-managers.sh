@@ -8,10 +8,14 @@ else
     ok "cargo already installed: $(cargo --version)"
   else
     echo "  Installing Rust..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || true
     # shellcheck source=/dev/null
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    ok "cargo installed: $(cargo --version)"
+    if command -v cargo &>/dev/null; then
+      ok "cargo installed: $(cargo --version)"
+    else
+      fail "cargo install failed"; exit 1
+    fi
   fi
   # Ensure cargo binaries are on PATH for the rest of this script (idempotent)
   # shellcheck source=/dev/null
@@ -22,9 +26,13 @@ else
     ok "uv already installed: $(uv --version)"
   else
     echo "  Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh || true
     export PATH="$HOME/.local/bin:$PATH"
-    ok "uv installed: $(uv --version)"
+    if command -v uv &>/dev/null; then
+      ok "uv installed: $(uv --version)"
+    else
+      fail "uv install failed"; exit 1
+    fi
   fi
   # Ensure uv/uvx binaries are on PATH for the rest of this script
   export PATH="$HOME/.local/bin:$PATH"
@@ -34,15 +42,19 @@ else
     ok "bun already installed: $(bun --version)"
   else
     echo "  Installing bun..."
-    curl -fsSL https://bun.sh/install | bash
+    curl -fsSL https://bun.sh/install | bash || true
     export PATH="$HOME/.bun/bin:$PATH"
-    ok "bun installed: $(bun --version)"
+    if command -v bun &>/dev/null; then
+      ok "bun installed: $(bun --version)"
+    else
+      warn "bun install failed — will retry later or install manually"
+    fi
   fi
   # Ensure bun globals are on PATH for the rest of this script
   export PATH="$HOME/.bun/bin:$PATH"
 
   # ─── Go ───
-  GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
+  GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1 || true)
   GO_NEED_INSTALL=false
   if command -v go &>/dev/null && ! $FORCE_UPDATES; then
     GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+' || true)
@@ -69,13 +81,13 @@ else
     if [[ -z "$GO_LATEST" ]]; then
       warn "Failed to fetch Go version — skipping"
     else
-      wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
-      # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
-      sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+      wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+        # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
+        sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
         sudo rm -rf /usr/local/go &&
-        sudo mv "$WORKDIR/go" /usr/local/go
-      export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
-      ok "go installed: $(go version)"
+        sudo mv "$WORKDIR/go" /usr/local/go &&
+        export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH" &&
+        ok "go installed: $(go version)" || warn "go install failed"
     fi
   fi
   export GOPATH="$HOME/go"
@@ -86,9 +98,13 @@ else
     ok "mise already installed"
   else
     echo "  Installing mise..."
-    curl https://mise.run | sh
+    curl https://mise.run | sh || true
     export PATH="$HOME/.local/bin:$PATH"
-    ok "mise installed"
+    if command -v mise &>/dev/null; then
+      ok "mise installed"
+    else
+      warn "mise install failed"
+    fi
   fi
   # Activate mise in the current script session so shims (node, python, etc.) are on PATH.
   # .bashrc already has eval "$(mise activate bash)" via SHELL_BLOCK — this covers the script run itself.

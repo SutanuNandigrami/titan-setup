@@ -868,13 +868,16 @@ else
       FONT_DIR="$HOME/.local/share/fonts"
       mkdir -p "$FONT_DIR"
       TMPFONT=$(mktemp -d)
-      curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
-        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
-      tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
-      cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
-      fc-cache -f "$FONT_DIR" 2>/dev/null
+      if curl -fsSL -o "$TMPFONT/JetBrainsMono.tar.xz" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"; then
+        tar -xf "$TMPFONT/JetBrainsMono.tar.xz" -C "$TMPFONT"
+        cp "$TMPFONT"/*.ttf "$FONT_DIR/" 2>/dev/null || true
+        fc-cache -f "$FONT_DIR" 2>/dev/null
+        ok "JetBrainsMono Nerd Font installed"
+      else
+        warn "JetBrainsMono Nerd Font download failed"
+      fi
       rm -rf "$TMPFONT"
-      ok "JetBrainsMono Nerd Font installed"
     fi
     # Note: Cosmic Terminal font is NOT set here — change it manually via terminal settings.
   fi
@@ -919,10 +922,14 @@ else
     ok "cargo already installed: $(cargo --version)"
   else
     echo "  Installing Rust..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || true
     # shellcheck source=/dev/null
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    ok "cargo installed: $(cargo --version)"
+    if command -v cargo &>/dev/null; then
+      ok "cargo installed: $(cargo --version)"
+    else
+      fail "cargo install failed"; exit 1
+    fi
   fi
   # Ensure cargo binaries are on PATH for the rest of this script (idempotent)
   # shellcheck source=/dev/null
@@ -933,9 +940,13 @@ else
     ok "uv already installed: $(uv --version)"
   else
     echo "  Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh || true
     export PATH="$HOME/.local/bin:$PATH"
-    ok "uv installed: $(uv --version)"
+    if command -v uv &>/dev/null; then
+      ok "uv installed: $(uv --version)"
+    else
+      fail "uv install failed"; exit 1
+    fi
   fi
   # Ensure uv/uvx binaries are on PATH for the rest of this script
   export PATH="$HOME/.local/bin:$PATH"
@@ -945,15 +956,19 @@ else
     ok "bun already installed: $(bun --version)"
   else
     echo "  Installing bun..."
-    curl -fsSL https://bun.sh/install | bash
+    curl -fsSL https://bun.sh/install | bash || true
     export PATH="$HOME/.bun/bin:$PATH"
-    ok "bun installed: $(bun --version)"
+    if command -v bun &>/dev/null; then
+      ok "bun installed: $(bun --version)"
+    else
+      warn "bun install failed — will retry later or install manually"
+    fi
   fi
   # Ensure bun globals are on PATH for the rest of this script
   export PATH="$HOME/.bun/bin:$PATH"
 
   # ─── Go ───
-  GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1)
+  GO_LATEST=$(curl -s https://go.dev/VERSION?m=text | head -1 || true)
   GO_NEED_INSTALL=false
   if command -v go &>/dev/null && ! $FORCE_UPDATES; then
     GO_CURRENT=$(go version | grep -oP '\d+\.\d+\.\d+' || true)
@@ -980,13 +995,13 @@ else
     if [[ -z "$GO_LATEST" ]]; then
       warn "Failed to fetch Go version — skipping"
     else
-      wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz"
-      # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
-      sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+      wget -q -P "$WORKDIR" "https://go.dev/dl/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
+        # Extract to temp dir first, then atomic swap (prevents broken state if tar fails)
+        sudo tar -C "$WORKDIR" -xzf "$WORKDIR/${GO_LATEST}.linux-${ARCH_GO}.tar.gz" &&
         sudo rm -rf /usr/local/go &&
-        sudo mv "$WORKDIR/go" /usr/local/go
-      export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
-      ok "go installed: $(go version)"
+        sudo mv "$WORKDIR/go" /usr/local/go &&
+        export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH" &&
+        ok "go installed: $(go version)" || warn "go install failed"
     fi
   fi
   export GOPATH="$HOME/go"
@@ -997,9 +1012,13 @@ else
     ok "mise already installed"
   else
     echo "  Installing mise..."
-    curl https://mise.run | sh
+    curl https://mise.run | sh || true
     export PATH="$HOME/.local/bin:$PATH"
-    ok "mise installed"
+    if command -v mise &>/dev/null; then
+      ok "mise installed"
+    else
+      warn "mise install failed"
+    fi
   fi
   # Activate mise in the current script session so shims (node, python, etc.) are on PATH.
   # .bashrc already has eval "$(mise activate bash)" via SHELL_BLOCK — this covers the script run itself.
@@ -1722,6 +1741,14 @@ if [[ "$INSTALL_MODE" == "desktop" ]]; then
   else ok "spotify_player (exists)"; fi
 fi
 
+# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
+# Defined here (before nushell) because it's first used below and again in the Go section.
+_gh_latest_tag() {
+  local url
+  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
+  basename "$url" 2>/dev/null
+}
+
 # nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
@@ -1801,13 +1828,6 @@ _go_binary_install() {
 }
 
 mkdir -p "$HOME/go/bin"
-
-# Helper: get latest release tag via redirect (avoids GitHub API rate limits)
-_gh_latest_tag() {
-  local url
-  url=$(curl -sILo /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest" 2>/dev/null) || true
-  basename "$url" 2>/dev/null
-}
 
 # ── Parallel version fetches (saves ~15s vs sequential) ─────────────────────
 _VER_DIR=$(mktemp -d)
@@ -2000,7 +2020,7 @@ else ok "helm (exists)"; fi
 # gcloud CLI
 if ! command -v gcloud &>/dev/null; then
   curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
-    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
   apt_update && sudo apt-get install -y -qq google-cloud-cli &&
@@ -2009,7 +2029,7 @@ else ok "gcloud (exists)"; fi
 
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
-  wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null
+  wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
   apt_update && sudo apt-get install -y -qq terraform packer &&
     ok "terraform + packer" || warn "terraform/packer install failed"
@@ -2043,14 +2063,14 @@ else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
-  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
+  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   apt_update && sudo apt-get install -y -qq trivy &&
     ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
-    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null
+    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
     echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
     ok "trivy (key migrated)"
   else
@@ -2068,7 +2088,7 @@ else ok "mc (exists)"; fi
 # GitHub CLI
 if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
-  wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null || true
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
   apt_update && sudo apt-get install -y -qq gh &&
     ok "gh" || warn "gh install failed"
@@ -2080,8 +2100,8 @@ SHELLCHECK_VERSION=$(_gh_latest_tag "koalaman/shellcheck")
 if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
   warn "shellcheck — failed to fetch version, keeping existing"
 elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
-  wget -qO "$WORKDIR/shellcheck.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${ARCH_FULL}.tar.xz"
-  tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ &&
+  wget -qO "$WORKDIR/shellcheck.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${ARCH_FULL}.tar.xz" &&
+    tar xf "$WORKDIR/shellcheck.tar.xz" -C "$WORKDIR" && sudo mv "$WORKDIR/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ &&
     ok "shellcheck ($SHELLCHECK_VERSION)" || warn "shellcheck install failed"
 else ok "shellcheck (exists)"; fi
 
