@@ -1593,7 +1593,7 @@ SERVICEEOF
   _BCF_DB="$HOME/.config/better-ccflare/better-ccflare.db"
   _CC_CREDS="$HOME/.claude/.credentials.json"
   if [[ -f "$_CC_CREDS" ]] && command -v duckdb &>/dev/null && [[ -f "$_BCF_DB" ]]; then
-    _BCF_COUNT=$(duckdb "$_BCF_DB" "SELECT count(*) FROM accounts;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo "0")
+    _BCF_COUNT=$(duckdb -noheader -csv "$_BCF_DB" "SELECT count(*) FROM accounts;" 2>/dev/null | tr -d '[:space:]' || echo "0")
     if [[ "$_BCF_COUNT" == "0" ]]; then
       _BCF_ACCESS=$(jq -r '.claudeAiOauth.accessToken // empty' "$_CC_CREDS")
       _BCF_REFRESH=$(jq -r '.claudeAiOauth.refreshToken // empty' "$_CC_CREDS")
