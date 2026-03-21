@@ -1725,7 +1725,7 @@ fi
 # nushell — structured data shell (direct binary download; compiling takes 10-15 min)
 if ! command -v nu &>/dev/null; then
   echo -n "  nu (nushell)..."
-  _NU_VER=$(curl -sf https://api.github.com/repos/nushell/nushell/releases/latest | jq -r '.tag_name // empty' || true)
+  _NU_VER=$(_gh_latest_tag "nushell/nushell")
   _NU_INSTALLED=false
   if [[ -n "$_NU_VER" ]]; then
     _NU_URL="https://github.com/nushell/nushell/releases/download/${_NU_VER}/nu-${_NU_VER}-${ARCH_RUST}-unknown-linux-musl.tar.gz"
@@ -1968,7 +1968,7 @@ else ok "claude-esp (exists)"; fi
 # claude-squad — manage multiple AI terminal agents in parallel
 # Note: go install fails due to go.mod module path mismatch — use binary release instead
 if ! command -v claude-squad &>/dev/null; then
-  CSVER=$(curl -sf https://api.github.com/repos/smtg-ai/claude-squad/releases/latest | jq -r '.tag_name' || true)
+  CSVER=$(_gh_latest_tag "smtg-ai/claude-squad")
   if [[ -n "$CSVER" && "$CSVER" != "null" ]]; then
     mkdir -p "$HOME/.local/bin"
     curl -sfL "https://github.com/smtg-ai/claude-squad/releases/download/${CSVER}/claude-squad_${CSVER#v}_linux_${ARCH_AMD}.tar.gz" -o /tmp/cs.tar.gz &&
@@ -2076,7 +2076,7 @@ else ok "gh (exists)"; fi
 
 # ShellCheck linter (latest binary, apt version is ancient)
 
-SHELLCHECK_VERSION=$(curl -s https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq -r .tag_name)
+SHELLCHECK_VERSION=$(_gh_latest_tag "koalaman/shellcheck")
 if [[ -z "$SHELLCHECK_VERSION" || "$SHELLCHECK_VERSION" == "null" ]]; then
   warn "shellcheck — failed to fetch version, keeping existing"
 elif ! command -v shellcheck &>/dev/null || [[ "$(shellcheck --version | grep version: | awk '{print $2}')" != "${SHELLCHECK_VERSION#v}" ]]; then
