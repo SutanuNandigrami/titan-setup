@@ -68,8 +68,12 @@ warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 # Cached apt-get update — runs once per session, skips on subsequent calls
+# Pass --force to re-run after adding new apt repos (resets the cache)
 _APT_UPDATED=false
 apt_update() {
+  if [[ "${1:-}" == "--force" ]]; then
+    _APT_UPDATED=false
+  fi
   if ! $_APT_UPDATED; then
     run_q sudo apt-get update -qq && _APT_UPDATED=true
   fi
@@ -1165,16 +1169,15 @@ command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }
 
 # playwright — browser automation and E2E testing
+# Ensure node is on PATH (mise shims may not be sourced in non-interactive context)
+command -v node &>/dev/null || export PATH="$HOME/.local/share/mise/shims:$PATH"
 if ! bun pm ls -g 2>/dev/null | grep -q playwright; then
   run_q bun install -g playwright && ok "playwright" || warn "playwright"
   # Install chromium: apt deps need root, browser download runs as current user
   if command -v playwright &>/dev/null; then
     # install-deps uses apt-get; titan has NOPASSWD sudo so playwright's internal sudo call works
     sudo -E env "PATH=$PATH" "$(command -v playwright)" install-deps chromium >>"$LOG_FILE" 2>&1 || true
-    # mise shims may not be on PATH in non-interactive context; ensure node is findable
-    _PW_PATH="$PATH"
-    command -v node &>/dev/null || _PW_PATH="$HOME/.local/share/mise/shims:$_PW_PATH"
-    run_q env PATH="$_PW_PATH" playwright install chromium && ok "playwright chromium" ||
+    run_q playwright install chromium && ok "playwright chromium" ||
       warn "playwright chromium (install manually: playwright install chromium)"
   fi
 else
@@ -1194,8 +1197,9 @@ elif command -v docker &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
+  # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
   if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
-    sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
+    /usr/bin/sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
     sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
     ok "n8n docker image"
   else
@@ -2023,7 +2027,7 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  apt_update && sudo apt-get install -y -qq google-cloud-cli &&
+  apt_update --force && sudo apt-get install -y -qq google-cloud-cli &&
     ok "gcloud" || warn "gcloud install failed"
 else ok "gcloud (exists)"; fi
 
@@ -2031,7 +2035,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  apt_update && sudo apt-get install -y -qq terraform packer &&
+  apt_update --force && sudo apt-get install -y -qq terraform packer &&
     ok "terraform + packer" || warn "terraform/packer install failed"
 else ok "terraform (exists)"; fi
 
@@ -2065,7 +2069,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  apt_update && sudo apt-get install -y -qq trivy &&
+  apt_update --force && sudo apt-get install -y -qq trivy &&
     ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -2090,7 +2094,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null || true
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  apt_update && sudo apt-get install -y -qq gh &&
+  apt_update --force && sudo apt-get install -y -qq gh &&
     ok "gh" || warn "gh install failed"
 else ok "gh (exists)"; fi
 
@@ -3017,7 +3021,8 @@ ok "Git delta pager configured"
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Tailscale — install, connect, lock SSH ─────────────────────────────
   if ! command -v tailscale &>/dev/null; then
-    run_q curl -fsSL https://tailscale.com/install.sh | sh
+    curl -fsSL https://tailscale.com/install.sh | sudo bash >>"$LOG_FILE" 2>&1 &&
+      ok "Tailscale installed" || warn "Tailscale install failed"
   fi
   # --reset ensures idempotent re-runs; --operator grants non-root user access
   if sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \

@@ -2,7 +2,8 @@
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   # ── Tailscale — install, connect, lock SSH ─────────────────────────────
   if ! command -v tailscale &>/dev/null; then
-    run_q curl -fsSL https://tailscale.com/install.sh | sh
+    curl -fsSL https://tailscale.com/install.sh | sudo bash >>"$LOG_FILE" 2>&1 &&
+      ok "Tailscale installed" || warn "Tailscale install failed"
   fi
   # --reset ensures idempotent re-runs; --operator grants non-root user access
   if sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \

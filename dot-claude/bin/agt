@@ -56,7 +56,8 @@ slot_model() {
 # Extract a single frontmatter field value from a file
 fm_field() {
   local file="$1" field="$2"
-  grep "^${field}:" "$file" | head -1 | sd "^${field}:\\s*" '' | sed "s/^[[:space:]]*//;s/[[:space:]]*$//" | tr -d '"'
+  # grep returns 1 if no match — guard with || true to avoid pipefail abort
+  grep "^${field}:" "$file" 2>/dev/null | head -1 | sd "^${field}:\\s*" '' | sed "s/^[[:space:]]*//;s/[[:space:]]*$//" | tr -d '"' || true
 }
 
 # ─── Commands ──────────────────────────────────────────────────────────────────

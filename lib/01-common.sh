@@ -25,8 +25,12 @@ warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 # Cached apt-get update — runs once per session, skips on subsequent calls
+# Pass --force to re-run after adding new apt repos (resets the cache)
 _APT_UPDATED=false
 apt_update() {
+  if [[ "${1:-}" == "--force" ]]; then
+    _APT_UPDATED=false
+  fi
   if ! $_APT_UPDATED; then
     run_q sudo apt-get update -qq && _APT_UPDATED=true
   fi

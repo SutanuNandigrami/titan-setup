@@ -418,7 +418,7 @@ if ! command -v gcloud &>/dev/null; then
     sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-  apt_update && sudo apt-get install -y -qq google-cloud-cli &&
+  apt_update --force && sudo apt-get install -y -qq google-cloud-cli &&
     ok "gcloud" || warn "gcloud install failed"
 else ok "gcloud (exists)"; fi
 
@@ -426,7 +426,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-  apt_update && sudo apt-get install -y -qq terraform packer &&
+  apt_update --force && sudo apt-get install -y -qq terraform packer &&
     ok "terraform + packer" || warn "terraform/packer install failed"
 else ok "terraform (exists)"; fi
 
@@ -460,7 +460,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
-  apt_update && sudo apt-get install -y -qq trivy &&
+  apt_update --force && sudo apt-get install -y -qq trivy &&
     ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
@@ -485,7 +485,7 @@ if ! command -v gh &>/dev/null; then
   sudo mkdir -p -m 755 /etc/apt/keyrings
   wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null || true
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  apt_update && sudo apt-get install -y -qq gh &&
+  apt_update --force && sudo apt-get install -y -qq gh &&
     ok "gh" || warn "gh install failed"
 else ok "gh (exists)"; fi
 
