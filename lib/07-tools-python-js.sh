@@ -116,20 +116,24 @@ if $MINIMAL; then
 elif command -v docker &>/dev/null; then
   check_port 5678 "n8n" "n8n" || true
   # Add user to docker group and ensure daemon is running
-  sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true
 
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
-  # Restart user systemd manager so it picks up the new docker group membership.
-  # Without this, user services (n8n, letta) crash-loop on "permission denied" to
-  # the docker socket because group changes only take effect on new sessions.
-  sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+  # Add docker group only if not already a member; restart user systemd to pick it up.
+  # On re-run, skip — restarting user@.service kills all running user services.
+  if ! id -nG "$USER" 2>/dev/null | grep -qw docker; then
+    sudo usermod -aG docker "$USER" 2>/dev/null || true
+    sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+  fi
 
-  # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
+  # Pull image — skip if already present (idempotent re-run)
   # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
-  if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
+  if docker image inspect n8nio/n8n:latest &>/dev/null ||
+    sudo docker image inspect n8nio/n8n:latest &>/dev/null; then
+    ok "n8n docker image (exists)"
+  elif docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
     /usr/bin/sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
     sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
     ok "n8n docker image"
