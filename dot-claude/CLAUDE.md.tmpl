@@ -1,57 +1,62 @@
 # TITAN_ENGINEER_NAME — Global Operating Manual
 
-## Preferences
-- Be direct. Skip preambles. When I ask "how", give the command.
-- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
-- Python 3.10+ with type hints.
-
 ## Workflow
-1. **Search before create** — search the codebase before adding new functions/classes
-2. **Check history** — `git log --oneline -5 <file>` before editing
-3. **Verify after changes** — run the project's test/build commands after every change
-4. **Scan before push** — `gitleaks detect` before any `git push`
-5. **Diff before commit** — `git diff --stat` — revert unrelated changes
+1. **Search before create** — search the codebase before adding new functions, files, or classes
+2. **Understand before changing** — read the file; if the structure seems intentional but unclear, check `git log --oneline -10 <file>` for context
+3. **Verify after changes** — run the project's test/build commands after every change; fix failures before moving on
+4. **Diff before commit** — `git diff --stat` to confirm only intended files are staged; drop unrelated changes
+5. **Scan before push** — run `gitleaks detect --no-banner` before any push; if secrets found, stop and report the file and line
 
-## CLI Tools Installed via Titan
+## Recovery
+- **Test failure after your change?** Read the full error. Usually the code is wrong. If the test assertion itself is clearly incorrect (wrong expected value, testing removed behavior), fix the test and explain why.
+- **Same error 3 times?** Stop. Write what you tried to `_scratchpad.md` and ask the user how to proceed.
+- **Tool missing?** `type <tool>` to check, then try alternatives from the table below before asking.
+- **Unsure about approach?** Read existing code patterns and `git log` before proposing a new one.
+
+## Bug Fixes
+Every bug fix includes a regression test that would have caught it.
+Commit fix + test together. Run the project's test suite before committing.
+
+## CLI Tools (Titan-Installed)
 100+ CLI tools are installed. They replace MCPs at zero context cost.
-Never guess flags — discover on demand: `<tool> --help` or `tldr <tool>`.
+For unfamiliar tools, check `<tool> --help` or `tldr <tool>` before guessing flags.
+For well-known tools (git, jq, docker), use flags you're confident about directly.
 Browse what's installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`.
 
-When running bash commands, prefer these over legacy equivalents:
+Modern alternatives available on this system (use whichever fits best):
 
-| Task | Use | Instead of |
-|------|-----|------------|
-| HTTP requests | `xh` | curl |
-| Find & replace | `sd` | sed |
-| JSON | `jq` | python -c |
-| YAML | `yq` | python -c |
-| CSV | `xsv` or `miller` | awk |
-| SQL on files | `duckdb` | sqlite3 |
-| HTML extraction | `htmlq` | regex |
-| Compress/extract | `ouch` | tar/unzip/7z |
-| Structural replace | `comby` | regex sed |
-| API test chains | `hurl` | curl scripts |
-| Code stats | `scc` | cloc |
+| Task | Tool | Notes |
+|------|------|-------|
+| HTTP requests | `xh` | Simpler syntax than curl for REST APIs; use curl for pipe-to-bash or complex auth |
+| Find & replace | `sd` | Good for literal replacements; use sed for complex regex |
+| JSON | `jq` | Preferred over python -c for JSON pipelines |
+| YAML | `yq` | Same query syntax as jq |
+| CSV | `xsv` or `miller` | Typed column ops without awk one-liners |
+| SQL on files | `duckdb` | SQL over CSV/Parquet/JSON; replaces sqlite3 for analytics |
+| HTML extraction | `htmlq` | CSS selectors on HTML; safer than regex extraction |
+| Compress/extract | `ouch` | Auto-detects format; replaces tar/unzip/7z |
+| Structural replace | `comby` | Language-aware find/replace across files |
+| API test chains | `hurl` | Declarative HTTP test sequences |
+| Code stats | `scc` | Fast line counts with complexity estimates |
 
-Use CLIs instead of MCPs — zero context tokens: `gh` (GitHub), `pgcli`/`litecli`/`usql` (databases),
+CLIs that replace MCPs (zero context tokens): `gh` (GitHub), `pgcli`/`litecli`/`usql` (databases),
 `docker`/`lazydocker` (containers), `aws` (AWS), `kubectl`/`helm` (K8s),
 `gitleaks`/`trufflehog` (secrets), `trivy`/`grype` (vulns), `semgrep` (SAST).
 
-## When Stuck
-- Tool missing? `type <tool>` to check, then try alternatives before asking.
-- Tests fail after your change? Fix the code, not the test. Read the actual error.
-- Same error 3 times? Stop. Write what you tried to `_scratchpad.md` and ask me.
-- Corrected twice on same issue? `/clear` and restart with a better prompt.
-- Unsure about approach? Read existing code and `git log` for prior decisions first.
-
-## Bug Fixes Always Need Tests
-Every bug fix must include a regression test that would have caught it.
-Commit fix + test together. Run the project's test suite before committing.
+## Git
+- Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`)
+- Create feature branches for changes; push feature branches, not main
 
 ## Memory
-Write to `~/.claude/memory/` when: user says "remember", you find a non-obvious fix,
+Write to `~/.claude/memory/` when: user says "remember", you discover a non-obvious fix,
 a key decision is made, or the user corrects you. Keep `MEMORY.md` under 150 lines.
-Do NOT write speculative conclusions or session-specific temp state (use `_scratchpad.md`).
-At session start, read `_scratchpad.md` and `~/.claude/memory/handoff.md` if they exist.
+Write facts and decisions, not hypotheses. If uncertain, prefix with "Unconfirmed:".
+Temp session state goes in `_scratchpad.md`, not memory.
 
-## Verify after changes — run tests before committing
+## Style
+- Start responses with the answer, command, or action — not "Sure", "Great question", or restatements.
+- For operational "how" questions, lead with the command, then explain if non-obvious.
+- For design/architecture questions, explain the approach first.
+- Python: 3.10+ with type hints.
+
+Project-local CLAUDE.md overrides this file when they conflict.
