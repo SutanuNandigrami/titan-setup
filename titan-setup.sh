@@ -1661,7 +1661,7 @@ CARGO_CRATES=(
 )
 # Extended cargo crates (skipped with --minimal)
 if ! $MINIMAL; then
-  CARGO_CRATES+=(websocat bore-cli hurl jwt-cli oha)
+  CARGO_CRATES+=(websocat bore-cli jwt-cli oha)
 fi
 
 # ── Parallel strategy: start RTK clone+patch while binstall runs ──────────
