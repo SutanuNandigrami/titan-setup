@@ -37,15 +37,23 @@ apt_update() {
 }
 
 # Port pre-flight check — warn if a port is already in use by another service.
-# Accepts optional 3rd arg: docker container name to check before warning.
-# Idempotent: if the expected container/service already owns the port, skip.
+# Accepts optional 3rd arg: expected owner (docker container name OR process name).
+# Idempotent: if the expected owner already has the port, skip silently.
 check_port() {
-  local port="$1" service="$2" container="${3:-}"
+  local port="$1" service="$2" expected_owner="${3:-}"
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
-    # If a docker container name is given, check if it's already running on this port
-    if [[ -n "$container" ]] && command -v docker &>/dev/null &&
-      docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
-      return 0  # our container already owns this port — idempotent
+    if [[ -n "$expected_owner" ]]; then
+      # Check docker container name
+      if command -v docker &>/dev/null &&
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${expected_owner}$"; then
+        return 0
+      fi
+      # Check process name from ss output
+      local owner
+      owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+      if [[ "$owner" == *"$expected_owner"* ]]; then
+        return 0
+      fi
     fi
     local owner
     owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")

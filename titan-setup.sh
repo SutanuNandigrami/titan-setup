@@ -80,15 +80,23 @@ apt_update() {
 }
 
 # Port pre-flight check — warn if a port is already in use by another service.
-# Accepts optional 3rd arg: docker container name to check before warning.
-# Idempotent: if the expected container/service already owns the port, skip.
+# Accepts optional 3rd arg: expected owner (docker container name OR process name).
+# Idempotent: if the expected owner already has the port, skip silently.
 check_port() {
-  local port="$1" service="$2" container="${3:-}"
+  local port="$1" service="$2" expected_owner="${3:-}"
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
-    # If a docker container name is given, check if it's already running on this port
-    if [[ -n "$container" ]] && command -v docker &>/dev/null &&
-      docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
-      return 0  # our container already owns this port — idempotent
+    if [[ -n "$expected_owner" ]]; then
+      # Check docker container name
+      if command -v docker &>/dev/null &&
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${expected_owner}$"; then
+        return 0
+      fi
+      # Check process name from ss output
+      local owner
+      owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+      if [[ "$owner" == *"$expected_owner"* ]]; then
+        return 0
+      fi
     fi
     local owner
     owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
@@ -1404,6 +1412,7 @@ else
   fi
 
   if ! $LETTA_SKIP; then
+    check_port "$LETTA_PORT" "letta" "letta-server" || true
     mkdir -p "$HOME/.letta/.persist/pgdata"
 
     # Systemd user service using --env-file to avoid secrets in unit file
@@ -1539,6 +1548,7 @@ PYEOF
   fi
 
   # Phase B: Systemd user service
+  check_port "$CCFLARE_PORT" "better-ccflare" "better-ccflare" || true
   # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
   _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
@@ -2970,6 +2980,7 @@ else
     warn "LettaCtrl: bun not found — skipping"
     LETTA_CTRL_SKIP=true
   else
+    check_port "$LETTA_CTRL_PORT" "letta-ctrl" "bun" || true
     mkdir -p "$HOME/.config/letta"
 
     # Write server

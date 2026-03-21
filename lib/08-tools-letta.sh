@@ -99,6 +99,7 @@ else
   fi
 
   if ! $LETTA_SKIP; then
+    check_port "$LETTA_PORT" "letta" "letta-server" || true
     mkdir -p "$HOME/.letta/.persist/pgdata"
 
     # Systemd user service using --env-file to avoid secrets in unit file
@@ -234,6 +235,7 @@ PYEOF
   fi
 
   # Phase B: Systemd user service
+  check_port "$CCFLARE_PORT" "better-ccflare" "better-ccflare" || true
   # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
   _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
