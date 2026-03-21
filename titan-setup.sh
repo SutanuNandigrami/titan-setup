@@ -1211,6 +1211,11 @@ elif command -v docker &>/dev/null; then
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
+  # Restart user systemd manager so it picks up the new docker group membership.
+  # Without this, user services (n8n, letta) crash-loop on "permission denied" to
+  # the docker socket because group changes only take effect on new sessions.
+  sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+
   # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
   # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
   if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
