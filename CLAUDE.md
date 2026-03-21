@@ -93,3 +93,5 @@ Reduce false positives in grep-based tests by excluding guarded lines
 - `rules/` — 7 path-gated rules (shell, python, docker, terraform, security, memory, skill-authoring)
 - `agents/` — researcher (Haiku), planner (Opus), reviewer (Sonnet)
 - `commands/` — /review, /tools, /gh-action
+
+## Remember: `just build && just test` after every lib/*.sh change. Guard every failable command.

@@ -3,26 +3,21 @@
 ## Preferences
 - Be direct. Skip preambles. When I ask "how", give the command.
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
-- Python 3.10+ with type hints. Bash must pass shellcheck.
+- Python 3.10+ with type hints.
 
 ## Workflow
-1. **Branch first** — never commit directly to `main`
-2. **Search before create** — search the codebase before adding new functions/classes
-3. **Check history** — `git log --oneline -5 <file>` before editing
-4. **Lint** — `shellcheck` for .sh, `ruff check` for .py, `hadolint` for Dockerfile
-5. **Scan before push** — `gitleaks detect` before any `git push`
-6. **Verify after changes** — run the project's test/build/lint commands after every change
-7. **Diff before commit** — `git diff --stat` — revert unrelated changes
-
-## Protected Files
-Never read, edit, or commit: `.env*`, `*credentials*`, `*secret*`, `~/.ssh/*`, `~/.bashrc`, `~/.profile`
+1. **Search before create** — search the codebase before adding new functions/classes
+2. **Check history** — `git log --oneline -5 <file>` before editing
+3. **Verify after changes** — run the project's test/build commands after every change
+4. **Scan before push** — `gitleaks detect` before any `git push`
+5. **Diff before commit** — `git diff --stat` — revert unrelated changes
 
 ## CLI Tools Installed via Titan
 100+ CLI tools are installed. They replace MCPs at zero context cost.
 Never guess flags — discover on demand: `<tool> --help` or `tldr <tool>`.
 Browse what's installed: `uv tool list`, `ls ~/.cargo/bin/`, `ls ~/go/bin/`.
 
-When running bash commands, prefer these modern tools over legacy equivalents:
+When running bash commands, prefer these over legacy equivalents:
 
 | Task | Use | Instead of |
 |------|-----|------------|
@@ -36,23 +31,18 @@ When running bash commands, prefer these modern tools over legacy equivalents:
 | Compress/extract | `ouch` | tar/unzip/7z |
 | Structural replace | `comby` | regex sed |
 | API test chains | `hurl` | curl scripts |
-| JWT inspect | `jwt` | python/openssl |
 | Code stats | `scc` | cloc |
-| Greppable JSON | `gron` | manual jq |
 
-For tasks with built-in Claude Code tools (file search, text search, file reading),
-use those native tools first. Use the CLI tools above for bash-specific workflows.
-
-Use CLIs instead of MCPs: `gh` for GitHub, `pgcli`/`litecli`/`usql` for databases,
-`docker`/`lazydocker` for containers, `aws` for AWS, `kubectl`/`helm` for K8s,
-`gitleaks`/`trufflehog` for secrets, `trivy`/`grype` for vulns, `semgrep` for SAST.
+Use CLIs instead of MCPs — zero context tokens: `gh` (GitHub), `pgcli`/`litecli`/`usql` (databases),
+`docker`/`lazydocker` (containers), `aws` (AWS), `kubectl`/`helm` (K8s),
+`gitleaks`/`trufflehog` (secrets), `trivy`/`grype` (vulns), `semgrep` (SAST).
 
 ## When Stuck
 - Tool missing? `type <tool>` to check, then try alternatives before asking.
-- Tests fail after your change? Fix the code, not the test. Read the actual error message.
-- Same error 3 times? Stop looping. Write what you tried to `_scratchpad.md` and ask me.
-- Unsure about approach? Read the existing code first. Check `git log` for prior decisions.
+- Tests fail after your change? Fix the code, not the test. Read the actual error.
+- Same error 3 times? Stop. Write what you tried to `_scratchpad.md` and ask me.
 - Corrected twice on same issue? `/clear` and restart with a better prompt.
+- Unsure about approach? Read existing code and `git log` for prior decisions first.
 
 ## Bug Fixes Always Need Tests
 Every bug fix must include a regression test that would have caught it.
@@ -63,3 +53,5 @@ Write to `~/.claude/memory/` when: user says "remember", you find a non-obvious 
 a key decision is made, or the user corrects you. Keep `MEMORY.md` under 150 lines.
 Do NOT write speculative conclusions or session-specific temp state (use `_scratchpad.md`).
 At session start, read `_scratchpad.md` and `~/.claude/memory/handoff.md` if they exist.
+
+## Verify after changes — run tests before committing
