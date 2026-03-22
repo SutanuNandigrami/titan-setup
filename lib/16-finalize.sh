@@ -85,6 +85,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
         ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" ||
         warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
     fi
+    if ! $CLAUDECODEUI_SKIP; then
+      tailscale serve --bg --https="${CLAUDECODEUI_PORT}" "http://localhost:${CLAUDECODEUI_PORT}" 2>/dev/null &&
+        ok "tailscale serve: claudecodeui → https://${TS_HOSTNAME}:${CLAUDECODEUI_PORT}" ||
+        warn "tailscale serve for claudecodeui failed — run: tailscale serve --https=${CLAUDECODEUI_PORT} http://localhost:${CLAUDECODEUI_PORT}"
+    fi
   fi
 
   # ── Add Claude user to docker group ────────────────────────────────────
@@ -140,6 +145,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
+  $CLAUDECODEUI_SKIP || echo "    claudecodeui:   https://${TS_HOSTNAME}:${CLAUDECODEUI_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
   if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
@@ -168,6 +174,7 @@ else
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
+  $CLAUDECODEUI_SKIP || echo "    claudecodeui:     http://localhost:${CLAUDECODEUI_PORT}"
   echo ""
 
   # ── B8: n8n default credentials ──

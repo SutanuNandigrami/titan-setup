@@ -1320,6 +1320,29 @@ journalctl --user -u letta-ctrl -f
 
 Authentication uses the Letta API key from `~/.config/letta/credentials`.
 
+## Claude Code UI
+
+Web/mobile interface for Claude Code sessions. Access your Claude Code projects,
+file explorer, git, and terminal from any device on your tailnet.
+
+- Zero configuration — auto-discovers sessions from `~/.claude/`
+- Default port: 3001 (configurable via `--claudecodeui-port`)
+- Skip with `--claudecodeui-skip` or `--minimal`
+- Requires Node.js v22+ (installed via mise)
+
+```bash
+# Check status
+systemctl --user status claudecodeui
+
+# Restart
+systemctl --user restart claudecodeui
+
+# Logs
+journalctl --user -u claudecodeui -f
+```
+
+Access via browser: `http://localhost:3001` (desktop) or `https://<hostname>:3001` (VPS via Tailscale).
+
 ---
 
 ## Web & JavaScript

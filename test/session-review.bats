@@ -641,6 +641,39 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
+# claudecodeui integration (ADR-034)
+# ════════════════════════════════════════════════════════════════════
+
+@test "CCUI: CLI flag defaults exist in lib/02" {
+  grep -q 'CLAUDECODEUI_SKIP=false' "$REPO/lib/02-cli.sh"
+  grep -q 'CLAUDECODEUI_PORT=3001' "$REPO/lib/02-cli.sh"
+}
+
+@test "CCUI: --minimal sets CLAUDECODEUI_SKIP" {
+  grep -A10 '\-\-minimal)' "$REPO/lib/02-cli.sh" | grep -q 'CLAUDECODEUI_SKIP=true'
+}
+
+@test "CCUI: systemd service binds to 127.0.0.1 (ADR-019)" {
+  grep -A30 'Description=Claude Code UI' "$REPO/lib/07-tools-python-js.sh" | grep -q 'HOST=127.0.0.1'
+}
+
+@test "CCUI: Type=simple in systemd unit (not Docker)" {
+  grep -A30 'Description=Claude Code UI' "$REPO/lib/07-tools-python-js.sh" | grep -q 'Type=simple'
+}
+
+@test "CCUI: tailscale serve rule in lib/16" {
+  grep -q 'claudecodeui' "$REPO/lib/16-finalize.sh"
+}
+
+@test "CCUI: Node v22 guard exists" {
+  grep -q '_NODE_VER.*22' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "ADR: decisions.md has ADR-034 (claudecodeui)" {
+  grep -q 'ADR-034.*claudecodeui' "$REPO/docs/decisions.md"
+}
+
+# ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
 
@@ -710,3 +743,4 @@ setup() {
 @test "BUILT: titan-setup.sh matches assembled lib/ source" {
   bash "$REPO/script/build.sh" --check
 }
+

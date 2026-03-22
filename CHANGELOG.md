@@ -31,6 +31,7 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 ### v3.20 — ARM64 docker reliability, live testing overhaul, 168 tests
 
 - Replaced ccstatusline with claude-lens: quota pace tracking, zero-config, no bun dependency (ADR-030)
+- Added claudecodeui: web/mobile interface for Claude Code sessions, zero-config, systemd service (ADR-034)
 
 **ARM64 Docker Services (PR #47 — ADR-025/026):**
 - n8n pinned to `2.10.4` on aarch64 — `isolated-vm` in >=2.11.1 segfaults on ARM64 Alpine

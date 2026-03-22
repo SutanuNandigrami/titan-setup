@@ -224,3 +224,56 @@ SERVICEEOF
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
 fi
+
+# ─── claudecodeui — web/mobile interface for Claude Code sessions ───
+# Browse Claude Code sessions, file explorer, git, terminal from any device
+# Auto-discovers sessions from ~/.claude/ — zero config
+if $CLAUDECODEUI_SKIP || $MINIMAL; then
+  ok "claudecodeui (skipped)"
+else
+  _NODE_VER=$(node --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
+  if [[ "$_NODE_VER" -lt 22 ]]; then
+    warn "claudecodeui requires Node.js v22+ (found: v${_NODE_VER}) — skipping"
+  else
+    if bun pm ls -g 2>/dev/null | grep -q '@siteboon/claude-code-ui'; then
+      ok "claudecodeui (exists)"
+    else
+      echo -n "  Installing claudecodeui..."
+      run_q bun install -g @siteboon/claude-code-ui && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+    fi
+
+    if command -v cloudcli &>/dev/null; then
+      check_port "$CLAUDECODEUI_PORT" "claudecodeui" || true
+
+      _CLOUDCLI_BIN=$(command -v cloudcli)
+      mkdir -p "$HOME/.config/systemd/user"
+      cat >"$HOME/.config/systemd/user/claudecodeui.service" <<SERVICEEOF
+[Unit]
+Description=Claude Code UI — web interface for Claude Code sessions
+After=default.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=${_CLOUDCLI_BIN}
+Restart=on-failure
+RestartSec=5
+Environment="HOST=127.0.0.1"
+Environment="SERVER_PORT=${CLAUDECODEUI_PORT}"
+Environment="CLAUDE_CLI_PATH=$(command -v claude 2>/dev/null || echo claude)"
+Environment="PATH=${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target
+SERVICEEOF
+
+      systemctl --user daemon-reload 2>/dev/null || true
+      systemctl --user enable claudecodeui 2>/dev/null || true
+      systemctl --user start claudecodeui 2>/dev/null || true
+      ok "claudecodeui service (http://127.0.0.1:${CLAUDECODEUI_PORT})"
+    else
+      warn "claudecodeui: cloudcli not found — check: bun install -g @siteboon/claude-code-ui"
+    fi
+  fi
+fi
