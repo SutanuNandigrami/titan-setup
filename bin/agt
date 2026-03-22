@@ -21,54 +21,43 @@ INDEX="$STASH_DIR/index.tsv"
 
 # ─── Colors ────────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
-  GREEN='\033[0;32m'
-  YELLOW='\033[1;33m'
-  CYAN='\033[0;36m'
-  RED='\033[0;31m'
-  BOLD='\033[1m'
-  NC='\033[0m'
+  GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
+  RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
 else
-  GREEN=''
-  YELLOW=''
-  CYAN=''
-  RED=''
-  BOLD=''
-  NC=''
+  GREEN=''; YELLOW=''; CYAN=''; RED=''; BOLD=''; NC=''
 fi
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
-die() {
-  echo -e "${RED}error:${NC} $*" >&2
-  exit 1
-}
+die()  { echo -e "${RED}error:${NC} $*" >&2; exit 1; }
 info() { echo -e "${CYAN}info:${NC}  $*"; }
-ok() { echo -e "${GREEN}ok:${NC}    $*"; }
+ok()   { echo -e "${GREEN}ok:${NC}    $*"; }
 warn() { echo -e "${YELLOW}warn:${NC}  $*"; }
 
 require_stash() {
   [[ -d "$STASH_AGENTS" ]] || die "Stash not found: $STASH_AGENTS — run: agt refresh"
-  [[ -f "$INDEX" ]] || die "Index missing — run: agt build-index"
+  [[ -f "$INDEX" ]]        || die "Index missing — run: agt build-index"
 }
 
 ensure_loaded_dir() {
   mkdir -p "$LOADED_DIR"
   [[ -f "$MANIFEST" ]] || touch "$MANIFEST"
-  [[ -f "$LOCK" ]] || touch "$LOCK"
+  [[ -f "$LOCK" ]]     || touch "$LOCK"
 }
 
 slot_model() {
   case "$1" in
-    slot-1 | slot-2 | slot-3) echo "haiku" ;;
-    slot-4) echo "sonnet" ;;
-    slot-5) echo "opus" ;;
-    *) echo "unknown" ;;
+    slot-1|slot-2|slot-3|slot-6|slot-7|slot-8) echo "haiku" ;;
+    slot-4|slot-9)          echo "sonnet" ;;
+    slot-5|slot-10)         echo "opus" ;;
+    *)                     echo "unknown" ;;
   esac
 }
 
 # Extract a single frontmatter field value from a file
 fm_field() {
   local file="$1" field="$2"
-  grep "^${field}:" "$file" | head -1 | sd "^${field}:\\s*" '' | tr -d '"' | xargs
+  # grep returns 1 if no match — guard with || true to avoid pipefail abort
+  grep "^${field}:" "$file" 2>/dev/null | head -1 | sd "^${field}:\\s*" '' | sed "s/^[[:space:]]*//;s/[[:space:]]*$//" | tr -d '"' || true
 }
 
 # ─── Commands ──────────────────────────────────────────────────────────────────
@@ -110,14 +99,10 @@ cmd_load() {
   local agent_name='' slot_override=''
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --slot)
-        shift
-        [[ $# -gt 0 ]] || die "--slot requires a number"
-        slot_override="slot-$1"
-        ;;
+      --slot)   shift; [[ $# -gt 0 ]] || die "--slot requires a number"; slot_override="slot-$1" ;;
       --slot=*) slot_override="slot-${1#--slot=}" ;;
-      -*) die "Unknown option: $1" ;;
-      *) agent_name="$1" ;;
+      -*)       die "Unknown option: $1" ;;
+      *)        agent_name="$1" ;;
     esac
     shift
   done
@@ -133,7 +118,7 @@ cmd_load() {
       die "Agent not found: $agent_name — try: agt search $agent_name"
     fi
     echo "Agent '$agent_name' not found. Did you mean:"
-    while IFS= read -r m; do echo "  $m"; done <<<"$matches"
+    while IFS= read -r m; do echo "  $m"; done <<< "$matches"
     exit 1
   fi
 
@@ -151,7 +136,7 @@ cmd_load() {
     local slot=''
     if [[ -n "$slot_override" ]]; then
       local num="${slot_override#slot-}"
-      if [[ "$num" =~ ^[0-9]+$ ]] && ((num >= 1 && num <= SLOT_COUNT)); then
+      if [[ "$num" =~ ^[0-9]+$ ]] && (( num >= 1 && num <= SLOT_COUNT )); then
         if [[ -f "$LOADED_DIR/${slot_override}.md" ]]; then
           local occ
           occ=$(grep "^${slot_override}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "unknown")
@@ -180,7 +165,7 @@ cmd_load() {
       warn "Agent prefers '$model_hint' but $slot uses '$slot_m'"
       case "$model_hint" in
         sonnet) warn "Consider: agt load $agent_name --slot 4" ;;
-        opus) warn "Consider: agt load $agent_name --slot 5" ;;
+        opus)   warn "Consider: agt load $agent_name --slot 5" ;;
       esac
     fi
 
@@ -190,10 +175,10 @@ cmd_load() {
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     # remove stale entry for this slot
     if [[ -s "$MANIFEST" ]]; then
-      grep -v "^${slot}	" "$MANIFEST" >"${MANIFEST}.tmp" || true
+      grep -v "^${slot}	" "$MANIFEST" > "${MANIFEST}.tmp" || true
       mv "${MANIFEST}.tmp" "$MANIFEST"
     fi
-    printf '%s\t%s\t%s\n' "$slot" "$agent_name" "$ts" >>"$MANIFEST"
+    printf '%s\t%s\t%s\n' "$slot" "$agent_name" "$ts" >> "$MANIFEST"
 
     ok "Loaded '$agent_name' → $slot [${slot_m}]"
     echo "  Invoke in Claude Code with subagent_type: $slot"
@@ -214,7 +199,7 @@ cmd_unload() {
       for i in $(seq 1 "$SLOT_COUNT"); do
         if [[ -f "$LOADED_DIR/slot-${i}.md" ]]; then
           rm -f "$LOADED_DIR/slot-${i}.md"
-          ((count++)) || true
+          (( count++ )) || true
         fi
       done
       truncate -s 0 "$MANIFEST"
@@ -237,7 +222,7 @@ cmd_unload() {
       warn "$slot was already empty"
     fi
     if [[ -s "$MANIFEST" ]]; then
-      grep -v "^${slot}	" "$MANIFEST" >"${MANIFEST}.tmp" || true
+      grep -v "^${slot}	" "$MANIFEST" > "${MANIFEST}.tmp" || true
       mv "${MANIFEST}.tmp" "$MANIFEST"
     fi
   ) 200>"$LOCK"
@@ -282,99 +267,22 @@ cmd_info() {
 cmd_build_index() {
   [[ -d "$STASH_AGENTS" ]] || die "Stash agents dir not found: $STASH_AGENTS"
   local tmp="${INDEX}.tmp"
-  printf 'name\ttags\tdescription\tmodel-hint\n' >"$tmp"
+  printf 'name\ttags\tdescription\tmodel-hint\n' > "$tmp"
   local count=0
 
   while IFS= read -r -d '' md_file; do
     local name tags description model_hint
     name=$(fm_field "$md_file" "name")
-    [[ -n "$name" ]] || continue # skip files without name frontmatter
+    [[ -n "$name" ]] || continue   # skip files without name frontmatter
     tags=$(fm_field "$md_file" "tags")
     description=$(fm_field "$md_file" "description")
     model_hint=$(fm_field "$md_file" "model-hint")
-    printf '%s\t%s\t%s\t%s\n' "$name" "${tags:-}" "${description:-}" "${model_hint:-haiku}" >>"$tmp"
-    ((count++)) || true
+    printf '%s\t%s\t%s\t%s\n' "$name" "${tags:-}" "${description:-}" "${model_hint:-haiku}" >> "$tmp"
+    (( count++ )) || true
   done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0 | sort -z)
 
   mv "$tmp" "$INDEX"
   ok "Index built: $count agents → $INDEX"
-}
-
-cmd_reload() {
-  local slot='' agent_name=''
-  [[ $# -ge 2 ]] || die "Usage: agt reload <slot-N> <agent-name>"
-  slot="$1"
-  agent_name="$2"
-
-  # normalize slot (accept "1" or "slot-1")
-  if [[ "$slot" =~ ^[0-9]+$ ]]; then
-    slot="slot-$slot"
-  fi
-  [[ "$slot" =~ ^slot-[0-9]+$ ]] || die "Invalid slot: $slot"
-
-  ensure_loaded_dir
-
-  local current="[empty]"
-  if [[ -s "$MANIFEST" ]]; then
-    current=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "[empty]")
-    [[ -n "$current" ]] || current="[empty]"
-  fi
-
-  info "Unloading: $current from $slot"
-  cmd_unload "$slot" 2>/dev/null || true
-  info "Loading: $agent_name into $slot"
-  cmd_load "$agent_name" --slot "${slot#slot-}"
-
-  local slot_m
-  slot_m=$(slot_model "$slot")
-  ok "$slot → $agent_name [$slot_m]"
-  echo "  Note: CC restart required for slot changes to take effect"
-}
-
-cmd_list_stash() {
-  require_stash
-  local count=0 name desc
-
-  # count agents first
-  while IFS= read -r -d '' _; do
-    ((count++)) || true
-  done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0)
-
-  echo -e "${BOLD}Available agents in stash ($count total):${NC}"
-
-  while IFS= read -r -d '' md_file; do
-    name=$(basename "$md_file" .md)
-    desc=""
-
-    # try YAML frontmatter description: field first
-    if head -1 "$md_file" | grep -q '^---'; then
-      desc=$(fm_field "$md_file" "description")
-    fi
-
-    # fallback: first non-empty, non-# line
-    if [[ -z "$desc" ]]; then
-      desc=$(grep -v -m1 -E '^\s*$|^#|^---' "$md_file" 2>/dev/null || true)
-    fi
-
-    printf "  ${BOLD}%-22s${NC} — %s\n" "$name" "${desc:-[no description]}"
-  done < <(find "$STASH_AGENTS" -maxdepth 1 -name "*.md" -print0 | sort -z)
-}
-
-cmd_current() {
-  ensure_loaded_dir
-  echo -e "${BOLD}Loaded slots:${NC}"
-  local i
-  for i in $(seq 1 "$SLOT_COUNT"); do
-    local slot="slot-$i"
-    local slot_m
-    slot_m=$(slot_model "$slot")
-    local agent_name="[empty]"
-    if [[ -f "$LOADED_DIR/${slot}.md" ]] && [[ -s "$MANIFEST" ]]; then
-      agent_name=$(grep "^${slot}	" "$MANIFEST" 2>/dev/null | cut -f2 || echo "[empty]")
-      [[ -n "$agent_name" ]] || agent_name="[empty]"
-    fi
-    printf "  ${CYAN}%s${NC} (%-6s) → %s\n" "$slot" "$slot_m" "$agent_name"
-  done
 }
 
 cmd_refresh() {
@@ -393,31 +301,24 @@ cmd_refresh() {
   echo ""
   echo "  search <query>           Fuzzy search agents by name/tags/description"
   echo "  list                     List all agents in stash"
-  echo "  list-stash               Compact agent list with one-line descriptions"
   echo "  load <name> [--slot N]   Load agent into a slot (auto-picks free slot)"
   echo "  unload <slot|name|all>   Remove agent from slot"
-  echo "  reload <slot> <name>     Swap agent in a slot (unload + load)"
   echo "  status                   Show slot occupancy"
-  echo "  current                  Show loaded agent per slot (compact)"
   echo "  info <name>              Preview agent definition"
   echo "  refresh                  Pull latest from GitHub + rebuild index"
   echo "  build-index              Rebuild index.tsv from stash"
   exit 0
 }
 
-cmd="$1"
-shift
+cmd="$1"; shift
 case "$cmd" in
-  search) cmd_search "$@" ;;
-  list) cmd_list ;;
-  list-stash) cmd_list_stash ;;
-  load) cmd_load "$@" ;;
-  unload) cmd_unload "$@" ;;
-  reload) cmd_reload "$@" ;;
-  status) cmd_status ;;
-  current) cmd_current ;;
-  info) cmd_info "$@" ;;
-  refresh) cmd_refresh ;;
+  search)      cmd_search "$@" ;;
+  list)        cmd_list ;;
+  load)        cmd_load "$@" ;;
+  unload)      cmd_unload "$@" ;;
+  status)      cmd_status ;;
+  info)        cmd_info "$@" ;;
+  refresh)     cmd_refresh ;;
   build-index) cmd_build_index ;;
   *) die "Unknown command: $cmd — run 'agt' for help" ;;
 esac

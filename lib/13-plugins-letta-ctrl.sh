@@ -8,6 +8,7 @@ else
     warn "LettaCtrl: bun not found — skipping"
     LETTA_CTRL_SKIP=true
   else
+    check_port "$LETTA_CTRL_PORT" "letta-ctrl" "bun" || true
     mkdir -p "$HOME/.config/letta"
 
     # Write server

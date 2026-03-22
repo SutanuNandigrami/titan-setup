@@ -90,8 +90,10 @@ elif ! command -v docker &>/dev/null; then
 else
   # Pull Letta Docker image (bundles Postgres+pgvector)
   _DOCKER_BIN=$(command -v docker)
-  # Use sudo — docker group membership from lib/06 hasn't taken effect in this shell
-  if run_q sudo docker pull letta/letta:latest; then
+  # Skip pull if image already present (idempotent re-run)
+  if sudo docker image inspect letta/letta:latest &>/dev/null; then
+    ok "letta/letta:latest image (exists)"
+  elif run_q sudo docker pull letta/letta:latest; then
     ok "letta/letta:latest image"
   else
     warn "letta docker pull failed — check: docker pull letta/letta:latest"
@@ -99,6 +101,7 @@ else
   fi
 
   if ! $LETTA_SKIP; then
+    check_port "$LETTA_PORT" "letta" "letta-server" || true
     mkdir -p "$HOME/.letta/.persist/pgdata"
 
     # Systemd user service using --env-file to avoid secrets in unit file
@@ -234,6 +237,7 @@ PYEOF
   fi
 
   # Phase B: Systemd user service
+  check_port "$CCFLARE_PORT" "better-ccflare" "better-ccflare" || true
   # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
   _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
@@ -265,7 +269,35 @@ SERVICEEOF
   systemctl --user enable better-ccflare 2>/dev/null || true
   systemctl --user start better-ccflare 2>/dev/null || true
   ok "better-ccflare service (http://${CCFLARE_HOST}:${CCFLARE_PORT})"
-  echo "  Add accounts after install:"
+
+  # Auto-inject Claude OAuth account if credentials exist and no accounts configured
+  _BCF_DB="$HOME/.config/better-ccflare/better-ccflare.db"
+  _CC_CREDS="$HOME/.claude/.credentials.json"
+  if [[ -f "$_CC_CREDS" ]] && command -v duckdb &>/dev/null && [[ -f "$_BCF_DB" ]]; then
+    _BCF_COUNT=$(duckdb -noheader -csv "$_BCF_DB" "SELECT count(*) FROM accounts;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    if [[ "$_BCF_COUNT" == "0" ]]; then
+      _BCF_ACCESS=$(jq -r '.claudeAiOauth.accessToken // empty' "$_CC_CREDS")
+      _BCF_REFRESH=$(jq -r '.claudeAiOauth.refreshToken // empty' "$_CC_CREDS")
+      _BCF_EXPIRES=$(jq -r '.claudeAiOauth.expiresAt // 0' "$_CC_CREDS")
+      if [[ -n "$_BCF_ACCESS" && -n "$_BCF_REFRESH" ]]; then
+        _BCF_NOW=$(date +%s%3N)
+        _BCF_UUID=$(cat /proc/sys/kernel/random/uuid)
+        systemctl --user stop better-ccflare 2>/dev/null || true
+        # Wait for service to fully stop and release the port
+        for _wi in $(seq 1 15); do
+          systemctl --user is-active better-ccflare 2>/dev/null | grep -q inactive && break
+          sleep 1
+        done
+        duckdb "$_BCF_DB" "INSERT INTO accounts (id, name, provider, refresh_token, access_token, expires_at, created_at, last_used, request_count, total_requests, priority, paused, auto_fallback_enabled, auto_refresh_enabled) VALUES ('$_BCF_UUID', 'claude-auto', 'anthropic', '$_BCF_REFRESH', '$_BCF_ACCESS', $_BCF_EXPIRES, $_BCF_NOW, $_BCF_NOW, 0, 0, 0, 0, 1, 1);" 2>/dev/null &&
+          ok "better-ccflare: claude-auto account injected from Claude credentials" ||
+          warn "better-ccflare: account injection failed"
+        systemctl --user restart better-ccflare 2>/dev/null || true
+      fi
+    else
+      ok "better-ccflare: $_BCF_COUNT account(s) configured"
+    fi
+  fi
+  echo "  Add more accounts:"
   echo "    better-ccflare --add-account NAME --mode claude-oauth"
   echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
   echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"

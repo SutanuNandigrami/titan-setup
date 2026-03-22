@@ -79,12 +79,29 @@ apt_update() {
   fi
 }
 
-# Port pre-flight check — warn if a port is already in use
+# Port pre-flight check — warn if a port is already in use by another service.
+# Accepts optional 3rd arg: expected owner (docker container name OR process name).
+# Idempotent: if the expected owner already has the port, skip silently.
 check_port() {
-  local port="$1" service="$2"
+  local port="$1" service="$2" expected_owner="${3:-}"
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+    if [[ -n "$expected_owner" ]]; then
+      # Check docker container by name (works for docker-proxied ports)
+      if command -v docker &>/dev/null &&
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${expected_owner}$"; then
+        return 0
+      fi
+      # Check process name across ALL ss lines for this port (not just first)
+      # Use sudo to see docker-proxy and root-owned processes
+      local all_owners
+      all_owners=$(sudo ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'users:\(\("\K[^"]+' || true)
+      if echo "$all_owners" | grep -q "$expected_owner"; then
+        return 0
+      fi
+    fi
     local owner
-    owner=$(ss -tlnp 2>/dev/null | grep ":${port} " | head -1 | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+    owner=$(sudo ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'users:\(\("\K[^"]+' | head -1 || echo "unknown")
+    [[ -z "$owner" ]] && owner="unknown"
     warn "${service}: port ${port} already in use by ${owner}"
     return 1
   fi
@@ -477,6 +494,38 @@ if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
 fi
 if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || sudo loginctl enable-linger "$USER" 2>/dev/null || true
+fi
+
+# ─── Early Claude Code install + auth (VPS only, before tmux) ────────────
+# claude auth login is broken outside the TUI (upstream bug). Install the
+# binary early, then pause so the user can auth via 'claude' TUI in a
+# second SSH session before tmux takes over.
+if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
+  if ! command -v claude &>/dev/null; then
+    export PATH="$HOME/.local/bin:$PATH"
+    echo -e "\n  ${CYAN}Installing Claude Code (needed for auth before tmux)...${NC}"
+    if [[ -n "${CC_VERSION:-}" ]]; then
+      curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+    else
+      curl -fsSL https://claude.ai/install.sh | bash || true
+    fi
+  fi
+  if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second SSH session${NC} to this server and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+    if claude auth status &>/dev/null 2>&1; then
+      ok "Claude Code authenticated"
+    else
+      warn "Claude Code not authenticated — plugins will be skipped"
+    fi
+  elif command -v claude &>/dev/null; then
+    ok "Claude Code already authenticated"
+  fi
 fi
 
 # ─── Disconnect resilience: re-exec inside tmux if not already there ───
@@ -1203,22 +1252,27 @@ fi
 if $MINIMAL; then
   ok "n8n (skipped — minimal mode)"
 elif command -v docker &>/dev/null; then
-  check_port 5678 "n8n" || true
+  check_port 5678 "n8n" "n8n" || true
   # Add user to docker group and ensure daemon is running
-  sudo usermod -aG docker "$USER" 2>/dev/null || true
   sudo systemctl enable --now docker 2>/dev/null || true
 
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
-  # Restart user systemd manager so it picks up the new docker group membership.
-  # Without this, user services (n8n, letta) crash-loop on "permission denied" to
-  # the docker socket because group changes only take effect on new sessions.
-  sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+  # Ensure docker group membership is active in the systemd user manager.
+  # usermod adds the group but systemd user@.service may have started before
+  # the group was added. Restart only if docker services are not already running.
+  sudo usermod -aG docker "$USER" 2>/dev/null || true
+  if ! docker ps &>/dev/null && ! /usr/bin/sg docker -c "docker ps" &>/dev/null 2>&1; then
+    sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+  fi
 
-  # Pull image — user is in docker group; fall back to sudo if socket isn't yet accessible
+  # Pull image — skip if already present (idempotent re-run)
   # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
-  if docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
+  if docker image inspect n8nio/n8n:latest &>/dev/null ||
+    sudo docker image inspect n8nio/n8n:latest &>/dev/null; then
+    ok "n8n docker image (exists)"
+  elif docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
     /usr/bin/sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
     sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
     ok "n8n docker image"
@@ -1356,8 +1410,10 @@ elif ! command -v docker &>/dev/null; then
 else
   # Pull Letta Docker image (bundles Postgres+pgvector)
   _DOCKER_BIN=$(command -v docker)
-  # Use sudo — docker group membership from lib/06 hasn't taken effect in this shell
-  if run_q sudo docker pull letta/letta:latest; then
+  # Skip pull if image already present (idempotent re-run)
+  if sudo docker image inspect letta/letta:latest &>/dev/null; then
+    ok "letta/letta:latest image (exists)"
+  elif run_q sudo docker pull letta/letta:latest; then
     ok "letta/letta:latest image"
   else
     warn "letta docker pull failed — check: docker pull letta/letta:latest"
@@ -1365,6 +1421,7 @@ else
   fi
 
   if ! $LETTA_SKIP; then
+    check_port "$LETTA_PORT" "letta" "letta-server" || true
     mkdir -p "$HOME/.letta/.persist/pgdata"
 
     # Systemd user service using --env-file to avoid secrets in unit file
@@ -1500,6 +1557,7 @@ PYEOF
   fi
 
   # Phase B: Systemd user service
+  check_port "$CCFLARE_PORT" "better-ccflare" "better-ccflare" || true
   # Resolve binary path at install time — avoids hardcoded ~/.bun/bin/ which may not exist
   _BCF_BIN=$(command -v better-ccflare 2>/dev/null || echo "$HOME/.local/bin/better-ccflare")
   mkdir -p "$HOME/.config/systemd/user"
@@ -1531,7 +1589,35 @@ SERVICEEOF
   systemctl --user enable better-ccflare 2>/dev/null || true
   systemctl --user start better-ccflare 2>/dev/null || true
   ok "better-ccflare service (http://${CCFLARE_HOST}:${CCFLARE_PORT})"
-  echo "  Add accounts after install:"
+
+  # Auto-inject Claude OAuth account if credentials exist and no accounts configured
+  _BCF_DB="$HOME/.config/better-ccflare/better-ccflare.db"
+  _CC_CREDS="$HOME/.claude/.credentials.json"
+  if [[ -f "$_CC_CREDS" ]] && command -v duckdb &>/dev/null && [[ -f "$_BCF_DB" ]]; then
+    _BCF_COUNT=$(duckdb -noheader -csv "$_BCF_DB" "SELECT count(*) FROM accounts;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    if [[ "$_BCF_COUNT" == "0" ]]; then
+      _BCF_ACCESS=$(jq -r '.claudeAiOauth.accessToken // empty' "$_CC_CREDS")
+      _BCF_REFRESH=$(jq -r '.claudeAiOauth.refreshToken // empty' "$_CC_CREDS")
+      _BCF_EXPIRES=$(jq -r '.claudeAiOauth.expiresAt // 0' "$_CC_CREDS")
+      if [[ -n "$_BCF_ACCESS" && -n "$_BCF_REFRESH" ]]; then
+        _BCF_NOW=$(date +%s%3N)
+        _BCF_UUID=$(cat /proc/sys/kernel/random/uuid)
+        systemctl --user stop better-ccflare 2>/dev/null || true
+        # Wait for service to fully stop and release the port
+        for _wi in $(seq 1 15); do
+          systemctl --user is-active better-ccflare 2>/dev/null | grep -q inactive && break
+          sleep 1
+        done
+        duckdb "$_BCF_DB" "INSERT INTO accounts (id, name, provider, refresh_token, access_token, expires_at, created_at, last_used, request_count, total_requests, priority, paused, auto_fallback_enabled, auto_refresh_enabled) VALUES ('$_BCF_UUID', 'claude-auto', 'anthropic', '$_BCF_REFRESH', '$_BCF_ACCESS', $_BCF_EXPIRES, $_BCF_NOW, $_BCF_NOW, 0, 0, 0, 0, 1, 1);" 2>/dev/null &&
+          ok "better-ccflare: claude-auto account injected from Claude credentials" ||
+          warn "better-ccflare: account injection failed"
+        systemctl --user restart better-ccflare 2>/dev/null || true
+      fi
+    else
+      ok "better-ccflare: $_BCF_COUNT account(s) configured"
+    fi
+  fi
+  echo "  Add more accounts:"
   echo "    better-ccflare --add-account NAME --mode claude-oauth"
   echo "    better-ccflare --add-account NAME --mode kilo        (API key)"
   echo "    better-ccflare --add-account NAME --mode vertex-ai   (gcloud credentials)"
@@ -2202,17 +2288,43 @@ if [[ -n "${_UV_PID:-}" ]]; then
 fi
 section "Phase 4/6 — Claude Code CLI"
 
-# Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
-echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
-if [[ -n "$CC_VERSION" ]]; then
-  curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+# Skip re-download if already installed by early VPS auth step (lib/03-vps-reexec.sh)
+if command -v claude &>/dev/null && ! $FORCE_UPDATES; then
+  ok "Claude Code: $(claude --version 2>/dev/null || echo 'installed') (early install)"
 else
-  curl -fsSL https://claude.ai/install.sh | bash || true
+  # Always run installer — it's idempotent (installs if missing, updates if older, noop if current)
+  echo "  Installing/updating Claude Code${CC_VERSION:+ v${CC_VERSION}} (native binary)..."
+  if [[ -n "$CC_VERSION" ]]; then
+    curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+  else
+    curl -fsSL https://claude.ai/install.sh | bash || true
+  fi
+  if command -v claude &>/dev/null; then
+    ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
+  else
+    warn "Claude Code install failed — install manually: curl -fsSL https://claude.ai/install.sh | bash"
+  fi
 fi
-if command -v claude &>/dev/null; then
-  ok "Claude Code${CC_VERSION:+ v${CC_VERSION}}: $(claude --version 2>/dev/null || echo 'installed')"
-else
-  warn "Claude Code install failed — install manually: curl -fsSL https://claude.ai/install.sh | bash"
+
+# Auth check — claude auth login is broken outside the TUI (upstream bug).
+# VPS: auth handled in lib/03 pre-tmux pause. Desktop: prompt here.
+if [[ -t 0 ]] && command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+  if [[ "$INSTALL_MODE" == "desktop" ]]; then
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second terminal${NC} and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+  fi
+  if claude auth status &>/dev/null 2>&1; then
+    ok "Claude Code authenticated"
+  else
+    warn "Claude Code not authenticated — plugins will be skipped"
+  fi
+elif command -v claude &>/dev/null && claude auth status &>/dev/null 2>&1; then
+  ok "Claude Code authenticated"
 fi
 
 # ─── Claude Desktop (desktop only — Electron GUI app, x86_64 only) ───
@@ -2905,6 +3017,7 @@ else
     warn "LettaCtrl: bun not found — skipping"
     LETTA_CTRL_SKIP=true
   else
+    check_port "$LETTA_CTRL_PORT" "letta-ctrl" "bun" || true
     mkdir -p "$HOME/.config/letta"
 
     # Write server

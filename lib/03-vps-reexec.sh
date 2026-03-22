@@ -68,6 +68,38 @@ if [[ "$INSTALL_MODE" == "vps" ]] && command -v loginctl &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || sudo loginctl enable-linger "$USER" 2>/dev/null || true
 fi
 
+# ─── Early Claude Code install + auth (VPS only, before tmux) ────────────
+# claude auth login is broken outside the TUI (upstream bug). Install the
+# binary early, then pause so the user can auth via 'claude' TUI in a
+# second SSH session before tmux takes over.
+if [[ "$INSTALL_MODE" == "vps" ]] && [[ -t 0 ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
+  if ! command -v claude &>/dev/null; then
+    export PATH="$HOME/.local/bin:$PATH"
+    echo -e "\n  ${CYAN}Installing Claude Code (needed for auth before tmux)...${NC}"
+    if [[ -n "${CC_VERSION:-}" ]]; then
+      curl -fsSL https://claude.ai/install.sh | bash -s "$CC_VERSION" || true
+    else
+      curl -fsSL https://claude.ai/install.sh | bash || true
+    fi
+  fi
+  if command -v claude &>/dev/null && ! claude auth status &>/dev/null 2>&1; then
+    echo -e "\n  ${CYAN}Claude Code needs authentication.${NC}"
+    echo -e "  Open a ${GREEN}second SSH session${NC} to this server and run:"
+    echo -e "    ${GREEN}claude${NC}        (opens the TUI)"
+    echo -e "    ${GREEN}/login${NC}        (authenticate from within the TUI)"
+    echo -e "  Then come back here and press Enter to continue."
+    echo -e "  (Or press Enter now to skip — you can auth later)\n"
+    read -rp "  Press Enter when done (or to skip)... " || true
+    if claude auth status &>/dev/null 2>&1; then
+      ok "Claude Code authenticated"
+    else
+      warn "Claude Code not authenticated — plugins will be skipped"
+    fi
+  elif command -v claude &>/dev/null; then
+    ok "Claude Code already authenticated"
+  fi
+fi
+
 # ─── Disconnect resilience: re-exec inside tmux if not already there ───
 # Install takes 30-60 min; SSH drops must not kill it.
 if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
