@@ -127,13 +127,13 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 ## ADR-021: --minimal flag for reduced install (2026-03-20)
 **Status**: Accepted
 **Context**: Full install includes 150+ tools and 4 services (n8n, Letta, Ollama, ccflare). Many tools are nice-to-have but rarely used daily (sqlmap, mitmproxy, bore-cli, etc.). Services consume ~2GB RAM at idle. Fresh install takes 45-80 min.
-**Decision**: Add `--minimal` flag that installs ~50 core tools in ~25 min. Skips: Letta, Ollama, n8n, cozempic. Skips extended tool lists (sqlmap, mitmproxy, cookiecutter, bore-cli, websocat, hurl, jwt-cli, oha, mkcert, ffuf, grpcurl, security recon tools). Core tools always installed: ripgrep, fd, sd, bat, eza, delta, just, xh, jq, yq, semgrep, ruff, ansible, etc.
+**Decision**: Add `--minimal` flag that installs ~50 core tools in ~25 min. Skips: Letta, Ollama, n8n, cozempic. Skips extended tool lists (sqlmap, mitmproxy, cookiecutter, bore-cli, websocat, hurl, jwt-cli, oha, mkcert, ffuf, grpcurl, security recon tools). Core tools always installed: ripgrep, fd, sd, bat, eza, delta, just, xh, jq, yq, opengrep, ruff, ansible, etc.
 **Consequences**: 50% faster install. 75% less idle RAM. Users who need specific tools can install on-demand (`uv tool install sqlmap`). Full install remains the default.
 
 ## ADR-022: --secrets-file for credential passing (2026-03-20)
 **Status**: Accepted
-**Context**: Secrets (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD) were passed via CLI args, visible in `ps aux`, shell history, and install logs. An observer on the same machine during install could read all credentials.
-**Decision**: Add `--secrets-file PATH` flag. File format: `KEY=value` (one per line, # comments). Supported keys: TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD. File should be mode 0600. CLI arg passing still works (backward compatible).
+**Context**: Secrets (TAILSCALE_KEY, LETTA_PASSWORD) were passed via CLI args, visible in `ps aux`, shell history, and install logs. An observer on the same machine during install could read all credentials.
+**Decision**: Add `--secrets-file PATH` flag. File format: `KEY=value` (one per line, # comments). Supported keys: TAILSCALE_KEY, LETTA_PASSWORD. File should be mode 0600. CLI arg passing still works (backward compatible).
 **Consequences**: Secrets no longer visible in process list or shell history. Log files still show commands but not the secret values. Trade-off: user must create a temp file.
 
 ## ADR-023: Parallel Phase 3 — uv tools run concurrently with cargo (2026-03-20)
@@ -165,6 +165,12 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: `tailscale serve` binds rules to the current MagicDNS hostname. If the hostname changes between installs (e.g., server reimaged, hostname collision), stale rules remain active under the old hostname. New rules are added but old ones linger, causing confusion.
 **Decision**: Run `tailscale serve reset` before configuring serve rules. This clears all existing rules and re-adds only current ones.
 **Consequences**: Clean serve state on every run. Trade-off: momentary service interruption during re-run (rules cleared then re-added). Acceptable since re-runs are infrequent.
+
+## ADR-029: Replace Semgrep with Opengrep (2026-03-23)
+**Status**: Accepted
+**Context**: Semgrep CE moved critical features (advanced taint analysis, cross-function tracking) behind a paid Pro tier. Opengrep is an LGPL 2.1 fork (v1.16.5) backed by 10+ AppSec organizations, offering these features freely. It ships as a self-contained binary (no Python dependency), requires no authentication token, and is 100% compatible with Semgrep rule format.
+**Decision**: Replace semgrep with opengrep. Remove semgrep CLI install (uv), Claude Code plugin, `--semgrep-token`/`--no-semgrep` flags, `SEMGREP_APP_TOKEN` env var, interactive token prompt, and all hook patching. Install opengrep as a direct binary download to `/usr/local/bin/opengrep` with x86_64/aarch64 support. Drop the Claude Code semgrep plugin entirely — on-demand `opengrep scan` via the security-scan skill is sufficient (no auto-scan hooks needed).
+**Consequences**: Simpler install (no token, no Python, no plugin patching). One fewer uv tool. CLI commands change from `semgrep --config auto .` to `opengrep scan -f auto .`. Existing semgrep rules remain compatible.
 
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted

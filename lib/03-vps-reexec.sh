@@ -28,8 +28,6 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $VERBOSE && _VPS_REEXEC_ARGS+=(--verbose)
     $CCFLARE_SKIP && _VPS_REEXEC_ARGS+=(--ccflare-skip)
     _VPS_REEXEC_ARGS+=(--ccflare-port "$CCFLARE_PORT" --ccflare-host "$CCFLARE_HOST")
-    [[ -n "$SEMGREP_TOKEN" ]] && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
-    $SEMGREP_SKIP && _VPS_REEXEC_ARGS+=(--no-semgrep)
     $LETTA_SKIP && _VPS_REEXEC_ARGS+=(--letta-skip)
     _VPS_REEXEC_ARGS+=(--letta-port "$LETTA_PORT")
     [[ -n "$LETTA_PASSWORD" ]] && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
@@ -126,11 +124,6 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
       fi
       if [[ -n "${TAILSCALE_KEY:-}" ]]; then
         printf ' --tailscale-key %q' "$TAILSCALE_KEY"
-      fi
-      if [[ -n "$SEMGREP_TOKEN" ]]; then
-        printf ' --semgrep-token %q' "$SEMGREP_TOKEN"
-      elif $SEMGREP_SKIP; then
-        printf ' --no-semgrep'
       fi
       printf ' 2>&1 | tee %q\n' "$_TMUX_LOG"
     } >"$_TMUX_WRAPPER"

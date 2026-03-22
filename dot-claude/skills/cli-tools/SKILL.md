@@ -21,7 +21,7 @@ Run `<tool> --help` before first use. Never guess flags.
 `gh` (GitHub), `lazygit` (TUI), `delta` (diff pager), `difftastic` (structural diff), `git-cliff` (changelog), `gitleaks` (secrets), `git-absorb` (fixup), `onefetch` (stats)
 
 ## Code Quality
-`semgrep` (SAST), `shellcheck` (sh lint), `ruff` (Python lint+fmt), `scc` (stats), `tree-sitter` (AST), `typos`/`codespell` (spelling), `hadolint` (Dockerfile), `actionlint` (GH Actions), `shfmt` (sh fmt), `prettier` (web fmt), `ansible-lint`
+`opengrep` (SAST), `shellcheck` (sh lint), `ruff` (Python lint+fmt), `scc` (stats), `tree-sitter` (AST), `typos`/`codespell` (spelling), `hadolint` (Dockerfile), `actionlint` (GH Actions), `shfmt` (sh fmt), `prettier` (web fmt), `ansible-lint`
 
 ## Containers & K8s
 `lazydocker` (TUI), `dive` (layers), `ctop` (metrics), `kubectl`, `k9s` (TUI), `helm`, `stern` (multi-pod logs), `crane` (images), `cosign` (signing)

@@ -72,7 +72,7 @@ pueue add --after "$SCAN" --label deploy -- 'docker push app'
 pueue parallel 5
 pueue add --label secrets -- 'gitleaks detect --verbose'
 pueue add --label deps -- 'osv-scanner -r .'
-pueue add --label sast -- 'semgrep --config auto .'
+pueue add --label sast -- 'opengrep scan -f auto .'
 pueue add --label container -- 'trivy image myapp:latest'
 pueue add --label iac -- 'tflint --recursive'
 pueue wait

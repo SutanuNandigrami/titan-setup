@@ -12,7 +12,6 @@ echo -e "  ${CYAN}Python tools (uv):${NC}"
 # Core Python tools (always installed)
 UV_TOOLS=(
   "yq"           # yq — YAML/XML/TOML processor
-  "semgrep"      # semgrep — static analysis
   "ansible-core" # ansible, ansible-playbook, ansible-galaxy + more
   "ansible-lint" # ansible-lint — linter for Ansible playbooks
   "pgcli"        # pgcli — Postgres with autocomplete
@@ -60,6 +59,24 @@ python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists
 unset _PYSITE
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
+
+# ─── opengrep — static analysis (self-contained binary, no Python needed) ───
+# Replaces semgrep: LGPL 2.1 fork, no token required, better taint analysis
+if command -v opengrep &>/dev/null && ! $FORCE_UPDATES; then
+  ok "opengrep (exists)"
+else
+  case "$UNAME_ARCH" in
+    x86_64) _og_bin="opengrep_manylinux_x86" ;;
+    aarch64) _og_bin="opengrep_manylinux_aarch64" ;;
+  esac
+  if curl -fsSL "https://github.com/opengrep/opengrep/releases/latest/download/${_og_bin}" \
+    -o /usr/local/bin/opengrep 2>>"$LOG_FILE"; then
+    chmod +x /usr/local/bin/opengrep
+    ok "opengrep $(opengrep --version 2>/dev/null | head -1 || true)"
+  else
+    warn "opengrep download failed (install manually: https://github.com/opengrep/opengrep)"
+  fi
+fi
 
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"

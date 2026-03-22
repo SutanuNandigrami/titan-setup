@@ -55,10 +55,6 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   _MERGE_INJECT+=(--inject "LETTA_SDK_TOOLS=read-only")
 fi
 
-if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-  _MERGE_INJECT+=(--inject "SEMGREP_APP_TOKEN=${SEMGREP_TOKEN}")
-fi
-
 if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
   _MERGE_INJECT+=(--inject "DISABLE_AUTOUPDATER=1")
 fi
@@ -83,15 +79,6 @@ python3 "$REPO_FILES/script/merge-settings.py" \
       ok "settings.json (template — first install)"
     fi
   }
-
-# Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
-if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-  jq '.enabledPlugins["semgrep@claude-plugins-official"] = true' \
-    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
-    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
-    ok "settings.json (semgrep plugin enabled)" ||
-    warn "semgrep plugin enablement failed"
-fi
 
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
 if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
