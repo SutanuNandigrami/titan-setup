@@ -421,8 +421,11 @@ else ok "helm (exists)"; fi
 
 # gcloud CLI
 if ! command -v gcloud &>/dev/null; then
-  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
-    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
+  # Download key to temp file first — piping to gpg --dearmor hangs if curl fails
+  _GPG_TMP="$WORKDIR/gcloud.gpg"
+  if curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg -o "$_GPG_TMP" 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq google-cloud-cli &&
@@ -431,7 +434,10 @@ else ok "gcloud (exists)"; fi
 
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
-  wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null || true
+  _GPG_TMP="$WORKDIR/hashicorp.gpg"
+  if wget -qO "$_GPG_TMP" https://apt.releases.hashicorp.com/gpg 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq terraform packer &&
     ok "terraform + packer" || warn "terraform/packer install failed"
@@ -465,14 +471,20 @@ else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
-  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
+  _GPG_TMP="$WORKDIR/trivy.gpg"
+  if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq trivy &&
     ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
-    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
+    _GPG_TMP="$WORKDIR/trivy.gpg"
+    if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
+      sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+    fi
     echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
     ok "trivy (key migrated)"
   else
