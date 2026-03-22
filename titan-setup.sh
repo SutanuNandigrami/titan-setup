@@ -3301,7 +3301,7 @@ fi
 # Public port 22 deletion and sshd restart happen LAST (after all output)
 # so the current SSH session stays alive through the entire install.
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
-  sudo ufw allow in on tailscale0
+  command -v ufw &>/dev/null && sudo ufw allow in on tailscale0 || true
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 elif [[ "$INSTALL_MODE" == "vps" ]]; then
   warn "SSH lockdown skipped — Tailscale not connected. Run tailscale up manually, then:"
