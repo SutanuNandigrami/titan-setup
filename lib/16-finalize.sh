@@ -99,7 +99,13 @@ fi
 # Public port 22 deletion and sshd restart happen LAST (after all output)
 # so the current SSH session stays alive through the entire install.
 if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
-  sudo ufw allow in on tailscale0
+  # Allow traffic on tailscale interface — ufw on Hetzner, iptables on Oracle/others
+  if command -v ufw &>/dev/null; then
+    sudo ufw allow in on tailscale0 || true
+  elif command -v iptables &>/dev/null; then
+    sudo iptables -C INPUT -i tailscale0 -j ACCEPT 2>/dev/null ||
+      sudo iptables -I INPUT 1 -i tailscale0 -j ACCEPT 2>/dev/null || true
+  fi
   COMPLIANCE_OUT=$(sudo /usr/local/bin/compliance_check.sh 2>/dev/null || true)
 elif [[ "$INSTALL_MODE" == "vps" ]]; then
   warn "SSH lockdown skipped — Tailscale not connected. Run tailscale up manually, then:"
@@ -220,8 +226,14 @@ if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
   if [[ -z "${TS_IP:-}" ]]; then
     warn "Tailscale IP empty — skipping SSH lockdown (run manually after tailscale up)"
   else
-    sudo ufw delete allow 22/tcp || true
-    sudo ufw delete allow OpenSSH 2>/dev/null || true
+    # Remove public SSH access — ufw on Hetzner, iptables on Oracle/others
+    if command -v ufw &>/dev/null; then
+      sudo ufw delete allow 22/tcp || true
+      sudo ufw delete allow OpenSSH 2>/dev/null || true
+    elif command -v iptables &>/dev/null; then
+      sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || true
+      sudo iptables -D INPUT -p tcp -m state --state NEW --dport 22 -j ACCEPT 2>/dev/null || true
+    fi
     sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
     echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
     # Validate config before restart to avoid SSH lockout
