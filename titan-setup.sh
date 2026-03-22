@@ -1129,6 +1129,15 @@ else
 
   phase_mark "phase2"
 fi # end phase2 checkpoint
+
+# ─── Unconditional PATH exports ───────────────────────────────────────────────
+# These MUST run on every invocation (including cached re-runs) so that
+# Phase 3+ tools can find cargo, bun, go, uv, and mise.
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
+export GOPATH="$HOME/go"
+# mise shims (needed for playwright/node)
+[[ -d "$HOME/.local/share/mise/shims" ]] && export PATH="$HOME/.local/share/mise/shims:$PATH"
 # ─── Repo files (static content loaded from git repo) ────────────────────────
 # Cloned early so tools like RTK can use patches from the repo during Phase 3.
 REPO_FILES="${TITAN_REPO_FILES:-}"
