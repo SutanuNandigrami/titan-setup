@@ -136,6 +136,8 @@ LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
 VEXP_SKIP=false
+CLAUDECODEUI_SKIP=false
+CLAUDECODEUI_PORT=3001
 FORCE_UPDATES=false
 MINIMAL=false
 
@@ -167,6 +169,8 @@ Options:
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
   --no-cozempic            Skip cozempic install (context bloat cleaner)
   --no-vexp                Skip vexp-cli install (context engine)
+  --claudecodeui-skip      Skip Claude Code UI web interface
+  --claudecodeui-port PORT Claude Code UI port (default: 3001)
 
   --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
@@ -309,6 +313,18 @@ while [[ $# -gt 0 ]]; do
       VEXP_SKIP=true
       shift
       ;;
+    --claudecodeui-skip)
+      CLAUDECODEUI_SKIP=true
+      shift
+      ;;
+    --claudecodeui-port)
+      [[ $# -ge 2 ]] || {
+        fail "--claudecodeui-port requires a value"
+        usage
+      }
+      CLAUDECODEUI_PORT="$2"
+      shift 2
+      ;;
     --force-updates)
       FORCE_UPDATES=true
       shift
@@ -324,6 +340,7 @@ while [[ $# -gt 0 ]]; do
       COZEMPIC_SKIP=true
       LETTA_CTRL_SKIP=true
       VEXP_SKIP=true
+      CLAUDECODEUI_SKIP=true
       shift
       ;;
     --secrets-file)
@@ -1344,6 +1361,59 @@ SERVICEEOF
   # docker group is applied via sg above — no re-login required
 else
   warn "n8n skipped — Docker not available (install failed earlier or not supported)"
+fi
+
+# ─── claudecodeui — web/mobile interface for Claude Code sessions ───
+# Browse Claude Code sessions, file explorer, git, terminal from any device
+# Auto-discovers sessions from ~/.claude/ — zero config
+if $CLAUDECODEUI_SKIP || $MINIMAL; then
+  ok "claudecodeui (skipped)"
+else
+  _NODE_VER=$(node --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
+  if [[ "$_NODE_VER" -lt 22 ]]; then
+    warn "claudecodeui requires Node.js v22+ (found: v${_NODE_VER}) — skipping"
+  else
+    if bun pm ls -g 2>/dev/null | grep -q '@siteboon/claude-code-ui'; then
+      ok "claudecodeui (exists)"
+    else
+      echo -n "  Installing claudecodeui..."
+      run_q bun install -g @siteboon/claude-code-ui && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
+    fi
+
+    if command -v cloudcli &>/dev/null; then
+      check_port "$CLAUDECODEUI_PORT" "claudecodeui" || true
+
+      _CLOUDCLI_BIN=$(command -v cloudcli)
+      mkdir -p "$HOME/.config/systemd/user"
+      cat >"$HOME/.config/systemd/user/claudecodeui.service" <<SERVICEEOF
+[Unit]
+Description=Claude Code UI — web interface for Claude Code sessions
+After=default.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=${_CLOUDCLI_BIN}
+Restart=on-failure
+RestartSec=5
+Environment="HOST=127.0.0.1"
+Environment="SERVER_PORT=${CLAUDECODEUI_PORT}"
+Environment="CLAUDE_CLI_PATH=$(command -v claude 2>/dev/null || echo claude)"
+Environment="PATH=${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target
+SERVICEEOF
+
+      systemctl --user daemon-reload 2>/dev/null || true
+      systemctl --user enable claudecodeui 2>/dev/null || true
+      systemctl --user start claudecodeui 2>/dev/null || true
+      ok "claudecodeui service (http://127.0.0.1:${CLAUDECODEUI_PORT})"
+    else
+      warn "claudecodeui: cloudcli not found — check: bun install -g @siteboon/claude-code-ui"
+    fi
+  fi
 fi
 # ─── Ollama — local embedding model server (required by Letta for agent creation) ───
 if $LETTA_SKIP || $OLLAMA_SKIP; then
@@ -3251,6 +3321,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
         ok "tailscale serve: letta-ctrl → https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}" ||
         warn "tailscale serve for letta-ctrl failed — run: tailscale serve --https=${LETTA_CTRL_PORT} http://localhost:${LETTA_CTRL_PORT}"
     fi
+    if ! $CLAUDECODEUI_SKIP; then
+      tailscale serve --bg --https="${CLAUDECODEUI_PORT}" "http://localhost:${CLAUDECODEUI_PORT}" 2>/dev/null &&
+        ok "tailscale serve: claudecodeui → https://${TS_HOSTNAME}:${CLAUDECODEUI_PORT}" ||
+        warn "tailscale serve for claudecodeui failed — run: tailscale serve --https=${CLAUDECODEUI_PORT} http://localhost:${CLAUDECODEUI_PORT}"
+    fi
   fi
 
   # ── Add Claude user to docker group ────────────────────────────────────
@@ -3306,6 +3381,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
+  $CLAUDECODEUI_SKIP || echo "    claudecodeui:   https://${TS_HOSTNAME}:${CLAUDECODEUI_PORT}"
   echo "    SSH:            ssh ${CLAUDE_USER}@${TS_HOSTNAME}"
   echo ""
   if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
@@ -3334,6 +3410,7 @@ else
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
+  $CLAUDECODEUI_SKIP || echo "    claudecodeui:     http://localhost:${CLAUDECODEUI_PORT}"
   echo ""
 
   # ── B8: n8n default credentials ──

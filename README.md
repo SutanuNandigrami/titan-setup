@@ -102,6 +102,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | `--no-ollama` | Skip Ollama LLM server |
 | `--letta-ctrl-skip` | Skip LettaCtrl web GUI |
 | `--letta-ctrl-port PORT` | LettaCtrl port (default: 8284) |
+| `--claudecodeui-skip` | Skip Claude Code UI web interface |
+| `--claudecodeui-port PORT` | Claude Code UI port (default: 3001) |
 
 ---
 
@@ -229,6 +231,8 @@ Desktop only: `maim`, `xdotool`.
 **Binary:** kubectl · helm · gcloud · terraform · packer · tflint · infracost · hadolint · duckdb · trivy · mc · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy · opengrep
 
 **Docker services:** n8n (workflow automation, localhost:5678) · Letta (persistent memory, localhost:8283)
+
+**Web services:** claudecodeui (web/mobile Claude Code UI, localhost:3001)
 
 ### Claude Code Configuration
 

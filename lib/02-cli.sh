@@ -22,6 +22,8 @@ LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
 VEXP_SKIP=false
+CLAUDECODEUI_SKIP=false
+CLAUDECODEUI_PORT=3001
 FORCE_UPDATES=false
 MINIMAL=false
 
@@ -53,6 +55,8 @@ Options:
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
   --no-cozempic            Skip cozempic install (context bloat cleaner)
   --no-vexp                Skip vexp-cli install (context engine)
+  --claudecodeui-skip      Skip Claude Code UI web interface
+  --claudecodeui-port PORT Claude Code UI port (default: 3001)
 
   --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
@@ -195,6 +199,18 @@ while [[ $# -gt 0 ]]; do
       VEXP_SKIP=true
       shift
       ;;
+    --claudecodeui-skip)
+      CLAUDECODEUI_SKIP=true
+      shift
+      ;;
+    --claudecodeui-port)
+      [[ $# -ge 2 ]] || {
+        fail "--claudecodeui-port requires a value"
+        usage
+      }
+      CLAUDECODEUI_PORT="$2"
+      shift 2
+      ;;
     --force-updates)
       FORCE_UPDATES=true
       shift
@@ -210,6 +226,7 @@ while [[ $# -gt 0 ]]; do
       COZEMPIC_SKIP=true
       LETTA_CTRL_SKIP=true
       VEXP_SKIP=true
+      CLAUDECODEUI_SKIP=true
       shift
       ;;
     --secrets-file)

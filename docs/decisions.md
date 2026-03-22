@@ -196,6 +196,12 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: (1) Enhance /handoff with structured sections (task, completed, in-progress, key decisions, blockers, task checklist, next steps, test status). Enhance /catchup to read richer handoff + git state + memory. (2) Add pure bash `skill-suggest.sh` UserPromptSubmit hook that matches prompt keywords against a built-in skill registry and suggests relevant skills. Zero token cost on no match. No TypeScript/npm dependency — pure bash + jq + grep.
 **Consequences**: Better session continuity. Skills surface based on what users ask, not just what files are open. Trade-off: second UserPromptSubmit hook adds ~3s latency on keyword match (none on miss).
 
+## ADR-034: claudecodeui — web interface for Claude Code sessions (2026-03-23)
+**Status**: Accepted
+**Context**: Claude Code is CLI-only. Remote access requires SSH + tmux. claudecodeui (@siteboon/claude-code-ui) provides a zero-config web/mobile interface that auto-discovers sessions from ~/.claude/. Requires Node.js v22+ (installed via mise). Runs as HTTP+WebSocket server. GPL v3.0 license.
+**Decision**: Install via bun install -g. Run as systemd user service (Type=simple, not Docker). Bind to 127.0.0.1 (ADR-019). Expose via Tailscale serve on HTTPS. Skip in --minimal mode. CLI flags: --claudecodeui-skip, --claudecodeui-port PORT. Default port 3001.
+**Consequences**: Web/mobile access to Claude Code sessions from any device on tailnet. Zero config. Trade-off: one more bun package + one systemd service. Node v22+ guard skips gracefully on older runtimes.
+
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
