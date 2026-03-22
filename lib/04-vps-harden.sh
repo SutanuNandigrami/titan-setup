@@ -24,9 +24,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   apt_update
-  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    -o Dpkg::Options::="--force-confold" \
+    $_APT_LOCK_OPT -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
