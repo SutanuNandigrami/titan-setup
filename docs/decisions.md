@@ -190,6 +190,12 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: (1) `JSON.stringify()` for token injection into HTML. (2) `escHtml()` on all 12 agent data DOM insertions. (3) `data-*` attributes replace inline JS onclick strings. (4) `contenteditable="plaintext-only"`. (5) `encodeURIComponent(label)` on frontend + `decodeURIComponent()` on server for block labels. (6) `closed` flag guards SSE ReadableStream controller + `idleTimeout: 255` on Bun.serve. (7) EventSource `onerror` closes stream and shows reconnect message. (8) Recursive `setTimeout` replaces `setInterval` + `beforeunload` cleanup. (9) Escape key closes modal. (10) 150ms debounce on log filter. (11) CSS `text-overflow:ellipsis` on agent names. (12) Warn on startup if `LETTA_PASSWORD` is empty.
 **Consequences**: All known XSS vectors closed. Server survives SSE disconnect without crash. Polling cannot stack. Block labels with special chars work. Trade-off: `plaintext-only` contenteditable not supported in Firefox <125 (acceptable — dashboard targets Chromium-based browsers on dev machines).
 
+## ADR-033: Unified context system + skill auto-activation (2026-03-23)
+**Status**: Accepted
+**Context**: Titan's /handoff and /catchup commands were minimal (1 and 4 lines respectively). Sessions lost context on reset. Skills only activated via `paths:` frontmatter (file pattern matching), not by prompt content. Inspired by claude-code-infrastructure-showcase (diet103) which provides TypeScript-based skill auto-activation and dev-docs patterns.
+**Decision**: (1) Enhance /handoff with structured sections (task, completed, in-progress, key decisions, blockers, task checklist, next steps, test status). Enhance /catchup to read richer handoff + git state + memory. (2) Add pure bash `skill-suggest.sh` UserPromptSubmit hook that matches prompt keywords against a built-in skill registry and suggests relevant skills. Zero token cost on no match. No TypeScript/npm dependency — pure bash + jq + grep.
+**Consequences**: Better session continuity. Skills surface based on what users ask, not just what files are open. Trade-off: second UserPromptSubmit hook adds ~3s latency on keyword match (none on miss).
+
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
