@@ -1196,16 +1196,17 @@ Track Claude Code token and cost usage. Monitor spending.
 
 > **Example prompt:** "Show me my Claude Code usage and costs"
 
-#### ccstatusline
-Status bar for Claude Code with Powerline theme. Terminal integration.
+#### claude-lens
+Quota pace tracking statusline for Claude Code. Shows how fast/slow you're consuming
+quota relative to expected rate — zero configuration required.
 
-- Display status in terminal
-- Integration with shell prompt
-- Customizable themes and layout
-- Real-time updates
-- Config location: `~/.config/ccstatusline/settings.json` — use TUI editor: `ccstatusline`
+- Quota delta: % faster/slower than expected pace
+- 5-hour and 7-day remaining quota at a glance
+- Reset timer countdown
+- Model, effort level, context %, git branch
+- Script location: `~/.claude/claude-lens.sh`
 
-> **Example prompt:** "Show Claude Code status in my terminal prompt"
+> **Example prompt:** "Show Claude Code quota usage in my terminal"
 
 #### rtk (Rust Token Killer)
 Command output compression proxy. Reduces tokens consumed by verbose CLI output.

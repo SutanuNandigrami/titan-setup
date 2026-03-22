@@ -3,7 +3,6 @@
     "ENGINEER_NAME": "TITAN_ENGINEER_NAME",
     "DEFAULT_BRANCH": "main",
     "ENABLE_TOOL_SEARCH": "auto:5",
-    "CLAUDE_CODE_STATUSLINE": "ccstatusline",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "90",
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
@@ -309,7 +308,7 @@
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline-command.sh",
+    "command": "~/.claude/claude-lens.sh",
     "padding": 0
   }
 }

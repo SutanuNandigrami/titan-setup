@@ -91,7 +91,7 @@ trustedDependencies = ["puppeteer", "esbuild", "@swc/core", "canvas", "node-gyp"
 BUNFIG
 export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
-BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix" "ccstatusline")
+BUN_TOOLS=("trash-cli" "tldr" "prettier" "repomix")
 if $FORCE_UPDATES; then
   echo -e "  ${YELLOW}Force-updating all Bun tools...${NC}"
   for tool in "${BUN_TOOLS[@]}"; do

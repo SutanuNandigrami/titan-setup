@@ -172,6 +172,12 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: Replace semgrep with opengrep. Remove semgrep CLI install (uv), Claude Code plugin, `--semgrep-token`/`--no-semgrep` flags, `SEMGREP_APP_TOKEN` env var, interactive token prompt, and all hook patching. Install opengrep as a direct binary download to `/usr/local/bin/opengrep` with x86_64/aarch64 support. Drop the Claude Code semgrep plugin entirely — on-demand `opengrep scan` via the security-scan skill is sufficient (no auto-scan hooks needed).
 **Consequences**: Simpler install (no token, no Python, no plugin patching). One fewer uv tool. CLI commands change from `semgrep --config auto .` to `opengrep scan -f auto .`. Existing semgrep rules remain compatible.
 
+## ADR-030: Replace ccstatusline with claude-lens (2026-03-23)
+**Status**: Accepted
+**Context**: ccstatusline required bun (Node.js runtime), a 156-line JSON config file, and a 138-line bash fallback script — three moving parts. claude-lens is a single ~165-line bash script with only jq as dependency (already in Phase 1). It provides quota pace tracking (delta from expected consumption rate) which ccstatusline did not. CC v2.1.80+ sends usage data via stdin, eliminating network overhead.
+**Decision**: Remove ccstatusline from BUN_TOOLS, delete its config directory and fallback script. Ship claude-lens.sh in dot-claude/, deploy via `install -Dm755`. Remove CLAUDE_CODE_STATUSLINE env var (ccstatusline-specific). Point statusLine.command to ~/.claude/claude-lens.sh.
+**Consequences**: One fewer bun dependency. Zero-config status line (no ~/.config/ccstatusline/). Quota pace tracking gives users actionable insight. Trade-off: loses ccstatusline's Powerline theme and multi-line TUI config — acceptable since quota visibility is more valuable.
+
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
