@@ -6,6 +6,33 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ---
 
+### v3.20 — ARM64 docker reliability, live testing overhaul, 168 tests
+
+**ARM64 Docker Services (PR #47 — ADR-025/026):**
+- n8n pinned to `2.10.4` on aarch64 — `isolated-vm` in >=2.11.1 segfaults on ARM64 Alpine
+- Systemd services switched from `Type=simple` + `docker run --rm` to `Type=oneshot` + `docker run -d --restart unless-stopped` — attached docker clients get SIGKILL'd (exit 137) on ARM64
+- Removed `MemoryMax` from services (only limited docker CLI, not container)
+- Fixed `StartLimitIntervalSec` placement (`[Unit]` not `[Service]`)
+- Added `ExecStopPost` for container cleanup on service stop
+
+**Live VPS Testing (PRs #39–#47):**
+- Hetzner x86 (CPX22, Ubuntu 24.04): 16 bugs found and fixed — all 6 phases pass
+- Oracle ARM (Ampere, Ubuntu 24.04): 2 bugs found and fixed — all 6 phases pass
+- Fixes include: apt lock timeout, gpg dearmor hang, tailscaled wait, ufw/iptables fallback, docker GID propagation, read EOF guard, tmux detached mode
+
+**Architecture:**
+- Consolidated lib/12+13 → single `lib/12-plugins.sh` (ADR-024): 19 → 18 fragments
+- 26 ADRs (ADR-011 through ADR-026)
+- 168 bats tests (97 new regression tests from live testing)
+
+**New CLI flags:**
+- `--minimal` — 50 core tools in ~25 min (skips Letta, Ollama, n8n, extended tools)
+- `--secrets-file PATH` — credential passing via file instead of CLI args
+- `--fresh` — reset all phase checkpoints for clean re-install
+- `--force-updates` — force upgrade all tools
+
+---
+
 ### v3.19 — Idempotency overhaul, atomic settings merge, desktop bug fixes
 
 **Idempotency (Phase 2 — settings.json atomic merge):**

@@ -19,20 +19,19 @@ lib/
 ├── 09-tools-rust-go.sh   # Cargo crates, Go tools, binary installs
 ├── 10-claude-code.sh     # Claude Code install + config
 ├── 11-deploy-config.sh   # Deploy ~/.claude/ files from dot-claude/
-├── 12-plugins-install.sh # Plugin marketplace + installs
-├── 13-plugins-config.sh  # Plugin post-install config (subconscious, etc.)
-├── 14-plugins-letta-ctrl.sh # LettaCtrl GUI install
-├── 15-plugins-cleanup.sh # Plugin cache cleanup
-├── 16-shell-integration.sh # PATH exports, bashrc integration
-└── 17-finalize.sh        # Summary, compliance check, tmux cleanup
+├── 12-plugins.sh         # Plugin marketplace, installs, config
+├── 13-plugins-letta-ctrl.sh # LettaCtrl GUI install
+├── 14-plugins-cleanup.sh # Plugin cache cleanup
+├── 15-shell-integration.sh # PATH exports, bashrc integration
+└── 16-finalize.sh        # Summary, compliance check, tmux cleanup
 ```
-*(19 fragments total)*
+*(18 fragments total)*
 
 ## Build & Test
 
 ```bash
 just build       # Assemble lib/*.sh → titan-setup.sh
-just test        # Run 71 bats tests
+just test        # Run 168 bats tests
 just lint        # shellcheck on all fragments
 just smoke       # Quick syntax check
 just check       # lint + test (CI runs this on every PR)

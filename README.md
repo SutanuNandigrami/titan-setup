@@ -187,7 +187,7 @@ Every common MCP server has a free, fast CLI equivalent that costs **zero contex
 | Fetch MCP | `xh` | 0 |
 | File search | `rg` + `fd` | 0 |
 
-Instead of injecting 55K tokens of schemas, Titan installs 125+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
+Instead of injecting 55K tokens of schemas, Titan installs 150+ CLI tools and teaches Claude to run `<tool> --help` at runtime. Tool knowledge is discovered on-demand, not pre-loaded.
 
 ### The Result
 
@@ -195,7 +195,7 @@ Instead of injecting 55K tokens of schemas, Titan installs 125+ CLI tools and te
 Typical MCP setup:  55–134K tokens at startup
 Titan setup:        ~4–7K tokens
 Savings:            94–97%
-More tools:         125+ vs ~20
+More tools:         150+ vs ~20
 Better recall:      Fewer turns consumed by overhead
 ```
 
@@ -220,7 +220,7 @@ Desktop only: `maim`, `xdotool`.
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
 | **Docker** | Container runtime |
 
-### 125+ CLI Tools
+### 150+ CLI Tools
 
 **Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
 
@@ -582,6 +582,8 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 
 | Version | Highlights |
 |---------|-----------|
+| **v3.20** | ARM64 docker reliability, 168 tests, E2E pass on x86 + ARM64 |
+| **v3.19** | Idempotency overhaul, atomic settings merge, `--minimal`/`--secrets-file`/`--fresh` flags |
 | **v3.18** | GitHub Action security hardening — prompt injection prevention |
 | **v3.17** | ARM64 fixes, VPS reliability, consistency audit, `--version` flag |
 | **v3.16** | tmux resilience, Vertex AI RTK fix, Semgrep integration |
@@ -595,7 +597,7 @@ All changes documented in [CHANGELOG.md](CHANGELOG.md). Key versions:
 ## Detailed Tool Reference
 
 See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
-- 125+ CLI tools (what they do, example prompts)
+- 150+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
 - Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline, cc-patch-thinking)
