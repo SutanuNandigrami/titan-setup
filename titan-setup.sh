@@ -40,7 +40,7 @@ fi
 # ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-SCRIPT_VERSION="v3.19"
+SCRIPT_VERSION="v3.20"
 # ─── Phase checkpoint system for resume capability ───
 _PROGRESS_DIR="$HOME/.titan-progress"
 mkdir -p "$_PROGRESS_DIR" 2>/dev/null || true

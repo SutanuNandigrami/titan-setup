@@ -154,6 +154,18 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: Switch n8n and letta systemd services from `Type=simple` + `docker run --rm` to `Type=oneshot` + `RemainAfterExit=yes` + `docker run -d --restart unless-stopped`. Use `ExecStopPost` to clean up containers on service stop. Move `StartLimitIntervalSec` to `[Unit]` section (systemd ignores it in `[Service]`). Remove `MemoryMax` — it only limited the docker client process, not the container.
 **Consequences**: Both services start reliably on ARM64 and x86_64. Docker's own `--restart unless-stopped` handles container crashes. Trade-off: `systemctl --user status` shows `active (exited)` instead of `active (running)` since systemd doesn't track the container PID — use `docker ps` to check actual container status.
 
+## ADR-027: Unconditional PATH exports after phase checkpoints (2026-03-22)
+**Status**: Accepted
+**Context**: Phase 2 (Package Managers) installs rustup, bun, Go, uv and exports their PATH. On re-run, Phase 2 is skipped via checkpoint cache — but the PATH exports lived inside the skipped block. This caused `rustup: command not found` and bun tool failures on re-run.
+**Decision**: Add unconditional PATH exports after the phase2 `fi` block: cargo env, `.local/bin`, `.bun/bin`, `.cargo/bin`, `go/bin`, `/usr/local/go/bin`, and mise shims. These run on every invocation regardless of cache state.
+**Consequences**: Re-runs work correctly without `--fresh`. Trade-off: slight redundancy on first run (PATH exported twice). The pattern "PATH exports OUTSIDE checkpoint blocks" is now enforced.
+
+## ADR-028: Tailscale serve reset before reconfiguring (2026-03-22)
+**Status**: Accepted
+**Context**: `tailscale serve` binds rules to the current MagicDNS hostname. If the hostname changes between installs (e.g., server reimaged, hostname collision), stale rules remain active under the old hostname. New rules are added but old ones linger, causing confusion.
+**Decision**: Run `tailscale serve reset` before configuring serve rules. This clears all existing rules and re-adds only current ones.
+**Consequences**: Clean serve state on every run. Trade-off: momentary service interruption during re-run (rules cleared then re-added). Acceptable since re-runs are infrequent.
+
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.

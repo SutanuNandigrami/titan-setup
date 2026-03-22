@@ -40,4 +40,4 @@ fi
 # ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-SCRIPT_VERSION="v3.19"
+SCRIPT_VERSION="v3.20"
