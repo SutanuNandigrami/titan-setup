@@ -48,7 +48,7 @@ Run `<tool> --help` before first use. Never guess flags.
 `aws`, `hcloud` (Hetzner), `doctl` (DO), `mc` (S3), `vercel`, `gcloud`
 
 ## AI Tools
-`rtk` (token optimizer), `better-ccflare` (API proxy), `nlm` (NotebookLM), `claude-squad` (parallel agents), `ccusage`/`ccstatusline`
+`rtk` (token optimizer), `better-ccflare` (API proxy), `nlm` (NotebookLM), `claude-squad` (parallel agents), `ccusage`/`claude-lens`
 
 ## Docs & Terminal
 `pandoc` (convert), `glow` (md render), `mdbook` (doc sites), `slides` (presentations), `tmux`, `atuin` (history), `tldr` (cheatsheets), `starship` (prompt), `trash-cli`

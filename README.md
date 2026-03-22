@@ -211,7 +211,7 @@ Desktop only: `maim`, `xdotool`.
 |---------|---------|
 | **Rust / cargo** | Rust CLI tools (ripgrep, fd, bat, etc.) + auto-upgrade |
 | **uv** | Python CLI tools (ansible, pgcli, etc.) |
-| **bun** | JavaScript CLI tools (prettier, repomix, ccstatusline, etc.) |
+| **bun** | JavaScript CLI tools (prettier, repomix, etc.) |
 | **Go** | Go CLI tools (dive, stern, glow, etc.) |
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
 | **Docker** | Container runtime |
@@ -220,7 +220,7 @@ Desktop only: `maim`, `xdotool`.
 
 **Python (uv):** yq · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
 
-**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · mermaid-cli · playwright · kilocode · vercel
+**JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · mermaid-cli · playwright · kilocode · vercel
 
 **Rust (cargo):** ripgrep · fd · sd · eza · dust · bat · xsv · htmlq · git-absorb · git-delta · difftastic · typos-cli · websocat · bore-cli · procs · hyperfine · pueue · watchexec · just · choose · xh · ouch · hurl · jwt-cli · oha · rtk · nushell · recall · parry · claude-tmux
 
@@ -459,7 +459,7 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | [patrickjaja/claude-cowork-service](https://github.com/patrickjaja/claude-cowork-service) | Claude teamwork/collaboration service |
 | *cc-patch-thinking* (built-in) | Auto-patches CC binary to show thinking blocks inline |
 | *ccusage* (PyPI) | Claude Code token and cost usage tracking |
-| *ccstatusline* (npm) | Terminal status bar with Powerline theme |
+| *claude-lens* | Quota pace tracking statusline (zero-config, jq only) |
 
 ### Memory & AI Services
 
@@ -555,7 +555,7 @@ yq · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli ·
 
 ### JavaScript CLI Tools (via bun)
 
-trash-cli · tldr · prettier · repomix · ccstatusline · @google/gemini-cli · @mermaid-js/mermaid-cli · playwright · @kilocode/cli · vercel
+trash-cli · tldr · prettier · repomix · @google/gemini-cli · @mermaid-js/mermaid-cli · playwright · @kilocode/cli · vercel
 
 ### Package Managers & Runtimes
 
@@ -593,7 +593,7 @@ See [USER_GUIDE.md](USER_GUIDE.md) for comprehensive documentation of:
 - 150+ CLI tools (what they do, example prompts)
 - Built-in agents (researcher, planner, reviewer)
 - Slash commands (`/ship`, `/scan`, `/review`, etc.)
-- Claude Code ecosystem (ccusage, rtk, better-ccflare, ccstatusline, cc-patch-thinking)
+- Claude Code ecosystem (ccusage, rtk, better-ccflare, claude-lens, cc-patch-thinking)
 - Security tools and scanning patterns
 - Network and system monitoring
 - Container and Kubernetes tools

@@ -36,8 +36,18 @@ setup() {
   grep 'claude-tmux' "$REPO/lib/09-tools-rust-go.sh" | grep -q 'LOG_FILE'
 }
 
-@test "R1: ccstatusline only in lib/07 (not lib/09)" {
-  ! grep -q 'ccstatusline' "$REPO/lib/09-tools-rust-go.sh"
+@test "R1: claude-lens in dot-claude (ccstatusline removed)" {
+  [ -f "$REPO/dot-claude/claude-lens.sh" ]
+  ! grep -q 'ccstatusline' "$REPO/lib/07-tools-python-js.sh"
+  ! grep -q 'statusline-command.sh' "$REPO/lib/11-deploy-config.sh"
+}
+
+@test "R1: settings.json statusLine points to claude-lens" {
+  jq -e '.statusLine.command == "~/.claude/claude-lens.sh"' "$REPO/dot-claude/settings.json"
+}
+
+@test "R1: no CLAUDE_CODE_STATUSLINE env var in settings.json" {
+  ! jq -e '.env.CLAUDE_CODE_STATUSLINE' "$REPO/dot-claude/settings.json"
 }
 
 @test "R1: dippy clone logs to LOG_FILE" {
@@ -447,6 +457,10 @@ setup() {
 @test "ADR: decisions.md has ADR-025 and ADR-026" {
   grep -q 'ADR-025.*n8n.*ARM64' "$REPO/docs/decisions.md"
   grep -q 'ADR-026.*Detached docker' "$REPO/docs/decisions.md"
+}
+
+@test "ADR: decisions.md has ADR-030 (claude-lens)" {
+  grep -q 'ADR-030.*claude-lens' "$REPO/docs/decisions.md"
 }
 
 # ════════════════════════════════════════════════════════════════════

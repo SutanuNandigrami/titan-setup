@@ -8,6 +8,8 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ### v3.20 — ARM64 docker reliability, live testing overhaul, 168 tests
 
+- Replaced ccstatusline with claude-lens: quota pace tracking, zero-config, no bun dependency (ADR-030)
+
 **ARM64 Docker Services (PR #47 — ADR-025/026):**
 - n8n pinned to `2.10.4` on aarch64 — `isolated-vm` in >=2.11.1 segfaults on ARM64 Alpine
 - Systemd services switched from `Type=simple` + `docker run --rm` to `Type=oneshot` + `docker run -d --restart unless-stopped` — attached docker clients get SIGKILL'd (exit 137) on ARM64
