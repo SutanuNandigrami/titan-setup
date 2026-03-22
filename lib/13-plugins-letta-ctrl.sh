@@ -29,7 +29,7 @@ Type=simple
 ExecStart=${_BUN_BIN} run %h/.config/letta/letta-ctrl-server.js
 Environment="LETTA_CTRL_PORT=${LETTA_CTRL_PORT}"
 Environment="LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}"
-$( [[ "$INSTALL_MODE" == "vps" ]] && echo 'Environment="LETTA_CTRL_TOKEN=disable"' )
+$([[ "$INSTALL_MODE" == "vps" ]] && echo 'Environment="LETTA_CTRL_TOKEN=disable"')
 Restart=on-failure
 RestartSec=5
 

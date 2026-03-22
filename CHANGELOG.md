@@ -6,6 +6,28 @@ For full documentation see [README.md](README.md) and [USER_GUIDE.md](USER_GUIDE
 
 ---
 
+### v3.21 — vexp-cli context engine integration (ADR-030)
+
+**vexp-cli — local-first context engine for AI coding agents:**
+- Installed via `bun install -g vexp-cli` with `trustedDependencies` for postinstall binary download
+- Auto-configured as global MCP server in `settings.json` (stdio transport — CC spawns on demand)
+- Uses tree-sitter AST parsing + dependency graphs + skeleton context for ~65% token reduction
+- 11 MCP tools: `run_pipeline`, `get_context_capsule`, `get_impact_graph`, `search_logic_flow`, etc.
+- Free tier: 2,000 nodes, 8 calls/day, 7 tools — works out of box, no license key needed
+- Supports 30 languages (TypeScript, Python, Go, Rust, Bash, HCL, etc.)
+- Binary verification: warns if vexp-core Rust binary missing after postinstall
+
+**New CLI flag:**
+- `--no-vexp` — skip vexp-cli install
+- `--minimal` now also skips vexp-cli
+
+**Architecture:**
+- ADR-030: stdio transport over HTTP+SSE — no daemon, no port, no systemd service
+- mcpServers key NOT in TITAN_MANAGED_BLOCKS — user-added MCP servers preserved across re-runs
+- 170 bats tests (2 new for vexp-cli integration)
+
+---
+
 ### v3.20 — ARM64 docker reliability, live testing overhaul, 168 tests
 
 - Replaced ccstatusline with claude-lens: quota pace tracking, zero-config, no bun dependency (ADR-030)

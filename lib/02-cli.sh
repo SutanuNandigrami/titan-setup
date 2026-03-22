@@ -21,6 +21,7 @@ OLLAMA_SKIP=false
 LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
+VEXP_SKIP=false
 FORCE_UPDATES=false
 MINIMAL=false
 
@@ -51,6 +52,7 @@ Options:
   --letta-ctrl-skip        Skip LettaCtrl GUI (default: install if Letta is installed)
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
   --no-cozempic            Skip cozempic install (context bloat cleaner)
+  --no-vexp                Skip vexp-cli install (context engine)
 
   --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
@@ -189,6 +191,10 @@ while [[ $# -gt 0 ]]; do
       COZEMPIC_SKIP=true
       shift
       ;;
+    --no-vexp)
+      VEXP_SKIP=true
+      shift
+      ;;
     --force-updates)
       FORCE_UPDATES=true
       shift
@@ -203,6 +209,7 @@ while [[ $# -gt 0 ]]; do
       OLLAMA_SKIP=true
       COZEMPIC_SKIP=true
       LETTA_CTRL_SKIP=true
+      VEXP_SKIP=true
       shift
       ;;
     --secrets-file)

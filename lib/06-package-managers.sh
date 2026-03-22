@@ -14,7 +14,8 @@ else
     if command -v cargo &>/dev/null; then
       ok "cargo installed: $(cargo --version)"
     else
-      fail "cargo install failed"; exit 1
+      fail "cargo install failed"
+      exit 1
     fi
   fi
   # Ensure cargo binaries are on PATH for the rest of this script (idempotent)
@@ -31,7 +32,8 @@ else
     if command -v uv &>/dev/null; then
       ok "uv installed: $(uv --version)"
     else
-      fail "uv install failed"; exit 1
+      fail "uv install failed"
+      exit 1
     fi
   fi
   # Ensure uv/uvx binaries are on PATH for the rest of this script

@@ -589,6 +589,58 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
+# VEXP-CLI INTEGRATION (ADR-030)
+# ════════════════════════════════════════════════════════════════════
+
+@test "VEXP: VEXP_SKIP variable defined in lib/02-cli.sh" {
+  grep -q 'VEXP_SKIP=false' "$REPO/lib/02-cli.sh"
+}
+
+@test "VEXP: --no-vexp flag in CLI parser" {
+  grep -q '\-\-no-vexp' "$REPO/lib/02-cli.sh"
+}
+
+@test "VEXP: --minimal sets VEXP_SKIP=true" {
+  grep -A6 '\-\-minimal' "$REPO/lib/02-cli.sh" | grep -q 'VEXP_SKIP=true'
+}
+
+@test "VEXP: vexp-cli install block in lib/07" {
+  grep -q 'bun install -g vexp-cli' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "VEXP: install block guarded with VEXP_SKIP and MINIMAL" {
+  grep -q '! \$VEXP_SKIP && ! \$MINIMAL' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "VEXP: install command uses ok/warn guard (set -e safe)" {
+  grep 'bun install -g vexp-cli' "$REPO/lib/07-tools-python-js.sh" | grep -qE '&&.*ok|warn'
+}
+
+@test "VEXP: vexp-core binary verification exists" {
+  grep -q 'vexp-core' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "VEXP: MCP server config in lib/11 uses jq (not direct write)" {
+  grep -q 'jq.*mcpServers.*vexp' "$REPO/lib/11-deploy-config.sh"
+}
+
+@test "VEXP: MCP config uses vexp mcp command (stdio transport)" {
+  grep -q '"vexp".*"mcp"' "$REPO/lib/11-deploy-config.sh"
+}
+
+@test "VEXP: MCP config uses WORKDIR for temp file (not /tmp)" {
+  grep -A5 'mcpServers.*vexp' "$REPO/lib/11-deploy-config.sh" | grep -q 'WORKDIR'
+}
+
+@test "VEXP: MCP config injection guarded with ok/warn (set -e safe)" {
+  grep -A5 'mcpServers.*vexp' "$REPO/lib/11-deploy-config.sh" | grep -qE '&&.*ok|warn'
+}
+
+@test "ADR: decisions.md has ADR-031 (vexp-cli)" {
+  grep -q 'ADR-031.*vexp-cli.*stdio' "$REPO/docs/decisions.md"
+}
+
+# ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
 

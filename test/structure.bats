@@ -125,3 +125,15 @@ setup() {
 @test "config/letta/letta-ctrl.html exists" {
   assert [ -f "$REPO/config/letta/letta-ctrl.html" ]
 }
+
+# ── vexp-cli integration ─────────────────────────────────────────────────
+
+@test "vexp-cli install block exists in lib/07" {
+  run grep -c "bun install -g vexp-cli" "$REPO/lib/07-tools-python-js.sh"
+  assert_success
+}
+
+@test "--no-vexp flag is recognized" {
+  run grep -c "\-\-no-vexp" "$REPO/lib/02-cli.sh"
+  assert_success
+}

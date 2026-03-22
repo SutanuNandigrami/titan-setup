@@ -111,6 +111,22 @@ fi
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install -g @google/gemini-cli && ok "gemini-cli" || warn "gemini-cli"; }
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }
 
+# vexp-cli — local-first context engine for AI coding agents (tree-sitter + dependency graph)
+# Uses optional deps (@vexp/core-linux-x64 etc.) for platform-specific Rust binary — no postinstall needed
+if ! $VEXP_SKIP && ! $MINIMAL; then
+  if bun pm ls -g 2>/dev/null | grep -q "vexp-cli"; then
+    ok "vexp-cli (exists)"
+  else
+    run_q bun install -g vexp-cli && ok "vexp-cli" || warn "vexp-cli (install manually: bun install -g vexp-cli)"
+  fi
+  # Verify vexp-core platform binary was installed via optional deps
+  if command -v vexp &>/dev/null && vexp version &>/dev/null; then
+    ok "vexp-core binary ($(vexp version 2>&1 | grep 'core:' | sed 's/.*: //' || echo 'ok'))"
+  elif bun pm ls -g 2>/dev/null | grep -q "vexp-cli"; then
+    warn "vexp-core binary missing — try: bun install -g @vexp/core-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"
+  fi
+fi
+
 # playwright — browser automation and E2E testing
 # Ensure node is on PATH (mise shims may not be sourced in non-interactive context)
 command -v node &>/dev/null || export PATH="$HOME/.local/share/mise/shims:$PATH"

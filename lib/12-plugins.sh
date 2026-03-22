@@ -21,8 +21,8 @@ elif ! claude auth status &>/dev/null 2>&1; then
   warn "Claude not authenticated — skipping plugins (run 'claude auth login' then re-run)"
 else
   # Register official marketplace if not already registered
-  claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null \
-    && ok "official marketplace" || ok "official marketplace (exists)"
+  claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null &&
+    ok "official marketplace" || ok "official marketplace (exists)"
 
   # Install plugins from official marketplace
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
@@ -39,22 +39,22 @@ else
 
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
-  claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \
-    && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
+  claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null &&
+    ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 
   # cozempic plugin — context diagnose/treat MCP tools (diagnose_current, treat_session)
   # CLI (uv) provides the primary interface; plugin adds MCP tools for in-session diagnostics
   if ! $COZEMPIC_SKIP; then
-    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null \
-      && ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
+    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null &&
+      ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
     claude plugin install cozempic 2>/dev/null && ok "cozempic plugin" || warn "cozempic plugin"
   fi
 
   # claude-subconscious — Letta-based persistent cross-session memory agent
   if ! $LETTA_SKIP; then
-    claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null \
-      && ok "letta marketplace" || ok "letta marketplace (exists)"
+    claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null &&
+      ok "letta marketplace" || ok "letta marketplace (exists)"
     if claude plugin install claude-subconscious 2>/dev/null; then
       ok "claude-subconscious plugin"
 
@@ -62,9 +62,9 @@ else
       _SUBCON_DIR=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
         "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null)
       if [[ -n "$_SUBCON_DIR" ]] && [[ -f "$_SUBCON_DIR/package.json" ]]; then
-        (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) \
-          && ok "subconscious: node_modules installed" \
-          || warn "subconscious: npm install failed — hooks may not work"
+        (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) &&
+          ok "subconscious: node_modules installed" ||
+          warn "subconscious: npm install failed — hooks may not work"
       fi
 
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
@@ -79,8 +79,8 @@ else
       if [[ -f "$_SUBCON_AF" ]]; then
         # Patch LLM config: use ccflare billing proxy if available, else direct Anthropic
         # Check bun + proxy file (billing proxy was migrated from socat to Bun)
-        if ! $CCFLARE_SKIP && command -v bun &>/dev/null \
-            && [[ -f "$HOME/.config/letta/ccflare-billing-proxy.js" ]]; then
+        if ! $CCFLARE_SKIP && command -v bun &>/dev/null &&
+          [[ -f "$HOME/.config/letta/ccflare-billing-proxy.js" ]]; then
           _SUBCON_LLM_ENDPOINT="http://host.docker.internal:${CCFLARE_PROXY_PORT}"
         else
           _SUBCON_LLM_ENDPOINT="https://api.anthropic.com/v1"
@@ -93,10 +93,10 @@ else
           .agents[0].llm_config.provider_name = "anthropic" |
           .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
           .agents[0].llm_config.context_window = 200000
-        ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
-          && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
-          && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
-          || warn "subconscious: .af LLM patch failed"
+        ' "$_SUBCON_AF" >${WORKDIR}/_subcon_af.json &&
+          mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" &&
+          ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" ||
+          warn "subconscious: .af LLM patch failed"
 
         # Patch embedding config: use host.docker.internal (Letta runs in Docker, must reach host Ollama)
         if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
@@ -106,10 +106,10 @@ else
             .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
             .agents[0].embedding_config.embedding_dim = 768 |
             .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
-          ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
-            && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
-            && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
-            || warn "subconscious: .af embedding patch failed"
+          ' "$_SUBCON_AF" >${WORKDIR}/_subcon_af.json &&
+            mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" &&
+            ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" ||
+            warn "subconscious: .af embedding patch failed"
         fi
       else
         warn "subconscious: Subconscious.af not found — .af patching skipped"
@@ -117,10 +117,10 @@ else
 
       # Enable plugin in settings.json
       jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
-        "$CLAUDE_DIR/settings.json" > ${WORKDIR}/_cc_settings.json \
-        && mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" \
-        && ok "subconscious: enabled in settings.json" \
-        || warn "subconscious: settings.json update failed"
+        "$CLAUDE_DIR/settings.json" >${WORKDIR}/_cc_settings.json &&
+        mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
+        ok "subconscious: enabled in settings.json" ||
+        warn "subconscious: settings.json update failed"
     else
       warn "claude-subconscious plugin install failed"
     fi
@@ -128,4 +128,3 @@ else
 
 fi
 # ── end claude auth guard ──
-
