@@ -346,6 +346,15 @@ setup() {
   [ -z "$bare" ]
 }
 
+@test "HZ: docker group check uses /proc/PID/status not docker ps" {
+  grep -q '/proc.*status' "$REPO/lib/07-tools-python-js.sh"
+  grep -q '_DOCKER_GID' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "HZ: apt lock wait function exists" {
+  grep -q '_wait_apt_lock' "$REPO/lib/01-common.sh"
+}
+
 @test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {
   # read returns 1 on EOF (e.g. </dev/null or cloud-init) — kills script under set -e
   local unguarded
