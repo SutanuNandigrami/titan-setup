@@ -75,7 +75,7 @@ input,textarea{font-family:inherit;font-size:inherit}
 .agents-strip{display:flex;gap:10px;flex-wrap:wrap}
 .achip{background:#27272a;border:1px solid #3f3f46;border-radius:9px;padding:11px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .15s}
 .achip:hover{border-color:#7c3aed}
-.achip-name{font-weight:700;font-size:13px}
+.achip-name{font-weight:700;font-size:13px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .achip-meta{font-size:11px;color:#71717a;margin-top:3px}
 .abadge{background:#1c1027;color:#8b5cf6;font-size:10px;padding:3px 8px;border-radius:4px;font-family:monospace;border:1px solid #2d1d60;white-space:nowrap}
 .achip-new{border-style:dashed;color:#52525b;font-size:13px}
@@ -90,13 +90,13 @@ input,textarea{font-family:inherit;font-size:inherit}
 .aitem{padding:11px 15px;border-bottom:1px solid #1c1c1f;cursor:pointer}
 .aitem:hover{background:#18181b}
 .aitem.on{background:#1a1025;border-left:3px solid #7c3aed;padding-left:12px}
-.aitem-name{font-size:13px;font-weight:700}
+.aitem-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .aitem-meta{font-size:11px;color:#71717a;margin-top:2px}
 .aempty{padding:20px 15px;font-size:12px;color:#52525b;text-align:center}
 
 .aright{display:flex;flex-direction:column;min-height:0}
 .adethdr{padding:12px 17px;border-bottom:1px solid #3f3f46;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.adetname{font-weight:800;font-size:14px}
+.adetname{font-weight:800;font-size:14px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn-del{margin-left:auto;background:#1c0505;color:#f87171;font-size:11px;padding:4px 11px;border-radius:5px;border:1px solid #450a0a;font-weight:600}
 .btn-del:hover{background:#2a0808}
 .dtabs{display:flex;padding:0 17px;border-bottom:1px solid #3f3f46;flex-shrink:0}
@@ -221,7 +221,7 @@ input,textarea{font-family:inherit;font-size:inherit}
       </div>
       <div class="logstream" id="log-stream"><div style="color:#52525b;padding:8px">Select a service from the left.</div></div>
       <div class="logfilter">
-        <input class="loginput" id="log-filter" placeholder="filter... (e.g. POST, error, 500)" oninput="filterLogs(this.value)">
+        <input class="loginput" id="log-filter" placeholder="filter... (e.g. POST, error, 500)" oninput="debouncedFilter(this.value)">
       </div>
     </div>
   </div>
@@ -244,7 +244,8 @@ input,textarea{font-family:inherit;font-size:inherit}
 
 <script>
 // ── Auth ──────────────────────────────────────────────────────────────────
-let _token = localStorage.getItem("lettaCtrlToken") || "";
+// Token injected by server at serve-time (window.__LETTA_CTRL_TOKEN__), falls back to localStorage
+let _token = window.__LETTA_CTRL_TOKEN__ || localStorage.getItem("lettaCtrlToken") || "";
 
 function authFetch(url, opts = {}) {
   const headers = Object.assign({ "Authorization": "Bearer " + _token }, opts.headers || {});
@@ -328,10 +329,10 @@ function updatePills() {
 
 // ── Service cards ─────────────────────────────────────────────────────────
 const SVC_EXTRA = {
-  "letta":                 ["Health",    s => s.active ? "OK" : "DOWN"],
-  "ollama":                ["Model",     s => s.active ? "✓" : "—"],
-  "better-ccflare":        ["Accounts",  s => s.active ? "2" : "—"],
-  "ccflare-docker-proxy":  ["Fix #89",   s => s.active ? "on" : "off"],
+  "letta":                 ["Health",  s => s.active ? "OK" : "DOWN"],
+  "ollama":                ["Model",   s => s.active ? "✓" : "—"],
+  "better-ccflare":        ["Status",  s => s.active ? "OK" : "—"],
+  "ccflare-docker-proxy":  ["Status",  s => s.active ? "OK" : "—"],
 };
 
 function renderSvcGrid() {
@@ -349,13 +350,13 @@ function renderSvcGrid() {
         <span class="svcport">${ports[s]||""}</span>
       </div>
       <div class="svcmet">
-        <div class="met"><div class="mlabel">RAM</div><div class="mval num">${st.memory_mb||0}<span class="munit">MB</span></div></div>
-        <div class="met"><div class="mlabel">CPU</div><div class="mval num">${st.cpu_pct||0}<span class="munit">%</span></div></div>
-        <div class="met"><div class="mlabel">Uptime</div><div class="mval dim">${st.uptime||"—"}</div></div>
-        <div class="met"><div class="mlabel">${extraLabel}</div><div class="mval ok">${extraFn(st)}</div></div>
+        <div class="met"><div class="mlabel">RAM</div><div class="mval num" id="met-ram-${s}">${st.memory_mb||0}<span class="munit">MB</span></div></div>
+        <div class="met"><div class="mlabel">CPU</div><div class="mval num" id="met-cpu-${s}">${st.cpu_pct||0}<span class="munit">%</span></div></div>
+        <div class="met"><div class="mlabel">Uptime</div><div class="mval dim" id="met-up-${s}">${st.uptime||"—"}</div></div>
+        <div class="met"><div class="mlabel">${extraLabel}</div><div class="mval ok" id="met-extra-${s}">${extraFn(st)}</div></div>
       </div>
       <div class="svclog" id="log-tail-${s}"><span style="color:#3f3f46">Loading...</span></div>
-      <div class="svcact">
+      <div class="svcact" id="svc-act-${s}">
         ${ok
           ? `<button class="btn btn-r" onclick="svcAction('restart','${s}')">↺ Restart</button>
              <button class="btn btn-s" onclick="svcAction('stop','${s}')">■ Stop</button>`
@@ -363,18 +364,61 @@ function renderSvcGrid() {
       </div>
     </div>`;
   }).join("");
+  fetchLogTails();
 }
 
-function updateSvcCard(s) {
-  const card = document.getElementById("svc-" + s);
-  if (!card) return;
-  const st = status[s] || {active:false};
-  card.className = "svc " + (st.active ? "ok" : "dead");
+function updateSvcGrid() {
+  // First render: full build. Subsequent: targeted DOM updates (no flicker, preserves log tails).
+  if (!document.getElementById("svc-" + SVCS[0])) { renderSvcGrid(); return; }
+  SVCS.forEach(s => {
+    const st = status[s] || {active:false, memory_mb:0, cpu_pct:0, uptime:"—"};
+    const ok = st.active;
+    const card = document.getElementById("svc-" + s);
+    if (!card) return;
+    card.className = "svc " + (ok ? "ok" : "dead");
+    const ram = document.getElementById("met-ram-" + s);
+    if (ram) ram.innerHTML = `${st.memory_mb||0}<span class="munit">MB</span>`;
+    const cpu = document.getElementById("met-cpu-" + s);
+    if (cpu) cpu.innerHTML = `${st.cpu_pct||0}<span class="munit">%</span>`;
+    const up = document.getElementById("met-up-" + s);
+    if (up) up.textContent = st.uptime || "—";
+    const [, extraFn] = SVC_EXTRA[s];
+    const extra = document.getElementById("met-extra-" + s);
+    if (extra) extra.textContent = extraFn(st);
+    const act = document.getElementById("svc-act-" + s);
+    if (act) act.innerHTML = ok
+      ? `<button class="btn btn-r" onclick="svcAction('restart','${s}')">↺ Restart</button>
+         <button class="btn btn-s" onclick="svcAction('stop','${s}')">■ Stop</button>`
+      : `<button class="btn btn-st" onclick="svcAction('start','${s}')">▶ Start</button>`;
+  });
+  fetchLogTails();
+}
+
+async function fetchLogTails() {
+  for (const s of SVCS) {
+    try {
+      const r = await authFetch("/api/logtail/" + s);
+      const lines = await r.json();
+      const el = document.getElementById("log-tail-" + s);
+      if (el && lines.length) {
+        el.innerHTML = lines.map(l => {
+          const cls = classifyLog(l);
+          return `<div class="ll-${cls}">${escHtml(l)}</div>`;
+        }).join("");
+      } else if (el && !lines.length) {
+        el.innerHTML = `<span style="color:#3f3f46">No logs yet</span>`;
+      }
+    } catch {}
+  }
 }
 
 // ── Service actions ───────────────────────────────────────────────────────
 async function svcAction(action, svcName) {
-  await authFetch(`/api/svc/${svcName}/${action}`, {method:"POST"});
+  try {
+    const r = await authFetch(`/api/svc/${svcName}/${action}`, {method:"POST"});
+    const data = await r.json();
+    if (!data.ok) console.warn(`${action} ${svcName} failed:`, data.stderr);
+  } catch {}
   setTimeout(pollStatus, 1000);
 }
 
@@ -385,7 +429,7 @@ async function pollStatus() {
     status = await r.json();
     if (!document.getElementById("hp-letta")) buildHealthPills();
     else updatePills();
-    renderSvcGrid();
+    updateSvcGrid();
     renderAgentsStrip();
   } catch {}
 }
@@ -400,10 +444,10 @@ function renderAgentsStrip() {
   c.innerHTML = agents.map(a =>
     `<div class="achip" onclick="goTab('agents',document.querySelectorAll('.tab')[1]);selectAgent('${escHtml(a.id)}')">
       <div>
-        <div class="achip-name">${a.name}</div>
+        <div class="achip-name">${escHtml(a.name)}</div>
         <div class="achip-meta">${a.memory_blocks?.length||0} memory blocks</div>
       </div>
-      <span class="abadge">${a.llm_config?.model||"unknown"}</span>
+      <span class="abadge">${escHtml(a.llm_config?.model||"unknown")}</span>
     </div>`
   ).join("") +
   `<div class="achip achip-new" onclick="goTab('agents',document.querySelectorAll('.tab')[1]);openCreateModal()">+ New</div>`;
@@ -428,8 +472,8 @@ function renderAgentList() {
   }
   c.innerHTML = agents.map(a =>
     `<div class="aitem ${curAgent?.id===a.id?"on":""}" onclick="selectAgent('${escHtml(a.id)}')">
-      <div class="aitem-name">${a.name}</div>
-      <div class="aitem-meta">${a.llm_config?.model||""} · ${a.memory_blocks?.length||0} blocks</div>
+      <div class="aitem-name">${escHtml(a.name)}</div>
+      <div class="aitem-meta">${escHtml(a.llm_config?.model||"")} · ${a.memory_blocks?.length||0} blocks</div>
     </div>`
   ).join("");
 }
@@ -446,8 +490,8 @@ async function renderAgentDetail() {
   const det = document.getElementById("agent-detail");
   det.innerHTML = `
     <div class="adethdr">
-      <span class="adetname">${curAgent.name}</span>
-      <span class="abadge">${curAgent.llm_config?.model||"?"}</span>
+      <span class="adetname">${escHtml(curAgent.name)}</span>
+      <span class="abadge">${escHtml(curAgent.llm_config?.model||"?")}</span>
       <button class="btn-del" onclick="deleteAgent('${escHtml(curAgent.id)}')">✕ Delete</button>
     </div>
     <div class="dtabs">
@@ -476,17 +520,18 @@ async function renderDtab() {
       const blocks = await r.json();
       body.innerHTML = blocks.map(b => {
         const rawLbl = b.label||b.id;
-        const jsLbl = rawLbl.replace(/'/g, "\\'");
-        return `<div class="mblock" id="mb-${rawLbl}">
+        const sid = safeId(rawLbl);
+        return `<div class="mblock" id="mb-${sid}">
           <div class="mbhdr">
             <span class="mblabel">${escHtml(rawLbl)}</span>
             <span class="mbtokens">${(b.value||"").length} / ${b.limit||2048} chars</span>
           </div>
-          <div class="mbbody" contenteditable="true" id="mb-val-${rawLbl}"
-            onblur="mbChanged('${jsLbl}')">${escHtml(b.value||"")}</div>
+          <div class="mbbody" contenteditable="plaintext-only" id="mb-val-${sid}"
+            onblur="mbChanged('${sid}')">${escHtml(b.value||"")}</div>
           <div class="mbfoot">
-            <button class="btn-save" id="mb-save-${rawLbl}"
-              onclick="saveBlock('${escHtml(curAgent.id)}','${jsLbl}')">Save</button>
+            <button class="btn-save" id="mb-save-${sid}"
+              data-agent="${escHtml(curAgent.id)}" data-label="${escHtml(rawLbl)}" data-sid="${sid}"
+              onclick="saveBlock(this.dataset.agent,this.dataset.label,this.dataset.sid)">Save</button>
           </div>
         </div>`;
       }).join("") || `<div style="color:#52525b;font-size:12px;padding:8px">No blocks found.</div>`;
@@ -503,30 +548,30 @@ async function renderDtab() {
   } else if (curDtab === "info") {
     const a = curAgent;
     body.innerHTML = `<div class="infogrid">
-      <span class="ik">Agent ID</span><span class="iv">${a.id}</span>
-      <span class="ik">Name</span><span class="iv">${a.name}</span>
-      <span class="ik">Model</span><span class="iv">${a.llm_config?.model||"—"}</span>
-      <span class="ik">Endpoint</span><span class="iv">${a.llm_config?.model_endpoint||"—"}</span>
-      <span class="ik">Embed model</span><span class="iv">${a.embedding_config?.embedding_model||"—"}</span>
-      <span class="ik">Embed endpoint</span><span class="iv">${a.embedding_config?.embedding_endpoint||"—"}</span>
-      <span class="ik">Embed dim</span><span class="iv">${a.embedding_config?.embedding_dim||"—"}</span>
+      <span class="ik">Agent ID</span><span class="iv">${escHtml(a.id)}</span>
+      <span class="ik">Name</span><span class="iv">${escHtml(a.name)}</span>
+      <span class="ik">Model</span><span class="iv">${escHtml(a.llm_config?.model||"—")}</span>
+      <span class="ik">Endpoint</span><span class="iv">${escHtml(a.llm_config?.model_endpoint||"—")}</span>
+      <span class="ik">Embed model</span><span class="iv">${escHtml(a.embedding_config?.embedding_model||"—")}</span>
+      <span class="ik">Embed endpoint</span><span class="iv">${escHtml(a.embedding_config?.embedding_endpoint||"—")}</span>
+      <span class="ik">Embed dim</span><span class="iv">${escHtml(String(a.embedding_config?.embedding_dim||"—"))}</span>
       <span class="ik">Memory blocks</span><span class="iv">${a.memory_blocks?.length||0}</span>
     </div>`;
   }
 }
 
-function mbChanged(label) {
-  const btn = document.getElementById(`mb-save-${label}`);
+function mbChanged(sid) {
+  const btn = document.getElementById(`mb-save-${sid}`);
   if (btn) { btn.textContent = "Save*"; btn.classList.remove("btn-saved"); }
 }
 
-async function saveBlock(agentId, label) {
-  const el = document.getElementById(`mb-val-${label}`);
-  const btn = document.getElementById(`mb-save-${label}`);
+async function saveBlock(agentId, label, sid) {
+  const el = document.getElementById(`mb-val-${sid}`);
+  const btn = document.getElementById(`mb-save-${sid}`);
   if (!el || !btn) return;
   btn.disabled = true; btn.textContent = "Saving…";
   try {
-    const r = await authFetch(`/api/agents/${agentId}/blocks/${label}`, {
+    const r = await authFetch(`/api/agents/${agentId}/blocks/${encodeURIComponent(label)}`, {
       method: "PATCH",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({value: el.innerText}),
@@ -571,6 +616,9 @@ async function deleteAgent(id) {
 
 function openCreateModal() { document.getElementById("create-modal").classList.add("on"); }
 function closeCreateModal() { document.getElementById("create-modal").classList.remove("on"); }
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeCreateModal();
+});
 
 async function createAgent() {
   const name  = document.getElementById("new-agent-name").value.trim();
@@ -579,7 +627,7 @@ async function createAgent() {
   const r = await authFetch("/api/agents", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({name, llm: model, embedding: "ollama/nomic-embed-text",
+    body: JSON.stringify({name, model: model, embedding: "ollama/nomic-embed-text",
       memory_blocks:[{label:"persona",value:"",limit:2000}], include_base_tools:true}),
   });
   if (r.ok) {
@@ -600,23 +648,40 @@ function buildLogNav() {
   ).join("");
 }
 
-function setLogSvc(svc, btn) {
+async function setLogSvc(svc, btn) {
   logSvc = svc;
   logLines = [];
   if (logES) logES.close();
   document.querySelectorAll(".logbtn").forEach(b => b.classList.remove("on"));
   btn.classList.add("on");
   document.getElementById("log-title").textContent = `journalctl ${svc==="ollama"?"":"--user"} -u ${svc} -f`;
-  document.getElementById("log-stream").innerHTML = "";
+  const stream = document.getElementById("log-stream");
+  stream.innerHTML = `<span style="color:#52525b">Loading...</span>`;
 
-  logES = new EventSource(`/api/logs/${svc}`);
+  // Instant pre-fetch: show last 50 lines immediately while SSE connects
+  try {
+    const r = await authFetch(`/api/logtail/${svc}?n=50`);
+    const lines = await r.json();
+    stream.innerHTML = "";
+    lines.forEach(l => { logLines.push(l); appendLogLine(l); });
+  } catch {}
+
+  // Then connect SSE for live tail (only appends new lines)
+  logES = new EventSource(`/api/logs/${svc}${_token ? "?token=" + encodeURIComponent(_token) : ""}`);
+  let skipInitial = logLines.length;
   logES.onmessage = e => {
     const line = JSON.parse(e.data);
+    // SSE replays last 20 lines — skip ones we already have from pre-fetch
+    if (skipInitial > 0) { skipInitial--; return; }
     logLines.push(line);
     if (logLines.length > 500) logLines.shift();
     appendLogLine(line);
   };
-  logES.onerror = () => {};
+  logES.onerror = () => {
+    logES.close();
+    const s = document.getElementById("log-stream");
+    if (s) s.innerHTML += `<div style="color:#f87171;padding:4px 0">● Connection lost — click service to reconnect</div>`;
+  };
 }
 
 function classifyLog(line) {
@@ -637,6 +702,12 @@ function appendLogLine(line) {
   stream.scrollTop = stream.scrollHeight;
 }
 
+let _filterTimer;
+function debouncedFilter(val) {
+  clearTimeout(_filterTimer);
+  _filterTimer = setTimeout(() => filterLogs(val), 150);
+}
+
 function filterLogs(val) {
   logFilter = val;
   const stream = document.getElementById("log-stream");
@@ -651,8 +722,29 @@ function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+function safeId(s) {
+  return s.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
+let _pollTimer = null;
+function startPolling() {
+  async function tick() {
+    await pollStatus();
+    _pollTimer = setTimeout(tick, 5000);
+  }
+  tick();
+}
+window.addEventListener("beforeunload", () => {
+  if (_pollTimer) clearTimeout(_pollTimer);
+  if (logES) logES.close();
+});
+
 (async () => {
+  // Persist server-injected token to localStorage for consistency
+  if (_token && !localStorage.getItem("lettaCtrlToken")) {
+    localStorage.setItem("lettaCtrlToken", _token);
+  }
   if (!_token) {
     showTokenPrompt();
     return;
@@ -673,7 +765,7 @@ function escHtml(s) {
   await pollStatus();
   await fetchAgents();
   buildLogNav();
-  setInterval(pollStatus, 5000);
+  startPolling();
 })();
 </script>
 </body>
