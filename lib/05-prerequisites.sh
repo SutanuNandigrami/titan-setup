@@ -25,9 +25,11 @@ NEEDRESTART
   fi
 
   apt_update
+  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
     -o Dpkg::Options::="--force-confold"
 
+  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     curl wget git build-essential unzip software-properties-common \

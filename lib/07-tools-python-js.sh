@@ -122,10 +122,14 @@ elif command -v docker &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   # Ensure docker group membership is active in the systemd user manager.
-  # usermod adds the group but systemd user@.service may have started before
-  # the group was added. Restart only if docker services are not already running.
+  # usermod adds the group but user@.service may have started before docker
+  # group existed. Check if systemd --user's process has the docker GID;
+  # if not, restart it so child services (n8n, letta) can access the socket.
   sudo usermod -aG docker "$USER" 2>/dev/null || true
-  if ! docker ps &>/dev/null && ! /usr/bin/sg docker -c "docker ps" &>/dev/null 2>&1; then
+  _SYSD_PID=$(pgrep -u "$(id -u)" -f 'systemd --user' | head -1 || true)
+  _DOCKER_GID=$(getent group docker | cut -d: -f3 || true)
+  if [[ -n "$_SYSD_PID" && -n "$_DOCKER_GID" ]] &&
+    ! grep -qw "$_DOCKER_GID" "/proc/$_SYSD_PID/status" 2>/dev/null; then
     sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
   fi
 

@@ -16,7 +16,7 @@ setup() {
   local hits
   hits=$(grep -rn '\bapt ' "$REPO"/lib/*.sh \
     | grep -v 'apt-get\|# \|apt-key\|apt-transport\|DEBIAN\|deb \[' \
-    | grep -v 'insecure apt repos' || true)
+    | grep -v 'insecure apt repos\|apt lock' || true)
   [ -z "$hits" ]
 }
 
@@ -344,6 +344,15 @@ setup() {
   local bare
   bare=$(grep -rn '^\s*wait$' "$REPO"/lib/*.sh || true)
   [ -z "$bare" ]
+}
+
+@test "HZ: docker group check uses /proc/PID/status not docker ps" {
+  grep -q '/proc.*status' "$REPO/lib/07-tools-python-js.sh"
+  grep -q '_DOCKER_GID' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "HZ: apt lock wait function exists" {
+  grep -q '_wait_apt_lock' "$REPO/lib/01-common.sh"
 }
 
 @test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {

@@ -68,6 +68,25 @@ warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 # Cached apt-get update — runs once per session, skips on subsequent calls
+# Wait for dpkg/apt lock — fresh Ubuntu VPS runs unattended-upgrades on boot
+_wait_apt_lock() {
+  local max_wait=120 waited=0
+  while fuser /var/lib/dpkg/lock-frontend &>/dev/null 2>&1 ||
+        fuser /var/lib/apt/lists/lock &>/dev/null 2>&1; do
+    if [[ $waited -eq 0 ]]; then
+      echo -n "  Waiting for apt lock (unattended-upgrades)..."
+    fi
+    sleep 5
+    waited=$((waited + 5))
+    if [[ $waited -ge $max_wait ]]; then
+      echo " timeout"
+      return 0  # continue anyway, apt-get will fail with a clear error
+    fi
+  done
+  [[ $waited -gt 0 ]] && echo " done (${waited}s)"
+  return 0
+}
+
 # Pass --force to re-run after adding new apt repos (resets the cache)
 _APT_UPDATED=false
 apt_update() {
@@ -75,6 +94,7 @@ apt_update() {
     _APT_UPDATED=false
   fi
   if ! $_APT_UPDATED; then
+    _wait_apt_lock
     run_q sudo apt-get update -qq && _APT_UPDATED=true
   fi
 }
@@ -654,6 +674,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   apt_update
+  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins
@@ -906,9 +927,11 @@ NEEDRESTART
   fi
 
   apt_update
+  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
     -o Dpkg::Options::="--force-confold"
 
+  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     -o Dpkg::Options::="--force-confold" \
     curl wget git build-essential unzip software-properties-common \
@@ -1260,10 +1283,14 @@ elif command -v docker &>/dev/null; then
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   # Ensure docker group membership is active in the systemd user manager.
-  # usermod adds the group but systemd user@.service may have started before
-  # the group was added. Restart only if docker services are not already running.
+  # usermod adds the group but user@.service may have started before docker
+  # group existed. Check if systemd --user's process has the docker GID;
+  # if not, restart it so child services (n8n, letta) can access the socket.
   sudo usermod -aG docker "$USER" 2>/dev/null || true
-  if ! docker ps &>/dev/null && ! /usr/bin/sg docker -c "docker ps" &>/dev/null 2>&1; then
+  _SYSD_PID=$(pgrep -u "$(id -u)" -f 'systemd --user' | head -1 || true)
+  _DOCKER_GID=$(getent group docker | cut -d: -f3 || true)
+  if [[ -n "$_SYSD_PID" && -n "$_DOCKER_GID" ]] &&
+    ! grep -qw "$_DOCKER_GID" "/proc/$_SYSD_PID/status" 2>/dev/null; then
     sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
   fi
 
@@ -2136,8 +2163,11 @@ else ok "helm (exists)"; fi
 
 # gcloud CLI
 if ! command -v gcloud &>/dev/null; then
-  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
-    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
+  # Download key to temp file first — piping to gpg --dearmor hangs if curl fails
+  _GPG_TMP="$WORKDIR/gcloud.gpg"
+  if curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg -o "$_GPG_TMP" 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq google-cloud-cli &&
@@ -2146,7 +2176,10 @@ else ok "gcloud (exists)"; fi
 
 # terraform + packer
 if ! command -v terraform &>/dev/null; then
-  wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null || true
+  _GPG_TMP="$WORKDIR/hashicorp.gpg"
+  if wget -qO "$_GPG_TMP" https://apt.releases.hashicorp.com/gpg 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq terraform packer &&
     ok "terraform + packer" || warn "terraform/packer install failed"
@@ -2180,14 +2213,20 @@ else ok "duckdb (exists)"; fi
 
 # trivy
 if ! command -v trivy &>/dev/null; then
-  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
+  _GPG_TMP="$WORKDIR/trivy.gpg"
+  if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
+    sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+  fi
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq trivy &&
     ok "trivy" || warn "trivy install failed"
 else
   # migrate legacy key if sources.list lacks signed-by (suppresses apt deprecation warning)
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
-    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg 2>/dev/null || true
+    _GPG_TMP="$WORKDIR/trivy.gpg"
+    if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
+      sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+    fi
     echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
     ok "trivy (key migrated)"
   else
@@ -3167,6 +3206,11 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   if ! command -v tailscale &>/dev/null; then
     curl -fsSL https://tailscale.com/install.sh | sudo bash >>"$LOG_FILE" 2>&1 &&
       ok "Tailscale installed" || warn "Tailscale install failed"
+    # Wait for tailscaled service to start after install
+    for _ti in $(seq 1 10); do
+      sudo tailscale status &>/dev/null && break
+      sleep 2
+    done
   fi
   # --reset ensures idempotent re-runs; --operator grants non-root user access
   if sudo tailscale up --authkey="$TAILSCALE_KEY" --ssh --accept-routes --accept-dns \
