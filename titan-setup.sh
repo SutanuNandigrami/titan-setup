@@ -2655,6 +2655,10 @@ ok "bin: cc-patch-thinking"
 install -Dm755 "$REPO_FILES/dot-claude/hooks/prompt-memory-inject.sh" "$CLAUDE_DIR/hooks/prompt-memory-inject.sh"
 ok "hook: prompt-memory-inject.sh"
 
+# UserPromptSubmit: suggest relevant skills based on prompt keywords (zero tokens on no match)
+install -Dm755 "$REPO_FILES/dot-claude/hooks/skill-suggest.sh" "$CLAUDE_DIR/hooks/skill-suggest.sh"
+ok "hook: skill-suggest.sh"
+
 # ─── .claudeignore Template ───
 
 install -Dm644 "$REPO_FILES/dot-claude/claudeignore-template" "$CLAUDE_DIR/claudeignore-template"

@@ -644,6 +644,34 @@ setup() {
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
 
+# ── ADR-033: unified context system + skill auto-activation ──
+
+@test "ADR33: enhanced handoff.md command exists" {
+  assert [ -f "$REPO/dot-claude/commands/handoff.md" ]
+  grep -q 'Key Decisions' "$REPO/dot-claude/commands/handoff.md"
+}
+
+@test "ADR33: enhanced catchup.md command exists" {
+  assert [ -f "$REPO/dot-claude/commands/catchup.md" ]
+  grep -q 'git branch --show-current' "$REPO/dot-claude/commands/catchup.md"
+}
+
+@test "ADR33: skill-suggest.sh hook exists and is not empty" {
+  assert [ -s "$REPO/dot-claude/hooks/skill-suggest.sh" ]
+}
+
+@test "ADR33: skill-suggest.sh does NOT use set -euo pipefail" {
+  ! grep -q 'set -euo pipefail' "$REPO/dot-claude/hooks/skill-suggest.sh"
+}
+
+@test "ADR33: skill-suggest.sh is installed by lib/11" {
+  grep -q 'skill-suggest.sh' "$REPO/lib/11-deploy-config.sh"
+}
+
+@test "ADR33: settings.json has skill-suggest.sh hook" {
+  grep -q 'skill-suggest.sh' "$REPO/dot-claude/settings.json"
+}
+
 @test "BUILT: titan-setup.sh passes shellcheck" {
   shellcheck -x --severity=error "$REPO/titan-setup.sh"
 }

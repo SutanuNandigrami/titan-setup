@@ -242,6 +242,11 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/prompt-memory-inject.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/skill-suggest.sh",
+            "timeout": 3
           }
         ]
       }

@@ -90,9 +90,9 @@ Titan installs 12 slash commands that automate common workflows. Type these dire
 | `/workspace-init` | Detect project type, generate `_workspace.json`, create `.envrc` with direnv |
 | `/remember <thing>` | Save a fact, preference, or pattern to persistent memory |
 | `/recall` | Surface memory + session handoff from previous sessions (0 startup cost) |
-| `/catchup` | Summarize git branch state, recent commits, and pending work |
+| `/catchup` | Resume work: reads git state, _handoff.md, _scratchpad.md, memory — asks what to work on |
 | `/standup` | Generate standup from yesterday's git activity |
-| `/handoff` | Save current session state to handoff.md for next session |
+| `/handoff` | Create structured _handoff.md with task, decisions, blockers, checklist, next steps |
 | `/context` | Show current context usage and compression status |
 | `/tools` | List all configured CLI tools and their status |
 | `/gh-action` | Set up a GitHub Actions workflow for the current project |
