@@ -68,24 +68,10 @@ warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 # Cached apt-get update — runs once per session, skips on subsequent calls
-# Wait for dpkg/apt lock — fresh Ubuntu VPS runs unattended-upgrades on boot
-_wait_apt_lock() {
-  local max_wait=120 waited=0
-  while fuser /var/lib/dpkg/lock-frontend &>/dev/null 2>&1 ||
-        fuser /var/lib/apt/lists/lock &>/dev/null 2>&1; do
-    if [[ $waited -eq 0 ]]; then
-      echo -n "  Waiting for apt lock (unattended-upgrades)..."
-    fi
-    sleep 5
-    waited=$((waited + 5))
-    if [[ $waited -ge $max_wait ]]; then
-      echo " timeout"
-      return 0  # continue anyway, apt-get will fail with a clear error
-    fi
-  done
-  [[ $waited -gt 0 ]] && echo " done (${waited}s)"
-  return 0
-}
+# Apt lock timeout — fresh Ubuntu VPS runs unattended-upgrades on boot.
+# Using apt-get's native -o DPkg::Lock::Timeout instead of fuser polling
+# to avoid race conditions between the check and the actual apt call.
+_APT_LOCK_OPT='-o DPkg::Lock::Timeout=120'
 
 # Pass --force to re-run after adding new apt repos (resets the cache)
 _APT_UPDATED=false
@@ -94,8 +80,7 @@ apt_update() {
     _APT_UPDATED=false
   fi
   if ! $_APT_UPDATED; then
-    _wait_apt_lock
-    run_q sudo apt-get update -qq && _APT_UPDATED=true
+    run_q sudo apt-get update -qq $_APT_LOCK_OPT && _APT_UPDATED=true
   fi
 }
 
@@ -674,9 +659,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
 
   # ── Security packages ──────────────────────────────────────────────────
   apt_update
-  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    -o Dpkg::Options::="--force-confold" \
+    $_APT_LOCK_OPT -o Dpkg::Options::="--force-confold" \
     fail2ban unattended-upgrades auditd audispd-plugins
   ok "Security packages (fail2ban, unattended-upgrades, auditd)"
 
@@ -927,13 +911,11 @@ NEEDRESTART
   fi
 
   apt_update
-  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
-    -o Dpkg::Options::="--force-confold"
+    $_APT_LOCK_OPT -o Dpkg::Options::="--force-confold"
 
-  _wait_apt_lock
   run_q sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    -o Dpkg::Options::="--force-confold" \
+    $_APT_LOCK_OPT -o Dpkg::Options::="--force-confold" \
     curl wget git build-essential unzip software-properties-common \
     lsb-release apt-transport-https gnupg ca-certificates \
     jq mtr nmap tmux pandoc direnv entr nikto lynis \

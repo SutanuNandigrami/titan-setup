@@ -351,8 +351,8 @@ setup() {
   grep -q '_DOCKER_GID' "$REPO/lib/07-tools-python-js.sh"
 }
 
-@test "HZ: apt lock wait function exists" {
-  grep -q '_wait_apt_lock' "$REPO/lib/01-common.sh"
+@test "HZ: apt lock timeout configured" {
+  grep -q '_APT_LOCK_OPT' "$REPO/lib/01-common.sh"
 }
 
 @test "HZ: all interactive read -rp calls are guarded with || true (set -e safe)" {
