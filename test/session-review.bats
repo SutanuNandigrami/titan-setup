@@ -151,12 +151,12 @@ setup() {
   grep -A5 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'After=docker.service'
 }
 
-@test "R4: n8n has MemoryMax" {
-  grep -A15 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'MemoryMax'
+@test "R4: n8n uses detached docker (no exit 137 on ARM)" {
+  grep -A15 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'run -d'
 }
 
-@test "R4: letta has MemoryMax" {
-  grep -A15 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'MemoryMax'
+@test "R4: letta uses detached docker (no exit 137 on ARM)" {
+  grep -A15 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'run -d'
 }
 
 @test "R4: services have StartLimitBurst" {
@@ -363,6 +363,94 @@ setup() {
     | grep -v 'while.*read\|IFS.*read' \
     || true)
   [ -z "$unguarded" ]
+}
+
+# ════════════════════════════════════════════════════════════════════
+# ARM64 DOCKER FIXES (2026-03-22) — ADR-025, ADR-026
+# ════════════════════════════════════════════════════════════════════
+
+@test "ARM: n8n image pinned to 2.10.4 on aarch64 (ADR-025)" {
+  grep -q 'aarch64.*n8nio/n8n:2.10.4' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "ARM: n8n uses latest on non-aarch64" {
+  grep -q '_N8N_IMAGE="n8nio/n8n:latest"' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "ARM: _N8N_IMAGE variable used in docker pull (not hardcoded)" {
+  grep 'docker.*pull\|image inspect' "$REPO/lib/07-tools-python-js.sh" | grep -v '^#' | grep -qv 'n8nio/n8n:'
+}
+
+@test "ARM: _N8N_IMAGE variable used in systemd ExecStart (not hardcoded)" {
+  grep 'ExecStart.*n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q '_N8N_IMAGE'
+}
+
+@test "ARM: n8n service uses Type=oneshot (ADR-026)" {
+  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'Type=oneshot'
+}
+
+@test "ARM: letta service uses Type=oneshot (ADR-026)" {
+  grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'Type=oneshot'
+}
+
+@test "ARM: n8n service has RemainAfterExit=yes" {
+  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'RemainAfterExit=yes'
+}
+
+@test "ARM: letta service has RemainAfterExit=yes" {
+  grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'RemainAfterExit=yes'
+}
+
+@test "ARM: n8n uses --restart unless-stopped (docker-managed restarts)" {
+  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'restart unless-stopped'
+}
+
+@test "ARM: letta uses --restart unless-stopped (docker-managed restarts)" {
+  grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'restart unless-stopped'
+}
+
+@test "ARM: n8n has ExecStopPost for container cleanup" {
+  grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'ExecStopPost'
+}
+
+@test "ARM: letta has ExecStopPost for container cleanup" {
+  grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'ExecStopPost'
+}
+
+@test "ARM: StartLimitIntervalSec in Unit section not Service (n8n)" {
+  # Must appear between [Unit] and [Service] markers in the heredoc
+  local sl_line svc_line
+  sl_line=$(grep -n 'StartLimitIntervalSec' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  svc_line=$(grep -n '^\[Service\]' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  [ "$sl_line" -lt "$svc_line" ]
+}
+
+@test "ARM: StartLimitIntervalSec in Unit section not Service (letta)" {
+  local sl_line svc_line
+  sl_line=$(grep -n 'StartLimitIntervalSec' "$REPO/lib/08-tools-letta.sh" | head -1 | cut -d: -f1)
+  svc_line=$(grep -n '^\[Service\]' "$REPO/lib/08-tools-letta.sh" | head -1 | cut -d: -f1)
+  [ "$sl_line" -lt "$svc_line" ]
+}
+
+@test "ARM: no MemoryMax in docker services (only limits docker client, not container)" {
+  local hits
+  hits=$(grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep 'MemoryMax' || true)
+  [ -z "$hits" ]
+  hits=$(grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep 'MemoryMax' || true)
+  [ -z "$hits" ]
+}
+
+@test "ARM: no docker run --rm in systemd services (causes crash loop on ARM64)" {
+  local hits
+  hits=$(grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep 'run --rm' || true)
+  [ -z "$hits" ]
+  hits=$(grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep 'run --rm' || true)
+  [ -z "$hits" ]
+}
+
+@test "ADR: decisions.md has ADR-025 and ADR-026" {
+  grep -q 'ADR-025.*n8n.*ARM64' "$REPO/docs/decisions.md"
+  grep -q 'ADR-026.*Detached docker' "$REPO/docs/decisions.md"
 }
 
 # ════════════════════════════════════════════════════════════════════

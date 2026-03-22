@@ -105,23 +105,24 @@ else
     mkdir -p "$HOME/.letta/.persist/pgdata"
 
     # Systemd user service using --env-file to avoid secrets in unit file
+    # Use detached docker + Type=oneshot — attached docker clients get SIGKILL'd
+    # on ARM64 under systemd user sessions (exit 137 crash loop)
     mkdir -p "$HOME/.config/systemd/user"
     cat >"$HOME/.config/systemd/user/letta.service" <<SERVICEEOF
 [Unit]
 Description=Letta persistent memory server
 After=docker.service default.target
 Wants=docker.service
-
-[Service]
-Type=simple
-ExecStartPre=-${_DOCKER_BIN} rm -f letta-server
-ExecStart=${_DOCKER_BIN} run --rm --name letta-server -p 127.0.0.1:${LETTA_PORT}:8283 --add-host=host.docker.internal:host-gateway -v %h/.letta/.persist/pgdata:/var/lib/postgresql/data --env-file %h/.config/letta/docker.env letta/letta:latest
-ExecStop=${_DOCKER_BIN} stop letta-server
-Restart=on-failure
-RestartSec=15
 StartLimitIntervalSec=300
 StartLimitBurst=5
-MemoryMax=1G
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-${_DOCKER_BIN} rm -f letta-server
+ExecStart=${_DOCKER_BIN} run -d --name letta-server --restart unless-stopped -p 127.0.0.1:${LETTA_PORT}:8283 --add-host=host.docker.internal:host-gateway -v %h/.letta/.persist/pgdata:/var/lib/postgresql/data --env-file %h/.config/letta/docker.env letta/letta:latest
+ExecStop=${_DOCKER_BIN} stop letta-server
+ExecStopPost=-${_DOCKER_BIN} rm -f letta-server
 
 [Install]
 WantedBy=default.target
