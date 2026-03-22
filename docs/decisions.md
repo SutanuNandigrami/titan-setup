@@ -142,6 +142,18 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Decision**: Run uv tools in a background subshell while cargo compiles in the foreground. Background output goes to a log file; results are displayed after cargo finishes. This overlaps ~10-15 min of uv install time with cargo compile time.
 **Consequences**: ~10-15 min saved on fresh install. No output interleaving (background uses structured log format). Trade-off: uv errors are reported delayed (after cargo finishes, not in real-time).
 
+## ADR-025: Pin n8n to 2.10.4 on ARM64 (2026-03-22)
+**Status**: Accepted
+**Context**: n8n >=2.11.1 includes `isolated-vm` which ships prebuilt native binaries incompatible with ARM64 Alpine (musl). The container segfaults immediately on aarch64, creating a crash loop. x86_64 is unaffected. See github.com/n8n-io/n8n/issues/26858.
+**Decision**: Set `_N8N_IMAGE` dynamically: `n8nio/n8n:2.10.4` on `aarch64`, `n8nio/n8n:latest` on x86_64. Used in docker pull, image inspect, and the systemd service ExecStart.
+**Consequences**: ARM64 deployments get a stable n8n. Trade-off: ARM users miss new n8n features until upstream fixes isolated-vm on aarch64 Alpine. Must periodically check if newer versions resolve the issue.
+
+## ADR-026: Detached docker for systemd user services (2026-03-22)
+**Status**: Accepted
+**Context**: `docker run --rm` (attached mode) under systemd user sessions on ARM64 exits with SIGKILL (137) approximately 10 seconds after container startup. The docker client process gets killed, which also kills the container due to `--rm`. This creates a crash loop (n8n restarted 5+ times, letta reached restart counter 59). Running the same container with `docker run -d` (detached) works fine — the container stays up indefinitely.
+**Decision**: Switch n8n and letta systemd services from `Type=simple` + `docker run --rm` to `Type=oneshot` + `RemainAfterExit=yes` + `docker run -d --restart unless-stopped`. Use `ExecStopPost` to clean up containers on service stop. Move `StartLimitIntervalSec` to `[Unit]` section (systemd ignores it in `[Service]`). Remove `MemoryMax` — it only limited the docker client process, not the container.
+**Consequences**: Both services start reliably on ARM64 and x86_64. Docker's own `--restart unless-stopped` handles container crashes. Trade-off: `systemctl --user status` shows `active (exited)` instead of `active (running)` since systemd doesn't track the container PID — use `docker ps` to check actual container status.
+
 ## ADR-024: Consolidate split plugin fragments (2026-03-20)
 **Status**: Accepted
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
