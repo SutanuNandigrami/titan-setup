@@ -1254,6 +1254,10 @@ else
 fi
 
 # n8n — workflow automation server (runs as systemd user service via docker)
+# Pin to 2.10.4 on ARM64 — isolated-vm segfaults on aarch64 Alpine (github.com/n8n-io/n8n/issues/26858)
+_N8N_IMAGE="n8nio/n8n:latest"
+[[ "$(uname -m)" == "aarch64" ]] && _N8N_IMAGE="n8nio/n8n:2.10.4"
+
 if $MINIMAL; then
   ok "n8n (skipped — minimal mode)"
 elif command -v docker &>/dev/null; then
@@ -1278,15 +1282,15 @@ elif command -v docker &>/dev/null; then
 
   # Pull image — skip if already present (idempotent re-run)
   # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
-  if docker image inspect n8nio/n8n:latest &>/dev/null ||
-    sudo docker image inspect n8nio/n8n:latest &>/dev/null; then
-    ok "n8n docker image (exists)"
-  elif docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1 ||
-    /usr/bin/sg docker -c "docker pull n8nio/n8n:latest" >>"$LOG_FILE" 2>&1 ||
-    sudo docker pull n8nio/n8n:latest >>"$LOG_FILE" 2>&1; then
-    ok "n8n docker image"
+  if docker image inspect "$_N8N_IMAGE" &>/dev/null ||
+    sudo docker image inspect "$_N8N_IMAGE" &>/dev/null; then
+    ok "n8n docker image (exists: $_N8N_IMAGE)"
+  elif docker pull "$_N8N_IMAGE" >>"$LOG_FILE" 2>&1 ||
+    /usr/bin/sg docker -c "docker pull $_N8N_IMAGE" >>"$LOG_FILE" 2>&1 ||
+    sudo docker pull "$_N8N_IMAGE" >>"$LOG_FILE" 2>&1; then
+    ok "n8n docker image ($_N8N_IMAGE)"
   else
-    warn "n8n docker pull failed (check: docker pull n8nio/n8n:latest)"
+    warn "n8n docker pull failed (check: docker pull $_N8N_IMAGE)"
   fi
 
   # Fix n8n data directory permissions (container runs as uid 1000)
@@ -1307,7 +1311,7 @@ Wants=docker.service
 [Service]
 Type=simple
 ExecStartPre=-${DOCKER_BIN} rm -f n8n
-ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n n8nio/n8n
+ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n ${_N8N_IMAGE}
 ExecStop=${DOCKER_BIN} stop n8n
 Restart=on-failure
 RestartSec=10
