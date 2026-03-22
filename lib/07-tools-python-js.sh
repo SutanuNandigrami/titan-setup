@@ -157,6 +157,8 @@ elif command -v docker &>/dev/null; then
   fi
 
   # Create systemd user service for n8n
+  # Use detached docker + Type=oneshot — attached docker clients get SIGKILL'd
+  # on ARM64 under systemd user sessions (exit 137 crash loop)
   mkdir -p "$HOME/.config/systemd/user"
   DOCKER_BIN=$(command -v docker)
   cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
@@ -164,17 +166,16 @@ elif command -v docker &>/dev/null; then
 Description=n8n workflow automation
 After=docker.service default.target
 Wants=docker.service
-
-[Service]
-Type=simple
-ExecStartPre=-${DOCKER_BIN} rm -f n8n
-ExecStart=${DOCKER_BIN} run --rm --name n8n -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n ${_N8N_IMAGE}
-ExecStop=${DOCKER_BIN} stop n8n
-Restart=on-failure
-RestartSec=10
 StartLimitIntervalSec=300
 StartLimitBurst=5
-MemoryMax=512M
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-${DOCKER_BIN} rm -f n8n
+ExecStart=${DOCKER_BIN} run -d --name n8n --restart unless-stopped -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n ${_N8N_IMAGE}
+ExecStop=${DOCKER_BIN} stop n8n
+ExecStopPost=-${DOCKER_BIN} rm -f n8n
 
 [Install]
 WantedBy=default.target

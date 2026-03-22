@@ -151,12 +151,12 @@ setup() {
   grep -A5 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'After=docker.service'
 }
 
-@test "R4: n8n has MemoryMax" {
-  grep -A15 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'MemoryMax'
+@test "R4: n8n uses detached docker (no exit 137 on ARM)" {
+  grep -A15 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'run -d'
 }
 
-@test "R4: letta has MemoryMax" {
-  grep -A15 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'MemoryMax'
+@test "R4: letta uses detached docker (no exit 137 on ARM)" {
+  grep -A15 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'run -d'
 }
 
 @test "R4: services have StartLimitBurst" {
