@@ -2,7 +2,7 @@
 # Skill auto-activation — suggests relevant skills based on prompt keywords
 # Inspired by claude-code-infrastructure-showcase (diet103)
 # Zero token cost when no skill matches — exits silently
-# NOTE: no set -euo pipefail — hook must not die on non-zero exits (ADR-004/015)
+# NOTE: no pipefail — hook must not die on non-zero exits (ADR-004/015)
 
 PROMPT=$(jq -r '.prompt // empty' 2>/dev/null || echo "")
 [[ -z "$PROMPT" ]] && exit 0
