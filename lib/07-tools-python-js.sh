@@ -121,10 +121,11 @@ elif command -v docker &>/dev/null; then
   # Enable systemd linger so user services start at boot without login
   loginctl enable-linger "$USER" 2>/dev/null || true
 
-  # Add docker group only if not already a member; restart user systemd to pick it up.
-  # On re-run, skip — restarting user@.service kills all running user services.
-  if ! id -nG "$USER" 2>/dev/null | grep -qw docker; then
-    sudo usermod -aG docker "$USER" 2>/dev/null || true
+  # Ensure docker group membership is active in the systemd user manager.
+  # usermod adds the group but systemd user@.service may have started before
+  # the group was added. Restart only if docker services are not already running.
+  sudo usermod -aG docker "$USER" 2>/dev/null || true
+  if ! docker ps &>/dev/null && ! /usr/bin/sg docker -c "docker ps" &>/dev/null 2>&1; then
     sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
   fi
 
