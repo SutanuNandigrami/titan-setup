@@ -30,16 +30,25 @@ if (!AUTH_DISABLED && !AUTH_TOKEN) {
 }
 if (AUTH_DISABLED) console.log("Auth disabled (LETTA_CTRL_TOKEN=disable)");
 
-function checkAuth(req) {
-  if (AUTH_DISABLED) return true;
-  const hdr = req.headers.get("authorization") || "";
-  const prefix = "Bearer ";
-  if (!hdr.startsWith(prefix)) return false;
-  const provided = hdr.slice(prefix.length);
+function checkTokenValue(val) {
+  if (!val) return false;
   const a = Buffer.from(AUTH_TOKEN);
-  const b = Buffer.from(provided);
+  const b = Buffer.from(val);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+function checkAuth(req, url) {
+  if (AUTH_DISABLED) return true;
+  // Bearer header
+  const hdr = req.headers.get("authorization") || "";
+  if (hdr.startsWith("Bearer ") && checkTokenValue(hdr.slice(7))) return true;
+  // Query-param fallback (needed for EventSource which can't send headers)
+  if (url) {
+    const qtoken = url.searchParams.get("token");
+    if (qtoken && checkTokenValue(qtoken)) return true;
+  }
+  return false;
 }
 
 // Read Letta credentials from file (set at install time by titan-setup.sh)
@@ -50,14 +59,19 @@ if (!LETTA_PASSWORD && existsSync(CREDS_FILE)) {
   const match = creds.match(/LETTA_SERVER_PASSWORD=([^\n]+)/);
   if (match) LETTA_PASSWORD = match[1].trim();
 }
+if (!LETTA_PASSWORD) console.warn("WARNING: No LETTA_PASSWORD found — Letta API proxy will fail");
 
 // Services: letta/better-ccflare/ccflare-docker-proxy are --user; ollama is system-level
+// container: docker container name for services running in docker (memory/cpu from docker stats)
 const SERVICES = [
-  { name: "letta",                user: true  },
+  { name: "letta",                user: true,  container: "letta-server" },
   { name: "ollama",               user: false },
   { name: "better-ccflare",       user: true  },
   { name: "ccflare-docker-proxy", user: true  },
 ];
+
+// CPU delta tracking for non-docker services
+const _cpuPrev = new Map();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function lettaHeaders() {
@@ -78,6 +92,29 @@ function parseUptime(timestamp) {
   return `${h}h ${m}m`;
 }
 
+function getDockerStats(containerName) {
+  try {
+    const r = spawnSync("docker", [
+      "stats", containerName, "--no-stream", "--format",
+      '{"mem":"{{.MemUsage}}","cpu":"{{.CPUPerc}}"}'
+    ], { encoding: "utf8", timeout: 3000 });
+    if (r.status !== 0 || !r.stdout) return null;
+    const d = JSON.parse(r.stdout.trim());
+    // Parse mem: "242.8MiB / 7.77GiB" → extract first number + unit
+    const memMatch = (d.mem || "").match(/([\d.]+)\s*(MiB|GiB|KiB)/);
+    let memMb = 0;
+    if (memMatch) {
+      const val = parseFloat(memMatch[1]);
+      if (memMatch[2] === "GiB") memMb = Math.round(val * 1024);
+      else if (memMatch[2] === "KiB") memMb = Math.round(val / 1024);
+      else memMb = Math.round(val);
+    }
+    // Parse cpu: "0.12%" → 0.12
+    const cpuPct = parseFloat((d.cpu || "0").replace("%", "")) || 0;
+    return { memory_mb: memMb, cpu_pct: Math.round(cpuPct * 10) / 10 };
+  } catch { return null; }
+}
+
 function getServiceStatus(svc) {
   const args = ["show", svc.name,
     "--property=ActiveState,MemoryCurrent,CPUUsageNSec,ActiveEnterTimestamp"];
@@ -89,12 +126,32 @@ function getServiceStatus(svc) {
       .filter(p => p.length === 2)
   );
   const active = props.ActiveState === "active";
-  const memBytes = parseInt(props.MemoryCurrent || "0", 10);
-  const memMb = isNaN(memBytes) || memBytes <= 0 ? 0 : Math.round(memBytes / 1024 / 1024);
+
+  // For docker services, get real container stats
+  let memMb = 0, cpuPct = 0;
+  if (svc.container && active) {
+    const ds = getDockerStats(svc.container);
+    if (ds) { memMb = ds.memory_mb; cpuPct = ds.cpu_pct; }
+  } else {
+    // Native service: memory from systemctl, cpu from delta
+    const memBytes = parseInt(props.MemoryCurrent || "0", 10);
+    memMb = isNaN(memBytes) || memBytes <= 0 ? 0 : Math.round(memBytes / 1024 / 1024);
+    const cpuNs = parseInt(props.CPUUsageNSec || "0", 10);
+    const now = Date.now();
+    const prev = _cpuPrev.get(svc.name);
+    if (prev && (now - prev.time) > 1000) {
+      const deltaNs = cpuNs - prev.ns;
+      const deltaMs = now - prev.time;
+      cpuPct = Math.round((deltaNs / (deltaMs * 1e6)) * 1000) / 10;
+      if (cpuPct < 0) cpuPct = 0;
+    }
+    _cpuPrev.set(svc.name, { ns: cpuNs, time: now });
+  }
+
   return {
     active,
     memory_mb: memMb,
-    cpu_pct: 0,
+    cpu_pct: cpuPct,
     uptime: active ? parseUptime(props.ActiveEnterTimestamp) : "—",
   };
 }
@@ -128,6 +185,18 @@ async function proxyLetta(path, req) {
   }
 }
 
+function handleLogTail(svcName, count = 4) {
+  const svc = SERVICES.find(s => s.name === svcName);
+  if (!svc) return Response.json([], { status: 404 });
+  const n = Math.min(Math.max(count, 1), 100).toString();
+  const args = svc.user
+    ? ["--user", "-u", svcName, "-n", n, "--no-pager", "--output=short-iso"]
+    : ["-u", svcName, "-n", n, "--no-pager", "--output=short-iso"];
+  const r = spawnSync("journalctl", args, { encoding: "utf8", timeout: 3000 });
+  const lines = (r.stdout || "").trim().split("\n").filter(l => l.trim());
+  return Response.json(lines);
+}
+
 function handleLogs(svcName) {
   const svc = SERVICES.find(s => s.name === svcName);
   if (!svc) return new Response("Unknown service", { status: 404 });
@@ -137,19 +206,23 @@ function handleLogs(svcName) {
     : ["-u", svcName, "-f", "-n", "20", "--no-pager", "--output=short-iso"];
 
   let child;
+  let closed = false;
   const stream = new ReadableStream({
     start(ctrl) {
       child = spawn("journalctl", args);
       const enc = new TextEncoder();
       child.stdout.on("data", chunk => {
-        for (const line of chunk.toString().split("\n")) {
-          if (line.trim()) ctrl.enqueue(enc.encode(`data: ${JSON.stringify(line)}\n\n`));
-        }
+        if (closed) return;
+        try {
+          for (const line of chunk.toString().split("\n")) {
+            if (line.trim()) ctrl.enqueue(enc.encode(`data: ${JSON.stringify(line)}\n\n`));
+          }
+        } catch { closed = true; }
       });
       child.stderr.on("data", () => {});
-      child.on("close", () => ctrl.close());
+      child.on("close", () => { if (!closed) { closed = true; try { ctrl.close(); } catch {} } });
     },
-    cancel() { child?.kill(); },
+    cancel() { closed = true; child?.kill(); },
   });
 
   return new Response(stream, {
@@ -166,14 +239,18 @@ function handleLogs(svcName) {
 Bun.serve({
   port: PORT,
   hostname: "127.0.0.1",
+  idleTimeout: 255, // max: keep SSE connections alive
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    // Static
+    // Static — inject auth token so the UI auto-authenticates (no manual paste)
     if (path === "/" || path === "/index.html") {
       try {
-        const html = readFileSync(HTML_FILE, "utf8");
+        let html = readFileSync(HTML_FILE, "utf8");
+        const inject = AUTH_DISABLED ? '""' : JSON.stringify(AUTH_TOKEN);
+        html = html.replace("</head>",
+          `<script>window.__LETTA_CTRL_TOKEN__=${inject};</script>\n</head>`);
         return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       } catch {
         return new Response("letta-ctrl.html not found", { status: 500 });
@@ -192,9 +269,9 @@ Bun.serve({
       });
     }
 
-    // Auth check for all /api/* routes
+    // Auth check for all /api/* routes (supports Bearer header + ?token= query param)
     if (path.startsWith("/api/")) {
-      if (!checkAuth(req)) {
+      if (!checkAuth(req, url)) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
@@ -202,6 +279,10 @@ Bun.serve({
     // API
     if (path === "/api/ping") return Response.json({ ok: true });
     if (path === "/api/status") return handleStatus();
+    if (path.startsWith("/api/logtail/")) {
+      const count = parseInt(url.searchParams.get("n") || "4", 10);
+      return handleLogTail(path.slice("/api/logtail/".length), count);
+    }
     if (path.startsWith("/api/logs/")) return handleLogs(path.slice("/api/logs/".length));
 
     // Letta proxy
@@ -216,9 +297,9 @@ Bun.serve({
     if (blocksMatch && req.method === "GET")
       return proxyLetta(`/v1/agents/${blocksMatch[1]}/core-memory/blocks`, req);
 
-    const blockMatch = path.match(/^\/api\/agents\/([^/]+)\/blocks\/([^/]+)$/);
+    const blockMatch = path.match(/^\/api\/agents\/([^/]+)\/blocks\/(.+)$/);
     if (blockMatch && req.method === "PATCH")
-      return proxyLetta(`/v1/agents/${blockMatch[1]}/core-memory/blocks/${blockMatch[2]}`, req);
+      return proxyLetta(`/v1/agents/${blockMatch[1]}/core-memory/blocks/${decodeURIComponent(blockMatch[2])}`, req);
 
     const msgMatch = path.match(/^\/api\/agents\/([^/]+)\/messages$/);
     if (msgMatch && req.method === "POST")
