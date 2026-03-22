@@ -641,7 +641,7 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
-# claudecodeui integration (ADR-033)
+# claudecodeui integration (ADR-034)
 # ════════════════════════════════════════════════════════════════════
 
 @test "CCUI: CLI flag defaults exist in lib/02" {
@@ -669,8 +669,8 @@ setup() {
   grep -q '_NODE_VER.*22' "$REPO/lib/07-tools-python-js.sh"
 }
 
-@test "ADR: decisions.md has ADR-033 (claudecodeui)" {
-  grep -q 'ADR-033.*claudecodeui' "$REPO/docs/decisions.md"
+@test "ADR: decisions.md has ADR-034 (claudecodeui)" {
+  grep -q 'ADR-034.*claudecodeui' "$REPO/docs/decisions.md"
 }
 
 # ════════════════════════════════════════════════════════════════════
