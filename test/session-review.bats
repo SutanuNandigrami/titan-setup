@@ -463,6 +463,131 @@ setup() {
   grep -q 'ADR-030.*claude-lens' "$REPO/docs/decisions.md"
 }
 
+@test "ADR: decisions.md has ADR-031 and ADR-032" {
+  grep -q 'ADR-031.*LettaCtrl' "$REPO/docs/decisions.md"
+  grep -q 'ADR-032.*LettaCtrl.*security' "$REPO/docs/decisions.md"
+}
+
+# ════════════════════════════════════════════════════════════════════
+# LETTACTRL GUI FIXES — ROUND 1 (2026-03-23, ADR-031)
+# ════════════════════════════════════════════════════════════════════
+
+@test "CTRL: server uses docker stats for container metrics" {
+  grep -q '"stats".*"--no-stream"' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL: server has CPU delta tracking for native services" {
+  grep -q '_cpuPrev' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL: server has logtail endpoint" {
+  grep -q 'handleLogTail' "$REPO/config/letta/letta-ctrl-server.js"
+  grep -q '/api/logtail/' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL: auth supports query-param token (EventSource fix)" {
+  grep -q 'searchParams.get.*token' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL: frontend passes token in EventSource URL" {
+  grep -q 'EventSource.*token=' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL: no hardcoded Accounts or Fix #89 in SVC_EXTRA" {
+  local hits
+  hits=$(grep -E 'Accounts|Fix #89' "$REPO/config/letta/letta-ctrl.html" || true)
+  [ -z "$hits" ]
+}
+
+@test "CTRL: frontend uses targeted DOM updates (updateSvcGrid)" {
+  grep -q 'updateSvcGrid' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL: createAgent uses model field not llm" {
+  grep -q 'model: model' "$REPO/config/letta/letta-ctrl.html"
+  local hits
+  hits=$(grep 'llm:' "$REPO/config/letta/letta-ctrl.html" || true)
+  [ -z "$hits" ]
+}
+
+@test "CTRL: memory block IDs use safeId sanitizer" {
+  grep -q 'safeId' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL: letta service has container field for docker stats" {
+  grep -q 'container.*letta-server' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+# ════════════════════════════════════════════════════════════════════
+# LETTACTRL ROUND 2 — SECURITY + STABILITY (2026-03-23, ADR-032)
+# ════════════════════════════════════════════════════════════════════
+
+@test "CTRL2: token injection uses JSON.stringify (no raw quotes)" {
+  grep -q 'JSON.stringify(AUTH_TOKEN)' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL2: agent names escaped with escHtml in chips" {
+  grep -q 'escHtml(a.name)' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: agent models escaped with escHtml" {
+  grep -q 'escHtml(a.llm_config' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: block save uses data attributes not inline JS" {
+  grep -q 'this.dataset.agent' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: contenteditable is plaintext-only" {
+  grep -q 'plaintext-only' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: block labels URL-encoded in API path" {
+  grep -q 'encodeURIComponent(label)' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: server decodes block label in route" {
+  grep -q 'decodeURIComponent' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL2: SSE stream has closed guard (no controller crash)" {
+  grep -q 'let closed = false' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL2: Bun.serve has idleTimeout for SSE" {
+  grep -q 'idleTimeout' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
+@test "CTRL2: EventSource onerror shows reconnect message" {
+  grep -q 'Connection lost' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: polling uses setTimeout not setInterval" {
+  local hits
+  hits=$(grep 'setInterval.*pollStatus' "$REPO/config/letta/letta-ctrl.html" || true)
+  [ -z "$hits" ]
+}
+
+@test "CTRL2: beforeunload cleans up timer and EventSource" {
+  grep -q 'beforeunload' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: Escape key closes create modal" {
+  grep -q 'Escape.*closeCreateModal\|closeCreateModal.*Escape' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: log filter is debounced" {
+  grep -q 'debouncedFilter' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: agent names have text-overflow ellipsis" {
+  grep -q 'achip-name.*text-overflow:ellipsis\|adetname.*text-overflow:ellipsis' "$REPO/config/letta/letta-ctrl.html"
+}
+
+@test "CTRL2: server warns on empty LETTA_PASSWORD" {
+  grep -q 'No LETTA_PASSWORD found' "$REPO/config/letta/letta-ctrl-server.js"
+}
+
 # ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
