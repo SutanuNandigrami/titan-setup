@@ -24,7 +24,7 @@ Before any push to remote, run this sequence:
 ## Infrastructure Security
 1. `trivy config .` — scan Terraform/CloudFormation for misconfigs
 2. `tflint` — lint Terraform files
-3. `semgrep --config auto .` — static analysis
+3. `opengrep scan -f auto .` — static analysis
 
 ## Network Reconnaissance
 1. `subfinder -d <domain>` — passive subdomain enumeration

@@ -14,8 +14,6 @@ CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
 CCFLARE_PROXY_PORT=8081 # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
-SEMGREP_TOKEN=""
-SEMGREP_SKIP=false
 LETTA_SKIP=false
 LETTA_PORT=8283
 LETTA_PASSWORD=""
@@ -44,10 +42,6 @@ Options:
   --ccflare-skip           Skip better-ccflare install entirely
   --ccflare-port PORT      Proxy port (default: 8080)
   --ccflare-host HOST      Bind address (default: 127.0.0.1)
-
-  semgrep options:
-  --semgrep-token TOKEN    Semgrep App Token (enables semgrep plugin in Claude Code)
-  --no-semgrep             Skip semgrep plugin entirely (no token needed)
 
   letta / subconscious options:
   --letta-skip             Skip Letta server + claude-subconscious plugin
@@ -155,18 +149,6 @@ while [[ $# -gt 0 ]]; do
       CCFLARE_HOST="$2"
       shift 2
       ;;
-    --semgrep-token)
-      [[ $# -ge 2 ]] || {
-        fail "--semgrep-token requires a value"
-        usage
-      }
-      SEMGREP_TOKEN="$2"
-      shift 2
-      ;;
-    --no-semgrep)
-      SEMGREP_SKIP=true
-      shift
-      ;;
     --letta-skip)
       LETTA_SKIP=true
       shift
@@ -229,14 +211,13 @@ while [[ $# -gt 0 ]]; do
         usage
       }
       if [[ -f "$2" ]]; then
-        # Read key=value pairs (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD)
+        # Read key=value pairs (TAILSCALE_KEY, LETTA_PASSWORD)
         while IFS='=' read -r key value; do
           [[ -z "$key" || "$key" == \#* ]] && continue
           key=$(echo "$key" | xargs)
           value=$(echo "$value" | xargs)
           case "$key" in
             TAILSCALE_KEY) TAILSCALE_KEY="$value" ;;
-            SEMGREP_TOKEN) SEMGREP_TOKEN="$value" ;;
             LETTA_PASSWORD) LETTA_PASSWORD="$value" ;;
             *) warn "secrets-file: unknown key '$key' (ignored)" ;;
           esac
@@ -301,19 +282,5 @@ if [[ -z "$CC_NO_AUTOUPDATE" ]] && ! $CC_ASKED; then
 fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
 [[ "$CC_NO_AUTOUPDATE" == "true" ]] && echo -e "  Auto-updates:  ${YELLOW}disabled${NC}" || echo -e "  Auto-updates:  ${GREEN}enabled${NC}"
-
-# ─── Semgrep token (interactive prompt if not set via flag) ───
-if ! $SEMGREP_SKIP && [[ -z "$SEMGREP_TOKEN" ]]; then
-  echo -e "\n  ${CYAN}Semgrep (static analysis in Claude Code):${NC}"
-  echo "  Get a free token at semgrep.dev → Settings → Tokens"
-  read -rp "  Semgrep App Token (Enter to skip): " SEMGREP_TOKEN || true
-  [[ -z "$SEMGREP_TOKEN" ]] && SEMGREP_SKIP=true
-fi
-if $SEMGREP_SKIP; then
-  echo -e "  Semgrep:       ${YELLOW}skipped${NC}"
-elif [[ -n "$SEMGREP_TOKEN" ]]; then
-  echo -e "  Semgrep:       ${GREEN}enabled${NC}"
-fi
-echo ""
 
 # ─── VPS: create Claude user and re-exec as them ───

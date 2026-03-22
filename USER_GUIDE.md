@@ -450,28 +450,17 @@ Automated SQL injection detection and exploitation.
 
 > **Example prompt:** "Test this application for SQL injection vulnerabilities"
 
-#### semgrep
-Static analysis for security patterns, bugs, and code quality issues.
+#### opengrep
+Static analysis for security patterns, bugs, and code quality issues. Self-contained binary (LGPL 2.1 fork of semgrep, 100% rule compatible). No Python/pip dependency, no token needed.
 
 - Find security vulnerabilities in code
 - Enforce code patterns
 - Custom rule creation
 - Multi-language support
+- Installed as a binary download from GitHub releases
 
-> **Example prompt:** "Scan the codebase for security vulnerabilities and bad patterns"
-
-#### semgrep (Claude Code plugin)
-Integration with Claude Code IDE for real-time security scanning and findings management.
-
-- Real-time code scanning in Claude Code
-- Integration with semgrep.dev findings dashboard
-- Requires `SEMGREP_APP_TOKEN` environment variable
-- Token automatically set during titan install via `--semgrep-token TOKEN` or interactively
-- Token stored in `~/.claude/settings.json` env block
-- Post-tool hook (`post-tool-cli-scan`) is git-aware: runs only inside git repos, prevents hook failures in non-git directories
-- Enable via `claude plugin install semgrep` after obtaining API token
-
-> **Example prompt:** "Scan this code with the semgrep plugin and show findings"
+> **Example prompt:** "Scan the codebase for security vulnerabilities with opengrep"
+> **Direct usage:** `opengrep scan -f auto .`
 
 #### osv-scanner
 Google's open source vulnerability scanner. Checks dependencies against OSV database.
@@ -1290,12 +1279,10 @@ Titan installs curated plugins where MCP is genuinely better than the CLI equiva
 | `playwright` | Microsoft's browser automation MCP — 22 tools for navigate, click, snapshot, fill, screenshot, etc. | Ref-based accessibility tree targeting is deterministic; deferred loading (~300 tokens startup) |
 | `episodic-memory` | Semantic search over past Claude Code conversations | No CLI equivalent for cross-session memory |
 | `claude-subconscious` | Letta-based background memory agent; updates silently between turns (requires Letta) | No CLI equivalent for ambient persistent memory |
-| `semgrep` | Inline SAST findings — Claude sees results and fixes code in same turn (requires token) | Inline beats terminal loop; **requires `semgrep` CLI binary** (in UV_TOOLS) |
 
 ### Plugin notes
 
 - `playwright` MCP plugin provides AI-driven browser automation (navigate, click, fill, snapshot); the playwright CLI (installed via bun) provides E2E testing (`playwright test`, codegen, traces) — both are installed, serving different purposes
-- `semgrep` plugin shells out to the `semgrep` binary — both CLI and plugin must be installed
 - `claude-subconscious` requires the Letta server to be running — skip with `--letta-skip`
 - `superpowers` and `context7` are **not** installed as plugins — superpowers skills are installed directly into `~/.claude/skills/`
 
@@ -1626,7 +1613,7 @@ then show me diffs, then use comby to replace them"
 
 **Security scanning:**
 ```
-"Scan the codebase with semgrep, then check git history
+"Scan the codebase with opengrep, then check git history
 with gitleaks, and finally report vulnerabilities"
 ```
 

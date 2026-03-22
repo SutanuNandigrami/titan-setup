@@ -231,10 +231,6 @@ setup() {
   grep -A15 '\-\-secrets-file)' "$REPO/lib/02-cli.sh" | grep -q 'TAILSCALE_KEY'
 }
 
-@test "KI: --secrets-file reads SEMGREP_TOKEN" {
-  grep -A15 '\-\-secrets-file)' "$REPO/lib/02-cli.sh" | grep -q 'SEMGREP_TOKEN'
-}
-
 @test "KI: --secrets-file reads LETTA_PASSWORD" {
   grep -A15 '\-\-secrets-file)' "$REPO/lib/02-cli.sh" | grep -q 'LETTA_PASSWORD'
 }
@@ -459,6 +455,33 @@ setup() {
 
 @test "BUILT: titan-setup.sh passes shellcheck" {
   shellcheck -x --severity=error "$REPO/titan-setup.sh"
+}
+
+# ── ADR-029: semgrep → opengrep migration ──
+
+@test "ADR29: opengrep install uses guarded curl (if/else)" {
+  grep -B1 'opengrep/opengrep/releases' "$REPO/lib/07-tools-python-js.sh" | grep -q 'if curl'
+}
+
+@test "ADR29: opengrep supports both x86_64 and aarch64" {
+  grep -q 'opengrep_manylinux_x86' "$REPO/lib/07-tools-python-js.sh"
+  grep -q 'opengrep_manylinux_aarch64' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "ADR29: no semgrep CLI flags remain in arg parser" {
+  ! grep -q '\-\-semgrep-token\|\-\-no-semgrep' "$REPO/lib/02-cli.sh"
+}
+
+@test "ADR29: no SEMGREP_TOKEN in secrets-file parsing" {
+  ! grep -A15 '\-\-secrets-file)' "$REPO/lib/02-cli.sh" | grep -q 'SEMGREP_TOKEN'
+}
+
+@test "ADR29: no semgrep plugin in lib/12-plugins.sh" {
+  ! grep -q 'plugin install semgrep' "$REPO/lib/12-plugins.sh"
+}
+
+@test "ADR29: no SEMGREP_APP_TOKEN injection in settings" {
+  ! grep -q 'SEMGREP_APP_TOKEN' "$REPO/lib/11-deploy-config.sh"
 }
 
 @test "BUILT: titan-setup.sh passes bash -n" {

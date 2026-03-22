@@ -37,34 +37,6 @@ else
   # Playwright CLI (installed in lib/07) handles E2E testing; MCP plugin handles AI-driven browser automation.
   claude plugin install playwright 2>/dev/null && ok "playwright MCP" || warn "playwright MCP"
 
-  # semgrep plugin — only if token was provided
-  if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-    if claude plugin install semgrep 2>/dev/null; then
-      ok "semgrep plugin"
-      # Remove semgrep's UserPromptSubmit hook — injects ~500 tokens of static
-      # "Secure-by-Default Libraries" text on EVERY prompt. Wasteful and errors out.
-      # Keep PostToolUse (scan on edit) and SessionStart (one-time defaults).
-      _sg_hooks=$(find "$HOME/.claude/plugins/cache" -path "*/semgrep/*/hooks/hooks.json" 2>/dev/null | head -1)
-      if [[ -n "$_sg_hooks" ]] && jq -e '.hooks.UserPromptSubmit' "$_sg_hooks" &>/dev/null; then
-        jq 'del(.hooks.UserPromptSubmit)' "$_sg_hooks" > "${_sg_hooks}.tmp" \
-          && mv "${_sg_hooks}.tmp" "$_sg_hooks" \
-          && ok "semgrep: removed UserPromptSubmit hook (~500 tokens/prompt saved)"
-      fi
-      # Patch semgrep hooks.json to guard against non-git-repo dirs
-      # semgrep ci requires a git root; without this guard, every Write/Edit outside a repo fails
-      _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
-      if [[ -f "$_SEMGREP_HOOKS" ]]; then
-        jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
-          "$_SEMGREP_HOOKS" > ${WORKDIR}/_semgrep_hooks.json \
-          && mv ${WORKDIR}/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
-          && ok "semgrep: hooks patched (git-repo guard added)" \
-          || warn "semgrep hooks patch failed"
-      fi
-    else
-      warn "semgrep plugin"
-    fi
-  fi
-
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
   claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \

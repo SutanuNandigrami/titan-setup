@@ -76,8 +76,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | `--mode desktop\|vps` | Installation profile (prompted interactively if omitted) |
 | `--cc-version VERSION` | Pin a specific Claude Code version |
 | `--no-autoupdate` | Disable Claude Code auto-updates |
-| `--semgrep-token TOKEN` | Add Semgrep token for security scanning |
-| `--no-semgrep` | Skip Semgrep setup (no prompt) |
 | `--no-cozempic` | Skip cozempic context cleaner install |
 | `--force-updates` | Force upgrade all tools (uv, bun, cargo, go, binaries) |
 | `--dry-run` | Preview what will happen without making changes |
@@ -98,8 +96,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
 | `--ccflare-skip` | Skip better-ccflare proxy install |
 | `--ccflare-port PORT` | better-ccflare port (default: 8080) |
 | `--ccflare-host HOST` | better-ccflare bind address (default: 127.0.0.1) |
-| `--semgrep-token TOKEN` | Semgrep App Token (enables semgrep plugin) |
-| `--no-semgrep` | Skip Semgrep setup entirely |
 | `--letta-skip` | Skip Letta server + claude-subconscious plugin |
 | `--letta-port PORT` | Letta server port (default: 8283) |
 | `--letta-password PASS` | Letta server password (auto-generated if omitted) |
@@ -130,7 +126,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SutanuNandigrami/claude-tita
    ```bash
    claude plugin list
    ```
-   Titan installs: `hookify` · `code-review` · `skill-creator` · `playwright` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `cozempic` · `semgrep` (if token provided)
+   Titan installs: `hookify` · `code-review` · `skill-creator` · `playwright` · `episodic-memory` · `claude-subconscious` (if Letta enabled) · `cozempic`
 
 5. **Quick sanity check:**
    ```bash
@@ -214,7 +210,7 @@ Desktop only: `maim`, `xdotool`.
 | Manager | Purpose |
 |---------|---------|
 | **Rust / cargo** | Rust CLI tools (ripgrep, fd, bat, etc.) + auto-upgrade |
-| **uv** | Python CLI tools (semgrep, ansible, pgcli, etc.) |
+| **uv** | Python CLI tools (ansible, pgcli, etc.) |
 | **bun** | JavaScript CLI tools (prettier, repomix, ccstatusline, etc.) |
 | **Go** | Go CLI tools (dive, stern, glow, etc.) |
 | **mise** | Runtime version management (Node, Python, Go, Ruby) |
@@ -222,7 +218,7 @@ Desktop only: `maim`, `xdotool`.
 
 ### 150+ CLI Tools
 
-**Python (uv):** yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
+**Python (uv):** yq · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · nlm · cozempic · ccusage · sherlock
 
 **JS (bun):** trash-cli · tldr · prettier · repomix · gemini-cli · ccstatusline · mermaid-cli · playwright · kilocode · vercel
 
@@ -230,7 +226,7 @@ Desktop only: `maim`, `xdotool`.
 
 **Go:** dive · stern · glow · mkcert · task · nuclei · ffuf · usql · grpcurl · actionlint · osv-scanner · hcloud · sops · doggo · gitleaks · act · shfmt · gron · httpx · subfinder · dnsx · katana · scc · age · ctop · claude-esp · claude-squad
 
-**Binary:** kubectl · helm · gcloud · terraform · packer · tflint · infracost · hadolint · duckdb · trivy · mc · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy
+**Binary:** kubectl · helm · gcloud · terraform · packer · tflint · infracost · hadolint · duckdb · trivy · mc · gh · shellcheck · step-cli · comby · cloudflared · infisical · dippy · opengrep
 
 **Docker services:** n8n (workflow automation, localhost:5678) · Letta (persistent memory, localhost:8283)
 
@@ -248,7 +244,7 @@ Desktop only: `maim`, `xdotool`.
 | Component | Count | Description |
 |-----------|-------|-------------|
 | Skills | 15 | Trimmed, self-contained (vibesec, cli-tools, modern-python, security-scan, etc.) |
-| Plugins (MCP) | 6–8 | hookify, code-review, skill-creator, playwright, episodic-memory, claude-subconscious (if Letta), cozempic, semgrep (if token) |
+| Plugins (MCP) | 6–7 | hookify, code-review, skill-creator, playwright, episodic-memory, claude-subconscious (if Letta), cozempic |
 | Hook events | 14 | PreToolUse (safety), PostToolUse (audit), SessionStart (memory), etc. |
 | Conditional rules | 7 | Trigger on file type (Python, shell, terraform, docker, security, skill-authoring, memory) |
 | Slash commands | 12 | `/ship`, `/scan`, `/review`, `/workspace-init`, `/remember`, etc. |
@@ -376,8 +372,6 @@ claude plugin marketplace add anthropic/claude-plugins-official
 claude plugin install hookify code-review skill-creator playwright
 claude plugin marketplace add obra/superpowers-marketplace
 claude plugin install episodic-memory
-# semgrep — only if you have a token from semgrep.dev
-claude plugin install semgrep
 ```
 
 ### RTK not working
@@ -489,7 +483,6 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | *skill-creator* (official plugin) | Interactive skill authoring |
 | *playwright* (official plugin) | Microsoft's browser automation MCP — 22 deferred tools, ref-based accessibility targeting |
 | *episodic-memory* (community plugin) | Semantic search over past conversations |
-| *semgrep* (official plugin) | Inline SAST findings (requires Semgrep CLI + token) |
 
 ### Security & Recon
 
@@ -503,7 +496,7 @@ Titan pulls from and integrates with 60+ open-source projects across the AI deve
 | [zricethezav/gitleaks](https://github.com/zricethezav/gitleaks) | Secret scanning in git history |
 | [google/osv-scanner](https://github.com/google/osv-scanner) | Dependency vulnerability scanning |
 | [ffuf/ffuf](https://github.com/ffuf/ffuf) | Web fuzzer |
-| *semgrep* (PyPI) | Static analysis engine |
+| *opengrep* (binary) | Static analysis engine (LGPL 2.1 fork of semgrep, 100% rule compatible) |
 | *sqlmap* (PyPI) | SQL injection testing |
 | *mitmproxy* (PyPI) | HTTP/HTTPS interception proxy |
 | *sherlock-project* (PyPI) | Username reconnaissance |
@@ -558,7 +551,7 @@ dive · stern · glow · mkcert · task · nuclei · ffuf · usql · grpcurl · 
 
 ### Python CLI Tools (via uv)
 
-yq · semgrep · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · notebooklm-mcp-cli · cozempic · ccusage · sherlock-project · claude-agent-sdk
+yq · ansible-core · ansible-lint · sqlmap · pgcli · ruff · ast-grep-cli · mitmproxy · cookiecutter · notebooklm-mcp-cli · cozempic · ccusage · sherlock-project · claude-agent-sdk
 
 ### JavaScript CLI Tools (via bun)
 

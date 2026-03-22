@@ -128,8 +128,6 @@ CCFLARE_SKIP=false
 CCFLARE_PORT=8080
 CCFLARE_HOST="127.0.0.1"
 CCFLARE_PROXY_PORT=8081 # billing proxy port (Bun-based; Docker containers reach via host.docker.internal:8081)
-SEMGREP_TOKEN=""
-SEMGREP_SKIP=false
 LETTA_SKIP=false
 LETTA_PORT=8283
 LETTA_PASSWORD=""
@@ -158,10 +156,6 @@ Options:
   --ccflare-skip           Skip better-ccflare install entirely
   --ccflare-port PORT      Proxy port (default: 8080)
   --ccflare-host HOST      Bind address (default: 127.0.0.1)
-
-  semgrep options:
-  --semgrep-token TOKEN    Semgrep App Token (enables semgrep plugin in Claude Code)
-  --no-semgrep             Skip semgrep plugin entirely (no token needed)
 
   letta / subconscious options:
   --letta-skip             Skip Letta server + claude-subconscious plugin
@@ -269,18 +263,6 @@ while [[ $# -gt 0 ]]; do
       CCFLARE_HOST="$2"
       shift 2
       ;;
-    --semgrep-token)
-      [[ $# -ge 2 ]] || {
-        fail "--semgrep-token requires a value"
-        usage
-      }
-      SEMGREP_TOKEN="$2"
-      shift 2
-      ;;
-    --no-semgrep)
-      SEMGREP_SKIP=true
-      shift
-      ;;
     --letta-skip)
       LETTA_SKIP=true
       shift
@@ -343,14 +325,13 @@ while [[ $# -gt 0 ]]; do
         usage
       }
       if [[ -f "$2" ]]; then
-        # Read key=value pairs (TAILSCALE_KEY, SEMGREP_TOKEN, LETTA_PASSWORD)
+        # Read key=value pairs (TAILSCALE_KEY, LETTA_PASSWORD)
         while IFS='=' read -r key value; do
           [[ -z "$key" || "$key" == \#* ]] && continue
           key=$(echo "$key" | xargs)
           value=$(echo "$value" | xargs)
           case "$key" in
             TAILSCALE_KEY) TAILSCALE_KEY="$value" ;;
-            SEMGREP_TOKEN) SEMGREP_TOKEN="$value" ;;
             LETTA_PASSWORD) LETTA_PASSWORD="$value" ;;
             *) warn "secrets-file: unknown key '$key' (ignored)" ;;
           esac
@@ -416,20 +397,6 @@ fi
 [[ -n "$CC_VERSION" ]] && echo -e "  CC version:    ${GREEN}${CC_VERSION}${NC}"
 [[ "$CC_NO_AUTOUPDATE" == "true" ]] && echo -e "  Auto-updates:  ${YELLOW}disabled${NC}" || echo -e "  Auto-updates:  ${GREEN}enabled${NC}"
 
-# ─── Semgrep token (interactive prompt if not set via flag) ───
-if ! $SEMGREP_SKIP && [[ -z "$SEMGREP_TOKEN" ]]; then
-  echo -e "\n  ${CYAN}Semgrep (static analysis in Claude Code):${NC}"
-  echo "  Get a free token at semgrep.dev → Settings → Tokens"
-  read -rp "  Semgrep App Token (Enter to skip): " SEMGREP_TOKEN || true
-  [[ -z "$SEMGREP_TOKEN" ]] && SEMGREP_SKIP=true
-fi
-if $SEMGREP_SKIP; then
-  echo -e "  Semgrep:       ${YELLOW}skipped${NC}"
-elif [[ -n "$SEMGREP_TOKEN" ]]; then
-  echo -e "  Semgrep:       ${GREEN}enabled${NC}"
-fi
-echo ""
-
 # ─── VPS: create Claude user and re-exec as them ───
 if [[ "$INSTALL_MODE" == "vps" ]]; then
   if [[ -z "$CLAUDE_USER" ]]; then
@@ -461,8 +428,6 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     $VERBOSE && _VPS_REEXEC_ARGS+=(--verbose)
     $CCFLARE_SKIP && _VPS_REEXEC_ARGS+=(--ccflare-skip)
     _VPS_REEXEC_ARGS+=(--ccflare-port "$CCFLARE_PORT" --ccflare-host "$CCFLARE_HOST")
-    [[ -n "$SEMGREP_TOKEN" ]] && _VPS_REEXEC_ARGS+=(--semgrep-token "$SEMGREP_TOKEN")
-    $SEMGREP_SKIP && _VPS_REEXEC_ARGS+=(--no-semgrep)
     $LETTA_SKIP && _VPS_REEXEC_ARGS+=(--letta-skip)
     _VPS_REEXEC_ARGS+=(--letta-port "$LETTA_PORT")
     [[ -n "$LETTA_PASSWORD" ]] && _VPS_REEXEC_ARGS+=(--letta-password "$LETTA_PASSWORD")
@@ -559,11 +524,6 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
       fi
       if [[ -n "${TAILSCALE_KEY:-}" ]]; then
         printf ' --tailscale-key %q' "$TAILSCALE_KEY"
-      fi
-      if [[ -n "$SEMGREP_TOKEN" ]]; then
-        printf ' --semgrep-token %q' "$SEMGREP_TOKEN"
-      elif $SEMGREP_SKIP; then
-        printf ' --no-semgrep'
       fi
       printf ' 2>&1 | tee %q\n' "$_TMUX_LOG"
     } >"$_TMUX_WRAPPER"
@@ -1164,7 +1124,6 @@ echo -e "  ${CYAN}Python tools (uv):${NC}"
 # Core Python tools (always installed)
 UV_TOOLS=(
   "yq"           # yq — YAML/XML/TOML processor
-  "semgrep"      # semgrep — static analysis
   "ansible-core" # ansible, ansible-playbook, ansible-galaxy + more
   "ansible-lint" # ansible-lint — linter for Ansible playbooks
   "pgcli"        # pgcli — Postgres with autocomplete
@@ -1212,6 +1171,24 @@ python3 -c "import claude_agent_sdk" 2>/dev/null && ok "claude-agent-sdk (exists
 unset _PYSITE
 
 # sqlite-vec is installed to ~/.local/lib/python-libs/ as a memory library (used on-demand, not at startup)
+
+# ─── opengrep — static analysis (self-contained binary, no Python needed) ───
+# Replaces semgrep: LGPL 2.1 fork, no token required, better taint analysis
+if command -v opengrep &>/dev/null && ! $FORCE_UPDATES; then
+  ok "opengrep (exists)"
+else
+  case "$UNAME_ARCH" in
+    x86_64) _og_bin="opengrep_manylinux_x86" ;;
+    aarch64) _og_bin="opengrep_manylinux_aarch64" ;;
+  esac
+  if curl -fsSL "https://github.com/opengrep/opengrep/releases/latest/download/${_og_bin}" \
+    -o /usr/local/bin/opengrep 2>>"$LOG_FILE"; then
+    chmod +x /usr/local/bin/opengrep
+    ok "opengrep $(opengrep --version 2>/dev/null | head -1 || true)"
+  else
+    warn "opengrep download failed (install manually: https://github.com/opengrep/opengrep)"
+  fi
+fi
 
 # ─── JS tools via bun ───
 echo -e "\n  ${CYAN}JS tools (bun):${NC}"
@@ -2456,10 +2433,6 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   _MERGE_INJECT+=(--inject "LETTA_SDK_TOOLS=read-only")
 fi
 
-if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-  _MERGE_INJECT+=(--inject "SEMGREP_APP_TOKEN=${SEMGREP_TOKEN}")
-fi
-
 if [[ "$CC_NO_AUTOUPDATE" == "true" ]]; then
   _MERGE_INJECT+=(--inject "DISABLE_AUTOUPDATER=1")
 fi
@@ -2484,15 +2457,6 @@ python3 "$REPO_FILES/script/merge-settings.py" \
       ok "settings.json (template — first install)"
     fi
   }
-
-# Enable semgrep plugin if token provided (merge handles env var, this handles plugin)
-if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-  jq '.enabledPlugins["semgrep@claude-plugins-official"] = true' \
-    "$CLAUDE_DIR/settings.json" >/tmp/_cc_settings.json &&
-    mv /tmp/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
-    ok "settings.json (semgrep plugin enabled)" ||
-    warn "semgrep plugin enablement failed"
-fi
 
 # RTK global hook — runs after settings.json is written so it appends, not overwrites
 if command -v rtk &>/dev/null && rtk gain &>/dev/null 2>&1; then
@@ -2927,34 +2891,6 @@ else
   # NOTE: Do NOT remove — this is intentionally an MCP plugin, not a CLI replacement.
   # Playwright CLI (installed in lib/07) handles E2E testing; MCP plugin handles AI-driven browser automation.
   claude plugin install playwright 2>/dev/null && ok "playwright MCP" || warn "playwright MCP"
-
-  # semgrep plugin — only if token was provided
-  if [[ -n "$SEMGREP_TOKEN" ]] && ! $SEMGREP_SKIP; then
-    if claude plugin install semgrep 2>/dev/null; then
-      ok "semgrep plugin"
-      # Remove semgrep's UserPromptSubmit hook — injects ~500 tokens of static
-      # "Secure-by-Default Libraries" text on EVERY prompt. Wasteful and errors out.
-      # Keep PostToolUse (scan on edit) and SessionStart (one-time defaults).
-      _sg_hooks=$(find "$HOME/.claude/plugins/cache" -path "*/semgrep/*/hooks/hooks.json" 2>/dev/null | head -1)
-      if [[ -n "$_sg_hooks" ]] && jq -e '.hooks.UserPromptSubmit' "$_sg_hooks" &>/dev/null; then
-        jq 'del(.hooks.UserPromptSubmit)' "$_sg_hooks" > "${_sg_hooks}.tmp" \
-          && mv "${_sg_hooks}.tmp" "$_sg_hooks" \
-          && ok "semgrep: removed UserPromptSubmit hook (~500 tokens/prompt saved)"
-      fi
-      # Patch semgrep hooks.json to guard against non-git-repo dirs
-      # semgrep ci requires a git root; without this guard, every Write/Edit outside a repo fails
-      _SEMGREP_HOOKS=$(find "$CLAUDE_DIR/plugins/cache" -path '*/semgrep/*/hooks/hooks.json' | head -1)
-      if [[ -f "$_SEMGREP_HOOKS" ]]; then
-        jq '(.hooks.PostToolUse[].hooks[].command) |= "git rev-parse --git-dir &>/dev/null && " + . + " || true"' \
-          "$_SEMGREP_HOOKS" > ${WORKDIR}/_semgrep_hooks.json \
-          && mv ${WORKDIR}/_semgrep_hooks.json "$_SEMGREP_HOOKS" \
-          && ok "semgrep: hooks patched (git-repo guard added)" \
-          || warn "semgrep hooks patch failed"
-      fi
-    else
-      warn "semgrep plugin"
-    fi
-  fi
 
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
