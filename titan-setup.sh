@@ -3449,6 +3449,8 @@ if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
     done
     echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
     # Validate config before restart to avoid SSH lockout
+    # sshd -t needs /run/sshd on Ubuntu 24.04+
+    sudo mkdir -p /run/sshd 2>/dev/null || true
     if sudo sshd -t 2>/dev/null; then
       sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
     else
