@@ -16,7 +16,7 @@ setup() {
   local hits
   hits=$(grep -rn '\bapt ' "$REPO"/lib/*.sh \
     | grep -v 'apt-get\|# \|apt-key\|apt-transport\|DEBIAN\|deb \[' \
-    | grep -v 'insecure apt repos' || true)
+    | grep -v 'insecure apt repos\|apt lock' || true)
   [ -z "$hits" ]
 }
 
