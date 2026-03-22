@@ -40,7 +40,7 @@ fi
 # ║  from patrickjaja.github.io via sudo.                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-SCRIPT_VERSION="v3.20"
+SCRIPT_VERSION="v3.21"
 # ─── Phase checkpoint system for resume capability ───
 _PROGRESS_DIR="$HOME/.titan-progress"
 mkdir -p "$_PROGRESS_DIR" 2>/dev/null || true
@@ -135,6 +135,7 @@ OLLAMA_SKIP=false
 LETTA_CTRL_SKIP=false
 LETTA_CTRL_PORT=8284
 COZEMPIC_SKIP=false
+VEXP_SKIP=false
 FORCE_UPDATES=false
 MINIMAL=false
 
@@ -165,6 +166,7 @@ Options:
   --letta-ctrl-skip        Skip LettaCtrl GUI (default: install if Letta is installed)
   --letta-ctrl-port PORT   LettaCtrl server port (default: 8284)
   --no-cozempic            Skip cozempic install (context bloat cleaner)
+  --no-vexp                Skip vexp-cli install (context engine)
 
   --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
@@ -303,6 +305,10 @@ while [[ $# -gt 0 ]]; do
       COZEMPIC_SKIP=true
       shift
       ;;
+    --no-vexp)
+      VEXP_SKIP=true
+      shift
+      ;;
     --force-updates)
       FORCE_UPDATES=true
       shift
@@ -317,6 +323,7 @@ while [[ $# -gt 0 ]]; do
       OLLAMA_SKIP=true
       COZEMPIC_SKIP=true
       LETTA_CTRL_SKIP=true
+      VEXP_SKIP=true
       shift
       ;;
     --secrets-file)
@@ -961,7 +968,8 @@ else
     if command -v cargo &>/dev/null; then
       ok "cargo installed: $(cargo --version)"
     else
-      fail "cargo install failed"; exit 1
+      fail "cargo install failed"
+      exit 1
     fi
   fi
   # Ensure cargo binaries are on PATH for the rest of this script (idempotent)
@@ -978,7 +986,8 @@ else
     if command -v uv &>/dev/null; then
       ok "uv installed: $(uv --version)"
     else
-      fail "uv install failed"; exit 1
+      fail "uv install failed"
+      exit 1
     fi
   fi
   # Ensure uv/uvx binaries are on PATH for the rest of this script
@@ -1222,6 +1231,22 @@ fi
 
 command -v gemini &>/dev/null && ok "gemini-cli (exists)" || { run_q bun install -g @google/gemini-cli && ok "gemini-cli" || warn "gemini-cli"; }
 command -v mmdc &>/dev/null && ok "mermaid-cli (exists)" || { run_q bun install -g @mermaid-js/mermaid-cli && ok "mermaid-cli" || warn "mermaid-cli"; }
+
+# vexp-cli — local-first context engine for AI coding agents (tree-sitter + dependency graph)
+# Uses optional deps (@vexp/core-linux-x64 etc.) for platform-specific Rust binary — no postinstall needed
+if ! $VEXP_SKIP && ! $MINIMAL; then
+  if bun pm ls -g 2>/dev/null | grep -q "vexp-cli"; then
+    ok "vexp-cli (exists)"
+  else
+    run_q bun install -g vexp-cli && ok "vexp-cli" || warn "vexp-cli (install manually: bun install -g vexp-cli)"
+  fi
+  # Verify vexp-core platform binary was installed via optional deps
+  if command -v vexp &>/dev/null && vexp version &>/dev/null; then
+    ok "vexp-core binary ($(vexp version 2>&1 | grep 'core:' | sed 's/.*: //' || echo 'ok'))"
+  elif bun pm ls -g 2>/dev/null | grep -q "vexp-cli"; then
+    warn "vexp-core binary missing — try: bun install -g @vexp/core-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"
+  fi
+fi
 
 # playwright — browser automation and E2E testing
 # Ensure node is on PATH (mise shims may not be sourced in non-interactive context)
@@ -2145,7 +2170,7 @@ if ! command -v gcloud &>/dev/null; then
   # Download key to temp file first — piping to gpg --dearmor hangs if curl fails
   _GPG_TMP="$WORKDIR/gcloud.gpg"
   if curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg -o "$_GPG_TMP" 2>/dev/null; then
-    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg < "$_GPG_TMP" 2>/dev/null || true
+    sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg <"$_GPG_TMP" 2>/dev/null || true
   fi
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" |
     sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
@@ -2157,7 +2182,7 @@ else ok "gcloud (exists)"; fi
 if ! command -v terraform &>/dev/null; then
   _GPG_TMP="$WORKDIR/hashicorp.gpg"
   if wget -qO "$_GPG_TMP" https://apt.releases.hashicorp.com/gpg 2>/dev/null; then
-    sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$_GPG_TMP" 2>/dev/null || true
+    sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg <"$_GPG_TMP" 2>/dev/null || true
   fi
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq terraform packer &&
@@ -2194,7 +2219,7 @@ else ok "duckdb (exists)"; fi
 if ! command -v trivy &>/dev/null; then
   _GPG_TMP="$WORKDIR/trivy.gpg"
   if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
-    sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+    sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg <"$_GPG_TMP" 2>/dev/null || true
   fi
   echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
   apt_update --force && sudo apt-get install -y -qq trivy &&
@@ -2204,7 +2229,7 @@ else
   if ! grep -q 'signed-by' /etc/apt/sources.list.d/trivy.list 2>/dev/null; then
     _GPG_TMP="$WORKDIR/trivy.gpg"
     if wget -qO "$_GPG_TMP" https://aquasecurity.github.io/trivy-repo/deb/public.key 2>/dev/null; then
-      sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg < "$_GPG_TMP" 2>/dev/null || true
+      sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg <"$_GPG_TMP" 2>/dev/null || true
     fi
     echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
     ok "trivy (key migrated)"
@@ -2537,6 +2562,16 @@ fi
 install -Dm755 "$REPO_FILES/dot-claude/claude-lens.sh" "$CLAUDE_DIR/claude-lens.sh" &&
   ok "claude-lens: statusline" || warn "claude-lens install failed"
 
+# ─── vexp-cli MCP server (global, stdio transport — starts on-demand per session) ───
+# Uses `vexp mcp` command directly — no mcp-server.cjs file needed
+if ! $VEXP_SKIP && ! $MINIMAL && command -v vexp &>/dev/null; then
+  jq '.mcpServers.vexp = {"command": "vexp", "args": ["mcp"]}' \
+    "$CLAUDE_DIR/settings.json" >"${WORKDIR}/_cc_settings.json" &&
+    mv "${WORKDIR}/_cc_settings.json" "$CLAUDE_DIR/settings.json" &&
+    ok "vexp: MCP server configured (stdio — vexp mcp)" ||
+    warn "vexp: MCP config injection failed"
+fi
+
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
 #   tool-discovery → cli-tools (150 lines, full tool reference)
@@ -2864,8 +2899,8 @@ elif ! claude auth status &>/dev/null 2>&1; then
   warn "Claude not authenticated — skipping plugins (run 'claude auth login' then re-run)"
 else
   # Register official marketplace if not already registered
-  claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null \
-    && ok "official marketplace" || ok "official marketplace (exists)"
+  claude plugin marketplace add anthropic/claude-plugins-official 2>/dev/null &&
+    ok "official marketplace" || ok "official marketplace (exists)"
 
   # Install plugins from official marketplace
   claude plugin install code-review 2>/dev/null && ok "code-review" || warn "code-review"
@@ -2882,22 +2917,22 @@ else
 
   # episodic-memory — semantic search over past Claude Code sessions (~200 tokens/session)
   # Free, MIT, no subscription. Local embeddings via @xenova/transformers (no API key needed).
-  claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null \
-    && ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
+  claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null &&
+    ok "superpowers marketplace" || ok "superpowers marketplace (exists)"
   claude plugin install episodic-memory 2>/dev/null && ok "episodic-memory plugin" || warn "episodic-memory plugin"
 
   # cozempic plugin — context diagnose/treat MCP tools (diagnose_current, treat_session)
   # CLI (uv) provides the primary interface; plugin adds MCP tools for in-session diagnostics
   if ! $COZEMPIC_SKIP; then
-    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null \
-      && ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
+    claude plugin marketplace add Ruya-AI/cozempic 2>/dev/null &&
+      ok "cozempic marketplace" || ok "cozempic marketplace (exists)"
     claude plugin install cozempic 2>/dev/null && ok "cozempic plugin" || warn "cozempic plugin"
   fi
 
   # claude-subconscious — Letta-based persistent cross-session memory agent
   if ! $LETTA_SKIP; then
-    claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null \
-      && ok "letta marketplace" || ok "letta marketplace (exists)"
+    claude plugin marketplace add letta-ai/claude-subconscious 2>/dev/null &&
+      ok "letta marketplace" || ok "letta marketplace (exists)"
     if claude plugin install claude-subconscious 2>/dev/null; then
       ok "claude-subconscious plugin"
 
@@ -2905,9 +2940,9 @@ else
       _SUBCON_DIR=$(jq -r '.plugins["claude-subconscious@claude-subconscious"][0].installPath // empty' \
         "$CLAUDE_DIR/plugins/installed_plugins.json" 2>/dev/null)
       if [[ -n "$_SUBCON_DIR" ]] && [[ -f "$_SUBCON_DIR/package.json" ]]; then
-        (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) \
-          && ok "subconscious: node_modules installed" \
-          || warn "subconscious: npm install failed — hooks may not work"
+        (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) &&
+          ok "subconscious: node_modules installed" ||
+          warn "subconscious: npm install failed — hooks may not work"
       fi
 
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
@@ -2922,8 +2957,8 @@ else
       if [[ -f "$_SUBCON_AF" ]]; then
         # Patch LLM config: use ccflare billing proxy if available, else direct Anthropic
         # Check bun + proxy file (billing proxy was migrated from socat to Bun)
-        if ! $CCFLARE_SKIP && command -v bun &>/dev/null \
-            && [[ -f "$HOME/.config/letta/ccflare-billing-proxy.js" ]]; then
+        if ! $CCFLARE_SKIP && command -v bun &>/dev/null &&
+          [[ -f "$HOME/.config/letta/ccflare-billing-proxy.js" ]]; then
           _SUBCON_LLM_ENDPOINT="http://host.docker.internal:${CCFLARE_PROXY_PORT}"
         else
           _SUBCON_LLM_ENDPOINT="https://api.anthropic.com/v1"
@@ -2936,10 +2971,10 @@ else
           .agents[0].llm_config.provider_name = "anthropic" |
           .agents[0].llm_config.handle = "anthropic/claude-sonnet-4-6" |
           .agents[0].llm_config.context_window = 200000
-        ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
-          && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
-          && ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" \
-          || warn "subconscious: .af LLM patch failed"
+        ' "$_SUBCON_AF" >${WORKDIR}/_subcon_af.json &&
+          mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" &&
+          ok "subconscious: .af patched (LLM → claude-sonnet-4-6 via ${_SUBCON_LLM_ENDPOINT})" ||
+          warn "subconscious: .af LLM patch failed"
 
         # Patch embedding config: use host.docker.internal (Letta runs in Docker, must reach host Ollama)
         if ! $OLLAMA_SKIP && command -v ollama &>/dev/null; then
@@ -2949,10 +2984,10 @@ else
             .agents[0].embedding_config.embedding_model = "nomic-embed-text" |
             .agents[0].embedding_config.embedding_dim = 768 |
             .agents[0].embedding_config.handle = "ollama/nomic-embed-text"
-          ' "$_SUBCON_AF" > ${WORKDIR}/_subcon_af.json \
-            && mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" \
-            && ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" \
-            || warn "subconscious: .af embedding patch failed"
+          ' "$_SUBCON_AF" >${WORKDIR}/_subcon_af.json &&
+            mv ${WORKDIR}/_subcon_af.json "$_SUBCON_AF" &&
+            ok "subconscious: .af patched (embeddings → ollama/nomic-embed-text)" ||
+            warn "subconscious: .af embedding patch failed"
         fi
       else
         warn "subconscious: Subconscious.af not found — .af patching skipped"
@@ -2960,10 +2995,10 @@ else
 
       # Enable plugin in settings.json
       jq '.enabledPlugins["claude-subconscious@claude-subconscious"] = true' \
-        "$CLAUDE_DIR/settings.json" > ${WORKDIR}/_cc_settings.json \
-        && mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" \
-        && ok "subconscious: enabled in settings.json" \
-        || warn "subconscious: settings.json update failed"
+        "$CLAUDE_DIR/settings.json" >${WORKDIR}/_cc_settings.json &&
+        mv ${WORKDIR}/_cc_settings.json "$CLAUDE_DIR/settings.json" &&
+        ok "subconscious: enabled in settings.json" ||
+        warn "subconscious: settings.json update failed"
     else
       warn "claude-subconscious plugin install failed"
     fi
@@ -2971,7 +3006,6 @@ else
 
 fi
 # ── end claude auth guard ──
-
 # ─── LettaCtrl GUI — web dashboard for Letta management ───
 # NOTE: runs outside claude auth guard — letta-ctrl is standalone (no Claude auth needed)
 if $LETTA_SKIP || $LETTA_CTRL_SKIP; then
@@ -3003,7 +3037,7 @@ Type=simple
 ExecStart=${_BUN_BIN} run %h/.config/letta/letta-ctrl-server.js
 Environment="LETTA_CTRL_PORT=${LETTA_CTRL_PORT}"
 Environment="LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}"
-$( [[ "$INSTALL_MODE" == "vps" ]] && echo 'Environment="LETTA_CTRL_TOKEN=disable"' )
+$([[ "$INSTALL_MODE" == "vps" ]] && echo 'Environment="LETTA_CTRL_TOKEN=disable"')
 Restart=on-failure
 RestartSec=5
 

@@ -183,3 +183,10 @@ Immutable once written. New decisions get new numbers; old ones get "Superseded"
 **Context**: lib/12-plugins-install.sh and lib/13-plugins-config.sh shared an if/fi block across the fragment boundary. This was a maintenance landmine — editing one file could break the other without any indication.
 **Decision**: Merge into single `lib/12-plugins.sh`. Renumber subsequent fragments (14→13, 15→14, 16→15, 17→16). Total fragments: 19→18.
 **Consequences**: All if/fi blocks are self-contained within a single file. No cross-fragment dependencies. Slightly larger file (~160 lines) but much easier to maintain.
+
+
+## ADR-031: vexp-cli as global MCP server via stdio transport (2026-03-23)
+**Status**: Accepted
+**Context**: vexp-cli provides tree-sitter AST parsing, dependency graphs, and skeleton context for token-efficient code understanding. Ships 11 MCP tools (run_pipeline, get_context_capsule, get_impact_graph, etc.). Two transport options: stdio (on-demand, CC manages lifecycle) and HTTP+SSE (persistent daemon on port 7821).
+**Decision**: Install via `bun install -g vexp-cli` (uses optional deps `@vexp/core-linux-x64` etc. for platform binary — no postinstall). Configure as global MCP server in settings.json using stdio transport (`vexp mcp`). Injected via jq post-merge. Skip with `--minimal` or `--no-vexp`. mcpServers key NOT in TITAN_MANAGED_BLOCKS — user-added MCP servers preserved across re-runs.
+**Consequences**: Zero-touch UX — CC spawns `vexp mcp` on demand, no systemd service or port management. Trade-off: ~2s cold start per session for Rust daemon startup. ARM64 supported via `@vexp/core-linux-arm64` optional dep; binary verification warns if missing.

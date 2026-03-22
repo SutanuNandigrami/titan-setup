@@ -159,6 +159,16 @@ fi
 install -Dm755 "$REPO_FILES/dot-claude/claude-lens.sh" "$CLAUDE_DIR/claude-lens.sh" &&
   ok "claude-lens: statusline" || warn "claude-lens install failed"
 
+# ─── vexp-cli MCP server (global, stdio transport — starts on-demand per session) ───
+# Uses `vexp mcp` command directly — no mcp-server.cjs file needed
+if ! $VEXP_SKIP && ! $MINIMAL && command -v vexp &>/dev/null; then
+  jq '.mcpServers.vexp = {"command": "vexp", "args": ["mcp"]}' \
+    "$CLAUDE_DIR/settings.json" >"${WORKDIR}/_cc_settings.json" &&
+    mv "${WORKDIR}/_cc_settings.json" "$CLAUDE_DIR/settings.json" &&
+    ok "vexp: MCP server configured (stdio — vexp mcp)" ||
+    warn "vexp: MCP config injection failed"
+fi
+
 # ─── Skills ───
 # tool-discovery, security-ops, debug-protocol removed — replaced by better versions:
 #   tool-discovery → cli-tools (150 lines, full tool reference)
