@@ -155,6 +155,8 @@ elif command -v docker &>/dev/null; then
   if [ "$(stat -c %u "$HOME/.n8n" 2>/dev/null)" != "1000" ]; then
     sudo chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || true
   fi
+  # Clean crash artifacts from previous failed runs (causes "Last session crashed" loop)
+  rm -f "$HOME/.n8n/crash.journal" 2>/dev/null || true
 
   # Create systemd user service for n8n
   # Use detached docker + Type=oneshot — attached docker clients get SIGKILL'd

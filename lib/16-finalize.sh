@@ -62,6 +62,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 
     # ── tailscale serve — expose local services on Tailscale network ───────
+    # Reset stale serve rules from previous runs (hostname may have changed)
+    tailscale serve reset 2>/dev/null || true
     # tailscale serve is a proxy config — backend doesn't need to be running yet
     if command -v docker &>/dev/null; then
       tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
@@ -235,6 +237,12 @@ if [[ "$INSTALL_MODE" == "vps" && "${_TAILSCALE_FAILED:-}" != "true" ]]; then
       sudo iptables -D INPUT -p tcp -m state --state NEW --dport 22 -j ACCEPT 2>/dev/null || true
     fi
     sudo sed -i '/^#\?ListenAddress /d' /etc/ssh/sshd_config
+    # Remove ListenAddress from cloud drop-ins (Oracle 60-cloudimg-settings.conf etc.)
+    # These take precedence over sshd_config and can override our Tailscale-only binding
+    for _dropin in /etc/ssh/sshd_config.d/*.conf; do
+      [[ -f "$_dropin" ]] || continue
+      sudo sed -i '/^#\?ListenAddress /d' "$_dropin"
+    done
     echo "ListenAddress $TS_IP" | sudo tee -a /etc/ssh/sshd_config >/dev/null
     # Validate config before restart to avoid SSH lockout
     if sudo sshd -t 2>/dev/null; then
