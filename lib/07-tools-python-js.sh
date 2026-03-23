@@ -244,6 +244,19 @@ else
       echo -n "  Installing claudecodeui..."
       run_q bun install -g @siteboon/claude-code-ui && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}⚠${NC}"
     fi
+    # Rebuild native modules (better-sqlite3, node-pty) for node ABI.
+    # bun compiles them for bun's ABI; systemd service runs via node → SIGSEGV without this.
+    _CCUI_DIR=$(bun pm ls -g 2>/dev/null | grep '@siteboon/claude-code-ui' | awk '{print $NF}' || true)
+    [[ -z "$_CCUI_DIR" ]] && _CCUI_DIR="$(dirname "$(dirname "$(readlink -f "$(command -v cloudcli 2>/dev/null)")")" 2>/dev/null)"
+    if [[ -d "$_CCUI_DIR/../../node_modules/better-sqlite3" ]]; then
+      _NATIVE_ROOT="$_CCUI_DIR/../../node_modules"
+      for _mod in better-sqlite3 node-pty; do
+        if [[ -d "$_NATIVE_ROOT/$_mod" && -f "$_NATIVE_ROOT/$_mod/binding.gyp" ]]; then
+          (cd "$_NATIVE_ROOT/$_mod" && npm rebuild --silent 2>/dev/null) || true
+        fi
+      done
+      ok "claudecodeui: native modules rebuilt for node"
+    fi
 
     if command -v cloudcli &>/dev/null; then
       check_port "$CLAUDECODEUI_PORT" "claudecodeui" || true
