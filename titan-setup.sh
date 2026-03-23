@@ -441,6 +441,8 @@ if [[ "$INSTALL_MODE" == "desktop" && "$(id -u)" == "0" ]]; then
       export HOME="$_TARGET_HOME"
       export XDG_RUNTIME_DIR="/run/user/$_TARGET_UID"
       export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$_TARGET_UID/bus"
+      # Export CLAUDE_USER so it survives the tmux re-exec (SUDO_USER is lost after exec)
+      export CLAUDE_USER="$_TARGET_USER"
       # Add user's tool paths so mise/cargo/go/bun/uv binaries are found
       export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/go/bin:$PATH"
       echo -e "  ${GREEN}✓${NC} HOME → $_TARGET_HOME (running as root, targeting $_TARGET_USER)"
