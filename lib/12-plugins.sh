@@ -67,6 +67,15 @@ else
           warn "subconscious: npm install failed — hooks may not work"
       fi
 
+      # Patch /dev/tty crash: createWriteStream('/dev/tty') throws unhandled ENXIO in hook context
+      # (no terminal). Add .on("error") handler so the stream fails gracefully instead of crashing.
+      _SUBCON_SESS="$_SUBCON_DIR/scripts/session_start.ts"
+      if [[ -f "$_SUBCON_SESS" ]] && grep -q "createWriteStream('/dev/tty')" "$_SUBCON_SESS" 2>/dev/null; then
+        sed -i "s|tty = fs.createWriteStream('/dev/tty');|tty = fs.createWriteStream('/dev/tty'); tty.on('error', () => { tty = null; });|" "$_SUBCON_SESS" &&
+          ok "subconscious: patched /dev/tty crash (ENXIO in hook context)" ||
+          warn "subconscious: /dev/tty patch failed"
+      fi
+
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
       # Default .af uses openai/text-embedding-3-small and zai/glm-5 (cloud only)
       _SUBCON_AF=""

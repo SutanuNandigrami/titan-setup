@@ -674,6 +674,25 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
+# DESKTOP MODE: HOME FIX FOR ROOT EXECUTION
+# ════════════════════════════════════════════════════════════════════
+
+@test "DESKTOP: HOME override for root execution uses CLAUDE_USER/SUDO_USER" {
+  grep -q 'INSTALL_MODE.*desktop.*id -u.*0' "$REPO/lib/02-cli.sh"
+  grep -q 'TARGET_USER.*CLAUDE_USER.*SUDO_USER' "$REPO/lib/02-cli.sh"
+  grep -q 'getent passwd.*TARGET_USER' "$REPO/lib/02-cli.sh"
+  grep -q 'export HOME=' "$REPO/lib/02-cli.sh"
+}
+
+@test "DESKTOP: PATH includes mise shims when running as root" {
+  grep -q 'mise/shims.*local/bin.*cargo/bin.*bun/bin.*go/bin' "$REPO/lib/02-cli.sh"
+}
+
+@test "DESKTOP: claudecodeui node check falls back to mise shims" {
+  grep -q 'mise/shims/node' "$REPO/lib/07-tools-python-js.sh"
+}
+
+# ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart hook — load previous session state and run maintenance
 # NOTE: no set -euo pipefail — hooks must not die on non-zero exits (ADR-015)
+# NOTE: all output to stdout (not stderr) — CC treats stderr as hook errors
 
 # ─── ntfy push notification helper ───
 _ntfy() {
@@ -20,18 +21,18 @@ HANDOFF="$HOME/.claude/memory/handoff.md"
 if [[ -f "$HANDOFF" ]]; then
   FILE_AGE=$(($(date +%s) - $(stat -c %Y "$HANDOFF" 2>/dev/null || echo 0)))
   if ((FILE_AGE < 86400)); then
-    echo "[Memory] Previous session handoff ($((FILE_AGE / 60))m ago):" >&2
-    head -30 "$HANDOFF" >&2
-    echo "---" >&2
+    echo "[Memory] Previous session handoff ($((FILE_AGE / 60))m ago):"
+    head -30 "$HANDOFF"
+    echo "---"
   fi
 fi
 
 # Remind about auto memory files
 MEMORY_COUNT=$(find "$HOME/.claude/projects/" -name "MEMORY.md" 2>/dev/null | wc -l)
 if ((MEMORY_COUNT > 0)); then
-  echo "[Memory] ${MEMORY_COUNT} project memory file(s) available." >&2
+  echo "[Memory] ${MEMORY_COUNT} project memory file(s) available."
 else
-  echo "[Memory] No project memories yet. Use /remember or write to auto memory directory." >&2
+  echo "[Memory] No project memories yet. Use /remember or write to auto memory directory."
 fi
 
 # ─── Maintenance: JSONL prune (cap at 30, delete >30 days old) ───
@@ -48,16 +49,16 @@ if [[ -f "$AUDIT_LOG" ]]; then
   AUDIT_SIZE=$(stat -c %s "$AUDIT_LOG" 2>/dev/null || echo 0)
   if ((AUDIT_SIZE > 10485760)); then
     mv "$AUDIT_LOG" "${AUDIT_LOG}.$(date +%s).bak"
-    echo "[Audit] Log rotated (was $((AUDIT_SIZE / 1048576))MB)" >&2
+    echo "[Audit] Log rotated (was $((AUDIT_SIZE / 1048576))MB)"
   fi
 fi
 
-# ─── Agent slots: show loaded agents (stderr = zero token cost) ───
+# ─── Agent slots: show loaded agents ───
 MANIFEST="$HOME/.claude/agent-stash/_loaded/.manifest"
 if [[ -f "$MANIFEST" ]] && [[ -s "$MANIFEST" ]]; then
-  echo "[Agents] Loaded slots:" >&2
+  echo "[Agents] Loaded slots:"
   while IFS=$'\t' read -r slot agent _ts; do
-    echo "  $slot: $agent" >&2
+    echo "  $slot: $agent"
   done <"$MANIFEST"
 fi
 
@@ -67,8 +68,8 @@ if command -v cc-patch-thinking >/dev/null 2>&1; then
   cc-patch-thinking --check 2>/dev/null || _patch_rc=$?
   case $_patch_rc in
     0) ;; # already patched
-    1) cc-patch-thinking 2>&1 | while read -r line; do echo "[Patch] $line" >&2; done ;;
-    2) echo "[Patch] cc-patch-thinking: unknown CC version — may need patcher update" >&2 ;;
+    1) cc-patch-thinking 2>&1 | while read -r line; do echo "[Patch] $line"; done ;;
+    2) echo "[Patch] cc-patch-thinking: unknown CC version — may need patcher update" ;;
   esac
 fi
 

@@ -231,7 +231,10 @@ fi
 if $CLAUDECODEUI_SKIP || $MINIMAL; then
   ok "claudecodeui (skipped)"
 else
-  _NODE_VER=$(node --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
+  # Check node version — also try mise shims (not on PATH when running as root)
+  _NODE_BIN=$(command -v node 2>/dev/null || echo "")
+  [[ -z "$_NODE_BIN" && -x "$HOME/.local/share/mise/shims/node" ]] && _NODE_BIN="$HOME/.local/share/mise/shims/node"
+  _NODE_VER=$("$_NODE_BIN" --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
   if [[ "$_NODE_VER" -lt 22 ]]; then
     warn "claudecodeui requires Node.js v22+ (found: v${_NODE_VER}) — skipping"
   else

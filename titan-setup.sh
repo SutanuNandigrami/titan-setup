@@ -407,6 +407,22 @@ if [[ -z "$INSTALL_MODE" ]]; then
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
+# ─── Desktop mode: fix HOME when running as root via sudo ───
+# sudo changes HOME to /root, but services/configs must go to the target user's home.
+# VPS mode handles this via re-exec (lib/03-vps-reexec.sh). Desktop mode needs this fix.
+if [[ "$INSTALL_MODE" == "desktop" && "$(id -u)" == "0" ]]; then
+  _TARGET_USER="${CLAUDE_USER:-${SUDO_USER:-}}"
+  if [[ -n "$_TARGET_USER" && "$_TARGET_USER" != "root" ]]; then
+    _TARGET_HOME=$(getent passwd "$_TARGET_USER" | cut -d: -f6)
+    if [[ -n "$_TARGET_HOME" && -d "$_TARGET_HOME" ]]; then
+      export HOME="$_TARGET_HOME"
+      # Add user's tool paths so mise/cargo/go/bun/uv binaries are found
+      export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/go/bin:$PATH"
+      echo -e "  ${GREEN}✓${NC} HOME → $_TARGET_HOME (running as root, targeting $_TARGET_USER)"
+    fi
+  fi
+fi
+
 # ─── Claude Code version + autoupdate ───
 if [[ -z "$CC_VERSION" ]] && ! $CC_ASKED; then
   read -rp "  Claude Code version to install (blank = latest): " CC_VERSION || true
@@ -1369,7 +1385,10 @@ fi
 if $CLAUDECODEUI_SKIP || $MINIMAL; then
   ok "claudecodeui (skipped)"
 else
-  _NODE_VER=$(node --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
+  # Check node version — also try mise shims (not on PATH when running as root)
+  _NODE_BIN=$(command -v node 2>/dev/null || echo "")
+  [[ -z "$_NODE_BIN" && -x "$HOME/.local/share/mise/shims/node" ]] && _NODE_BIN="$HOME/.local/share/mise/shims/node"
+  _NODE_VER=$("$_NODE_BIN" --version 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo "0")
   if [[ "$_NODE_VER" -lt 22 ]]; then
     warn "claudecodeui requires Node.js v22+ (found: v${_NODE_VER}) — skipping"
   else
@@ -3017,6 +3036,15 @@ else
         (cd "$_SUBCON_DIR" && npm install --silent 2>/dev/null) &&
           ok "subconscious: node_modules installed" ||
           warn "subconscious: npm install failed — hooks may not work"
+      fi
+
+      # Patch /dev/tty crash: createWriteStream('/dev/tty') throws unhandled ENXIO in hook context
+      # (no terminal). Add .on("error") handler so the stream fails gracefully instead of crashing.
+      _SUBCON_SESS="$_SUBCON_DIR/scripts/session_start.ts"
+      if [[ -f "$_SUBCON_SESS" ]] && grep -q "createWriteStream('/dev/tty')" "$_SUBCON_SESS" 2>/dev/null; then
+        sed -i "s|tty = fs.createWriteStream('/dev/tty');|tty = fs.createWriteStream('/dev/tty'); tty.on('error', () => { tty = null; });|" "$_SUBCON_SESS" &&
+          ok "subconscious: patched /dev/tty crash (ENXIO in hook context)" ||
+          warn "subconscious: /dev/tty patch failed"
       fi
 
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
