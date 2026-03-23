@@ -792,3 +792,20 @@ setup() {
   bash "$REPO/script/build.sh" --check
 }
 
+
+# ── Letta password rotation fix (2026-03-23) ──
+@test "ROT: letta service start block detects running container password" {
+  grep -q '_RUNNING_PASS=$(docker inspect letta-server' "$REPO/lib/08-tools-letta.sh"
+}
+
+@test "ROT: letta password mismatch triggers service restart" {
+  grep -A5 '_RUNNING_PASS.*!=.*LETTA_PASSWORD' "$REPO/lib/08-tools-letta.sh" | grep -q 'systemctl --user restart letta'
+}
+
+@test "ROT: letta start skipped when password matches (no unnecessary restart)" {
+  grep -A8 'if \[\[ -n.*_RUNNING_PASS.*!=.*LETTA_PASSWORD' "$REPO/lib/08-tools-letta.sh" | grep -q 'systemctl --user start letta'
+}
+
+@test "ROT: assembled titan-setup.sh includes password rotation logic" {
+  grep -q '_RUNNING_PASS=$(docker inspect letta-server' "$REPO/titan-setup.sh"
+}

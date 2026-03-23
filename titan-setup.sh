@@ -1591,8 +1591,19 @@ SERVICEEOF
 
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable letta 2>/dev/null || true
-    systemctl --user start letta 2>/dev/null || true
-    ok "letta service (http://127.0.0.1:${LETTA_PORT})"
+    # Detect password rotation: if letta-server is already running with a different
+    # LETTA_SERVER_PASSWORD, restart the service so it picks up the new docker.env.
+    # Without this, re-runs that regenerate the password leave the container on the old
+    # key while settings.json gets the new one → 401 on every subconscious hook call.
+    _RUNNING_PASS=$(docker inspect letta-server --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null |
+      grep '^LETTA_SERVER_PASSWORD=' | cut -d= -f2- || true)
+    if [[ -n "$_RUNNING_PASS" && "$_RUNNING_PASS" != "$LETTA_PASSWORD" ]]; then
+      systemctl --user restart letta 2>/dev/null || true
+      ok "letta service (restarted — password rotated)"
+    else
+      systemctl --user start letta 2>/dev/null || true
+      ok "letta service (http://127.0.0.1:${LETTA_PORT})"
+    fi
 
     # Wait for Letta health (up to 60s — Postgres init slow on first run)
     _LETTA_READY=false
