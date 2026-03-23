@@ -108,7 +108,7 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     _TMUX_LOG="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
     _TMUX_WRAPPER=$(mktemp /tmp/titan-tmux-XXXXXX.sh)
     {
-      printf 'TITAN_TMUX=1 bash %q' "$(readlink -f "$0")"
+      printf 'TITAN_TMUX=1 bash %q' "$0"
       if [[ ${#_ORIG_ARGS[@]} -gt 0 ]]; then
         printf ' %q' "${_ORIG_ARGS[@]}"
       fi

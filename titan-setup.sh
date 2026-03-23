@@ -20,6 +20,18 @@ if [[ ! -f "$0" ]]; then
 fi
 # ────────────────────────────────────────────────────────────────────────────
 
+# ─── Canonicalize $0 to absolute path ──────────────────────────────────────
+# After this point $0 is guaranteed absolute. Needed because:
+#   - tmux re-launch writes $0 into a wrapper script (CWD changes under sudo)
+#   - VPS re-exec copies $0 to /tmp (needs readable path)
+#   - readlink -f resolves ./relative, symlinks, and /tmp paths uniformly
+_SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+if [[ "$_SCRIPT_PATH" != "$0" && -f "$_SCRIPT_PATH" ]]; then
+  # Re-exec with absolute path so all downstream $0 references are stable
+  exec bash "$_SCRIPT_PATH" "$@"
+fi
+# ────────────────────────────────────────────────────────────────────────────
+
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  TITAN SETUP — Single Source of Truth                           ║
 # ║  Fresh Ubuntu → fully armed Claude Code workstation             ║
@@ -548,7 +560,7 @@ if [[ -z "${TMUX:-}" ]] && [[ "${TITAN_TMUX:-}" != "1" ]]; then
     _TMUX_LOG="/tmp/titan-setup-$(date +%Y%m%d-%H%M%S).log"
     _TMUX_WRAPPER=$(mktemp /tmp/titan-tmux-XXXXXX.sh)
     {
-      printf 'TITAN_TMUX=1 bash %q' "$(readlink -f "$0")"
+      printf 'TITAN_TMUX=1 bash %q' "$0"
       if [[ ${#_ORIG_ARGS[@]} -gt 0 ]]; then
         printf ' %q' "${_ORIG_ARGS[@]}"
       fi
