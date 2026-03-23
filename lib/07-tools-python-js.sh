@@ -163,20 +163,19 @@ else
     ok "n8n: migrated from Docker (container removed, data preserved in ~/.n8n)"
   fi
 
-  # Resolve npm — check PATH first, fall back to mise shims
-  _NPM_BIN=$(command -v npm 2>/dev/null || echo "")
-  [[ -z "$_NPM_BIN" && -x "$HOME/.local/share/mise/shims/npm" ]] && _NPM_BIN="$HOME/.local/share/mise/shims/npm"
+  # Resolve npm — prefer mise shim (Node 22) over system npm (may be Node 18)
+  _NPM_BIN="$HOME/.local/share/mise/shims/npm"
+  [[ ! -x "$_NPM_BIN" ]] && _NPM_BIN=$(command -v npm 2>/dev/null || echo "")
   if [[ -z "$_NPM_BIN" ]]; then
     warn "n8n skipped — npm not found (mise Node not installed?)"
   else
-    # Install n8n globally if not present
-    _N8N_BIN=$(command -v n8n 2>/dev/null || echo "")
-    [[ -z "$_N8N_BIN" && -x "$HOME/.local/share/mise/shims/n8n" ]] && _N8N_BIN="$HOME/.local/share/mise/shims/n8n"
-    if [[ -z "$_N8N_BIN" ]]; then
+    # Prefer mise shim for n8n — bun-installed n8n fails at runtime (Node version mismatch)
+    _N8N_BIN="$HOME/.local/share/mise/shims/n8n"
+    if [[ ! -x "$_N8N_BIN" ]]; then
       "$_NPM_BIN" install -g n8n >>"$LOG_FILE" 2>&1 &&
         ok "n8n installed" ||
         warn "n8n install failed (check $LOG_FILE)"
-      _N8N_BIN=$(command -v n8n 2>/dev/null || echo "$HOME/.local/share/mise/shims/n8n")
+      # After install, mise reshims automatically
     else
       ok "n8n already installed ($("$_N8N_BIN" --version 2>/dev/null || echo 'unknown'))"
     fi
