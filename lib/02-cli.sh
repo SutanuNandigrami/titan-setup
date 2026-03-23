@@ -293,6 +293,22 @@ if [[ -z "$INSTALL_MODE" ]]; then
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
+# ─── Desktop mode: fix HOME when running as root via sudo ───
+# sudo changes HOME to /root, but services/configs must go to the target user's home.
+# VPS mode handles this via re-exec (lib/03-vps-reexec.sh). Desktop mode needs this fix.
+if [[ "$INSTALL_MODE" == "desktop" && "$(id -u)" == "0" ]]; then
+  _TARGET_USER="${CLAUDE_USER:-${SUDO_USER:-}}"
+  if [[ -n "$_TARGET_USER" && "$_TARGET_USER" != "root" ]]; then
+    _TARGET_HOME=$(getent passwd "$_TARGET_USER" | cut -d: -f6)
+    if [[ -n "$_TARGET_HOME" && -d "$_TARGET_HOME" ]]; then
+      export HOME="$_TARGET_HOME"
+      # Add user's tool paths so mise/cargo/go/bun/uv binaries are found
+      export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/go/bin:$PATH"
+      echo -e "  ${GREEN}✓${NC} HOME → $_TARGET_HOME (running as root, targeting $_TARGET_USER)"
+    fi
+  fi
+fi
+
 # ─── Claude Code version + autoupdate ───
 if [[ -z "$CC_VERSION" ]] && ! $CC_ASKED; then
   read -rp "  Claude Code version to install (blank = latest): " CC_VERSION || true
