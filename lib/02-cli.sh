@@ -24,6 +24,7 @@ COZEMPIC_SKIP=false
 VEXP_SKIP=false
 CLAUDECODEUI_SKIP=false
 CLAUDECODEUI_PORT=3001
+N8N_SKIP=false
 FORCE_UPDATES=false
 MINIMAL=false
 
@@ -57,6 +58,7 @@ Options:
   --no-vexp                Skip vexp-cli install (context engine)
   --claudecodeui-skip      Skip Claude Code UI web interface
   --claudecodeui-port PORT Claude Code UI port (default: 3001)
+  --n8n-skip               Skip n8n workflow automation install
 
   --force-updates          Force upgrade all tools (uv, bun, cargo, go, binaries)
   --version                Show script version
@@ -203,6 +205,10 @@ while [[ $# -gt 0 ]]; do
       CLAUDECODEUI_SKIP=true
       shift
       ;;
+    --n8n-skip)
+      N8N_SKIP=true
+      shift
+      ;;
     --claudecodeui-port)
       [[ $# -ge 2 ]] || {
         fail "--claudecodeui-port requires a value"
@@ -227,6 +233,7 @@ while [[ $# -gt 0 ]]; do
       LETTA_CTRL_SKIP=true
       VEXP_SKIP=true
       CLAUDECODEUI_SKIP=true
+      N8N_SKIP=true
       shift
       ;;
     --secrets-file)

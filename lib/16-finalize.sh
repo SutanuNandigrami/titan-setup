@@ -65,7 +65,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     # Reset stale serve rules from previous runs (hostname may have changed)
     tailscale serve reset 2>/dev/null || true
     # tailscale serve is a proxy config — backend doesn't need to be running yet
-    if command -v docker &>/dev/null; then
+    if ! $N8N_SKIP; then
       tailscale serve --bg --https=5678 http://localhost:5678 2>/dev/null &&
         ok "tailscale serve: n8n → https://${TS_HOSTNAME}:5678" ||
         warn "tailscale serve for n8n failed — run: tailscale serve --https=5678 http://localhost:5678"
@@ -141,7 +141,7 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
   echo "$COMPLIANCE_OUT" | sed 's/^/    /'
   echo ""
   echo -e "  ${CYAN}Services (Tailscale):${NC}"
-  command -v docker &>/dev/null && echo "    n8n:            https://${TS_HOSTNAME}:5678"
+  $N8N_SKIP || echo "    n8n:            https://${TS_HOSTNAME}:5678"
   $CCFLARE_SKIP || echo "    better-ccflare: https://${TS_HOSTNAME}:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:          https://${TS_HOSTNAME}:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:     https://${TS_HOSTNAME}:${LETTA_CTRL_PORT}"
@@ -169,8 +169,8 @@ if [[ "$INSTALL_MODE" == "vps" ]]; then
     /tools                    # see all installed tools
     /catchup                  # orient to the project"
 else
-  echo -e "  ${CYAN}Services:${NC}
-    n8n:              http://localhost:5678"
+  echo -e "  ${CYAN}Services:${NC}"
+  $N8N_SKIP || echo "    n8n:              http://localhost:5678"
   $CCFLARE_SKIP || echo "    better-ccflare:   http://localhost:${CCFLARE_PORT}"
   $LETTA_SKIP || echo "    letta:            http://localhost:${LETTA_PORT}"
   $LETTA_CTRL_SKIP || $LETTA_SKIP || echo "    letta-ctrl:       http://localhost:${LETTA_CTRL_PORT}"
@@ -178,9 +178,11 @@ else
   echo ""
 
   # ── B8: n8n default credentials ──
-  echo -e "  ${CYAN}n8n credentials (first-run setup):${NC}
+  if ! $N8N_SKIP; then
+    echo -e "  ${CYAN}n8n credentials (first-run setup):${NC}
     Open http://localhost:5678 and create your owner account.
     n8n has no default password — first visitor becomes owner."
+  fi
 
   # ── B9: Letta API key ──
   if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then

@@ -143,86 +143,75 @@ else
   ok "playwright (exists)"
 fi
 
-# n8n — workflow automation server (runs as systemd user service via docker)
-# Pin to 2.10.4 on ARM64 — isolated-vm segfaults on aarch64 Alpine (github.com/n8n-io/n8n/issues/26858)
-_N8N_IMAGE="n8nio/n8n:latest"
-[[ "$(uname -m)" == "aarch64" ]] && _N8N_IMAGE="n8nio/n8n:2.10.4"
-
-if $MINIMAL; then
+# ── n8n — workflow automation (native install via npm) ──────────────
+# ADR-038: native npm install supersedes Docker (ADR-025 superseded)
+# isolated-vm ARM64 fix shipped upstream (n8n PR #26765); Docker adds no value here
+if $N8N_SKIP; then
+  ok "n8n (skipped — --n8n-skip)"
+elif $MINIMAL; then
   ok "n8n (skipped — minimal mode)"
-elif command -v docker &>/dev/null; then
-  check_port 5678 "n8n" "n8n" || true
-  # Add user to docker group and ensure daemon is running
-  sudo systemctl enable --now docker 2>/dev/null || true
+else
+  N8N_PORT="${N8N_PORT:-5678}"
+  check_port "$N8N_PORT" "n8n" "n8n" || true
 
-  # Enable systemd linger so user services start at boot without login
-  loginctl enable-linger "$USER" 2>/dev/null || true
-
-  # Ensure docker group membership is active in the systemd user manager.
-  # usermod adds the group but user@.service may have started before docker
-  # group existed. Check if systemd --user's process has the docker GID;
-  # if not, restart it so child services (n8n, letta) can access the socket.
-  sudo usermod -aG docker "$USER" 2>/dev/null || true
-  _SYSD_PID=$(pgrep -u "$(id -u)" -f 'systemd --user' | head -1 || true)
-  _DOCKER_GID=$(getent group docker | cut -d: -f3 || true)
-  if [[ -n "$_SYSD_PID" && -n "$_DOCKER_GID" ]] &&
-    ! grep -qw "$_DOCKER_GID" "/proc/$_SYSD_PID/status" 2>/dev/null; then
-    sudo systemctl restart "user@$(id -u).service" 2>/dev/null || true
+  # Migrate from Docker to native (idempotent on re-runs)
+  if [[ -f "$HOME/.config/systemd/user/n8n.service" ]] &&
+    grep -q 'docker' "$HOME/.config/systemd/user/n8n.service" 2>/dev/null; then
+    systemctl --user stop n8n 2>/dev/null || true
+    systemctl --user disable n8n 2>/dev/null || true
+    docker rm -f n8n 2>/dev/null || true
+    ok "n8n: migrated from Docker (container removed, data preserved in ~/.n8n)"
   fi
 
-  # Pull image — skip if already present (idempotent re-run)
-  # Use /usr/bin/sg explicitly — ast-grep-cli installs an 'sg' binary that shadows it
-  if docker image inspect "$_N8N_IMAGE" &>/dev/null ||
-    sudo docker image inspect "$_N8N_IMAGE" &>/dev/null; then
-    ok "n8n docker image (exists: $_N8N_IMAGE)"
-  elif docker pull "$_N8N_IMAGE" >>"$LOG_FILE" 2>&1 ||
-    /usr/bin/sg docker -c "docker pull $_N8N_IMAGE" >>"$LOG_FILE" 2>&1 ||
-    sudo docker pull "$_N8N_IMAGE" >>"$LOG_FILE" 2>&1; then
-    ok "n8n docker image ($_N8N_IMAGE)"
+  # Resolve npm — check PATH first, fall back to mise shims
+  _NPM_BIN=$(command -v npm 2>/dev/null || echo "")
+  [[ -z "$_NPM_BIN" && -x "$HOME/.local/share/mise/shims/npm" ]] && _NPM_BIN="$HOME/.local/share/mise/shims/npm"
+  if [[ -z "$_NPM_BIN" ]]; then
+    warn "n8n skipped — npm not found (mise Node not installed?)"
   else
-    warn "n8n docker pull failed (check: docker pull $_N8N_IMAGE)"
-  fi
+    # Install n8n globally if not present
+    _N8N_BIN=$(command -v n8n 2>/dev/null || echo "")
+    [[ -z "$_N8N_BIN" && -x "$HOME/.local/share/mise/shims/n8n" ]] && _N8N_BIN="$HOME/.local/share/mise/shims/n8n"
+    if [[ -z "$_N8N_BIN" ]]; then
+      "$_NPM_BIN" install -g n8n >>"$LOG_FILE" 2>&1 &&
+        ok "n8n installed" ||
+        warn "n8n install failed (check $LOG_FILE)"
+      _N8N_BIN=$(command -v n8n 2>/dev/null || echo "$HOME/.local/share/mise/shims/n8n")
+    else
+      ok "n8n already installed ($("$_N8N_BIN" --version 2>/dev/null || echo 'unknown'))"
+    fi
 
-  # Fix n8n data directory permissions (container runs as uid 1000)
-  mkdir -p "$HOME/.n8n"
-  if [ "$(stat -c %u "$HOME/.n8n" 2>/dev/null)" != "1000" ]; then
-    sudo chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || chown -R 1000:1000 "$HOME/.n8n" 2>/dev/null || true
-  fi
-  # Clean crash artifacts from previous failed runs (causes "Last session crashed" loop)
-  rm -f "$HOME/.n8n/crash.journal" 2>/dev/null || true
+    # Clean crash artifacts from previous failed runs
+    rm -f "$HOME/.n8n/crash.journal" 2>/dev/null || true
 
-  # Create systemd user service for n8n
-  # Use detached docker + Type=oneshot — attached docker clients get SIGKILL'd
-  # on ARM64 under systemd user sessions (exit 137 crash loop)
-  mkdir -p "$HOME/.config/systemd/user"
-  DOCKER_BIN=$(command -v docker)
-  cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
+    # systemd user service — Type=simple, direct exec (no Docker)
+    mkdir -p "$HOME/.config/systemd/user"
+    _TZ=$(cat /etc/timezone 2>/dev/null || echo UTC)
+    cat >"$HOME/.config/systemd/user/n8n.service" <<SERVICEEOF
 [Unit]
 Description=n8n workflow automation
-After=docker.service default.target
-Wants=docker.service
-StartLimitIntervalSec=300
-StartLimitBurst=5
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStartPre=-${DOCKER_BIN} rm -f n8n
-ExecStart=${DOCKER_BIN} run -d --name n8n --restart unless-stopped -p 127.0.0.1:5678:5678 -v %h/.n8n:/home/node/.n8n ${_N8N_IMAGE}
-ExecStop=${DOCKER_BIN} stop n8n
-ExecStopPost=-${DOCKER_BIN} rm -f n8n
+Type=simple
+ExecStart=${_N8N_BIN} start
+Environment=N8N_PORT=${N8N_PORT}
+Environment=N8N_SECURE_COOKIE=false
+Environment=GENERIC_TIMEZONE=${_TZ}
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=default.target
 SERVICEEOF
 
-  systemctl --user daemon-reload 2>/dev/null || true
-  systemctl --user enable n8n 2>/dev/null || true
-  systemctl --user start n8n 2>/dev/null || true
-  ok "n8n service (systemctl --user status n8n | http://localhost:5678)"
-  # docker group is applied via sg above — no re-login required
-else
-  warn "n8n skipped — Docker not available (install failed earlier or not supported)"
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user enable n8n 2>/dev/null || true
+    systemctl --user start n8n 2>/dev/null || true
+    ok "n8n service (http://127.0.0.1:${N8N_PORT})"
+  fi
 fi
 
 # ─── claudecodeui — web/mobile interface for Claude Code sessions ───
