@@ -2578,7 +2578,6 @@ if ! $LETTA_SKIP && [[ -f "$HOME/.config/letta/credentials" ]]; then
   _LETTA_PASS=$(grep '^LETTA_SERVER_PASSWORD=' "$HOME/.config/letta/credentials" | cut -d= -f2-)
   _MERGE_INJECT+=(--inject "LETTA_BASE_URL=http://127.0.0.1:${LETTA_PORT}")
   _MERGE_INJECT+=(--inject "LETTA_API_KEY=${_LETTA_PASS}")
-  _MERGE_INJECT+=(--inject "LETTA_MODEL=anthropic/claude-sonnet-4-6")
   _MERGE_INJECT+=(--inject "LETTA_MODE=whisper")
   _MERGE_INJECT+=(--inject "LETTA_SDK_TOOLS=read-only")
 fi
