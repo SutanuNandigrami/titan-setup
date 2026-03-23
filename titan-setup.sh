@@ -3083,6 +3083,47 @@ else
           warn "subconscious: /dev/tty patch failed"
       fi
 
+      # Patch session_start.ts: exit 0 on Letta API errors (non-blocking).
+      # Without this, a 401/404 from the Letta server exits 1 → CC reports
+      # "SessionStart:startup hook error" at every session start.
+      # Guard: grep for marker before applying so re-runs are idempotent.
+      _SUBCON_SESS="$_SUBCON_DIR/scripts/session_start.ts"
+      if [[ -f "$_SUBCON_SESS" ]] && ! grep -q 'non-blocking.*Letta errors' "$_SUBCON_SESS" 2>/dev/null; then
+        python3 - "$_SUBCON_SESS" <<'_PYEOF'
+import sys, pathlib
+f = pathlib.Path(sys.argv[1]); c = f.read_text()
+old = '    process.exit(1);\n  }\n}\n\nmain();'
+new = '    # Exit 0 (non-blocking) — Letta errors must not fail the CC session start hook\n    process.exit(0);\n  }\n}\n\nmain();'
+if old in c: f.write_text(c.replace(old, new)); sys.exit(0)
+sys.exit(1)
+_PYEOF
+        # shellcheck disable=SC2181
+        [[ $? -eq 0 ]] &&
+          ok "subconscious: patched session_start.ts (exit 0 on API errors)" ||
+          warn "subconscious: session_start.ts exit-code patch failed (pattern changed — plugin updated?)"
+      fi
+
+      # Patch sync_letta_memory.ts: exit 0 on all errors (non-blocking).
+      # Two exit(1) sites: missing LETTA_API_KEY and caught API error.
+      _SUBCON_SYNC="$_SUBCON_DIR/scripts/sync_letta_memory.ts"
+      if [[ -f "$_SUBCON_SYNC" ]] && ! grep -q 'non-blocking.*Letta errors' "$_SUBCON_SYNC" 2>/dev/null; then
+        python3 - "$_SUBCON_SYNC" <<'_PYEOF'
+import sys, pathlib
+f = pathlib.Path(sys.argv[1]); c = f.read_text()
+c = c.replace(
+    "    console.error('Error: LETTA_API_KEY environment variable is not set');\n    process.exit(1);",
+    "    console.error('Error: LETTA_API_KEY environment variable is not set');\n    process.exit(0); // non-blocking"
+)
+c = c.replace(
+    "    // Exit with code 1 for non-blocking error\n    // Change to exit(2) if you want to block prompt processing on sync failures\n    process.exit(1);",
+    "    // Exit 0 (non-blocking) — Letta errors must not fail CC hooks\n    process.exit(0);"
+)
+f.write_text(c)
+_PYEOF
+        ok "subconscious: patched sync_letta_memory.ts (exit 0 on all errors)" ||
+          warn "subconscious: sync_letta_memory.ts exit-code patch failed"
+      fi
+
       # Patch Subconscious.af: override LLM + embedding to use self-hosted Letta infrastructure
       # Default .af uses openai/text-embedding-3-small and zai/glm-5 (cloud only)
       _SUBCON_AF=""
