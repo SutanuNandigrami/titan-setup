@@ -56,3 +56,7 @@ setup() {
   run bash "$REPO/titan-setup.sh" --dry-run --mode desktop --name "Bob"
   assert_output --partial "Bob"
 }
+
+@test "--n8n-skip flag is accepted by CLI parser" {
+  grep -q '\-\-n8n-skip)' "$REPO/lib/02-cli.sh"
+}

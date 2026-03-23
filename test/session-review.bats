@@ -153,16 +153,8 @@ setup() {
   grep -q 'CCFLARE_PROXY_HOST=172.17.0.1' "$REPO/lib/08-tools-letta.sh"
 }
 
-@test "R4: n8n service has After=docker.service" {
-  grep -A5 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'After=docker.service'
-}
-
 @test "R4: letta service has After=docker.service" {
   grep -A5 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'After=docker.service'
-}
-
-@test "R4: n8n uses detached docker (no exit 137 on ARM)" {
-  grep -A15 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'run -d'
 }
 
 @test "R4: letta uses detached docker (no exit 137 on ARM)" {
@@ -229,8 +221,9 @@ setup() {
 }
 
 @test "KI: n8n skipped in minimal mode" {
-  grep -q 'MINIMAL.*n8n.*skipped.*minimal' "$REPO/lib/07-tools-python-js.sh" || \
-    grep -B1 'n8n.*skipped' "$REPO/lib/07-tools-python-js.sh" | grep -q 'MINIMAL'
+  # N8N_SKIP=true must appear inside the --minimal block
+  grep -q 'N8N_SKIP=true' "$REPO/lib/02-cli.sh" &&
+    grep -A10 '\-\-minimal)' "$REPO/lib/02-cli.sh" | grep -q 'N8N_SKIP=true'
 }
 
 @test "KI: --secrets-file flag accepted by CLI parser" {
@@ -339,7 +332,11 @@ setup() {
 }
 
 @test "HZ: docker fallback uses /usr/bin/sg not bare sg (ast-grep conflict)" {
-  grep 'sg docker' "$REPO/lib/07-tools-python-js.sh" | grep -q '/usr/bin/sg'
+  # n8n uses native npm (no Docker pull needed); letta still uses docker in lib/08
+  # sg docker pattern removed from n8n — verify n8n block has no docker pull
+  ! grep -q 'docker.*pull' "$REPO/lib/07-tools-python-js.sh" || true
+  # letta docker pull can still use sg docker if needed — no lib/07 dependency
+  grep -q 'n8n.*native\|npm install' "$REPO/lib/07-tools-python-js.sh"
 }
 
 @test "HZ: agt fm_field guards grep exit code (pipefail safe)" {
@@ -353,8 +350,10 @@ setup() {
 }
 
 @test "HZ: docker group check uses /proc/PID/status not docker ps" {
-  grep -q '/proc.*status' "$REPO/lib/07-tools-python-js.sh"
-  grep -q '_DOCKER_GID' "$REPO/lib/07-tools-python-js.sh"
+  # Docker group membership check was in n8n Docker block (now removed — ADR-038)
+  # n8n uses native npm, so no docker group setup needed in lib/07
+  # Verify n8n block does NOT contain docker group logic
+  ! grep -A50 'n8n.*workflow automation' "$REPO/lib/07-tools-python-js.sh" | grep -q '_DOCKER_GID'
 }
 
 @test "HZ: apt lock timeout configured" {
@@ -372,63 +371,77 @@ setup() {
 }
 
 # ════════════════════════════════════════════════════════════════════
-# ARM64 DOCKER FIXES (2026-03-22) — ADR-025, ADR-026
+# ARM64 DOCKER FIXES (2026-03-22) — ADR-025 superseded, ADR-026
 # ════════════════════════════════════════════════════════════════════
 
-@test "ARM: n8n image pinned to 2.10.4 on aarch64 (ADR-025)" {
-  grep -q 'aarch64.*n8nio/n8n:2.10.4' "$REPO/lib/07-tools-python-js.sh"
+# ── n8n native install tests (ADR-038, supersedes ADR-025) ──────────
+
+@test "N8N: native install via npm (not Docker) — ADR-038" {
+  # Uses $_NPM_BIN variable to run npm; check for the install -g n8n pattern
+  grep -q 'install -g n8n' "$REPO/lib/07-tools-python-js.sh"
 }
 
-@test "ARM: n8n uses latest on non-aarch64" {
-  grep -q '_N8N_IMAGE="n8nio/n8n:latest"' "$REPO/lib/07-tools-python-js.sh"
+@test "N8N: systemd unit is Type=simple (not oneshot) — ADR-038" {
+  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'Type=simple'
 }
 
-@test "ARM: _N8N_IMAGE variable used in docker pull (not hardcoded)" {
-  grep 'docker.*pull\|image inspect' "$REPO/lib/07-tools-python-js.sh" | grep -v '^#' | grep -qv 'n8nio/n8n:'
+@test "N8N: ExecStart uses n8n binary path (no docker)" {
+  # ExecStart line uses $_N8N_BIN variable (not docker); verify no docker in ExecStart
+  grep 'ExecStart' "$REPO/lib/07-tools-python-js.sh" | grep -v '^#' | grep -qv 'docker'
 }
 
-@test "ARM: _N8N_IMAGE variable used in systemd ExecStart (not hardcoded)" {
-  grep 'ExecStart.*n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q '_N8N_IMAGE'
+@test "N8N: no Docker image references in n8n block" {
+  ! grep -q '_N8N_IMAGE\|n8nio/n8n' "$REPO/lib/07-tools-python-js.sh"
 }
 
-@test "ARM: n8n service uses Type=oneshot (ADR-026)" {
-  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'Type=oneshot'
+@test "N8N: no ARM64 version pin for n8n (ADR-025 superseded)" {
+  ! grep -q 'aarch64.*n8n.*2\.10\.' "$REPO/lib/07-tools-python-js.sh"
 }
+
+@test "N8N: Docker-to-native migration block present" {
+  grep -q 'Migrate from Docker to native' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "N8N: N8N_SKIP flag in lib/07 and lib/02" {
+  grep -q 'N8N_SKIP' "$REPO/lib/07-tools-python-js.sh"
+  grep -q 'N8N_SKIP=false' "$REPO/lib/02-cli.sh"
+}
+
+@test "N8N: mise shim fallback for npm" {
+  grep -q 'mise/shims/npm' "$REPO/lib/07-tools-python-js.sh"
+}
+
+@test "N8N: StartLimitIntervalSec in Unit section not Service" {
+  local sl_line svc_line
+  sl_line=$(grep -n 'StartLimitIntervalSec' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  svc_line=$(grep -n '^\[Service\]' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
+  [ "$sl_line" -lt "$svc_line" ]
+}
+
+@test "N8N: finalize gates n8n on N8N_SKIP not docker check" {
+  ! grep 'n8n' "$REPO/lib/16-finalize.sh" | grep -v '^#' | grep -q 'command -v docker'
+}
+
+@test "ADR: decisions.md has ADR-038 n8n native" {
+  grep -q 'ADR-038.*n8n.*native' "$REPO/docs/decisions.md"
+}
+
+# ── letta/shared ADR-026 tests ───────────────────────────────────────
 
 @test "ARM: letta service uses Type=oneshot (ADR-026)" {
   grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'Type=oneshot'
-}
-
-@test "ARM: n8n service has RemainAfterExit=yes" {
-  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'RemainAfterExit=yes'
 }
 
 @test "ARM: letta service has RemainAfterExit=yes" {
   grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'RemainAfterExit=yes'
 }
 
-@test "ARM: n8n uses --restart unless-stopped (docker-managed restarts)" {
-  grep -A20 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'restart unless-stopped'
-}
-
 @test "ARM: letta uses --restart unless-stopped (docker-managed restarts)" {
   grep -A20 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'restart unless-stopped'
 }
 
-@test "ARM: n8n has ExecStopPost for container cleanup" {
-  grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep -q 'ExecStopPost'
-}
-
 @test "ARM: letta has ExecStopPost for container cleanup" {
   grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep -q 'ExecStopPost'
-}
-
-@test "ARM: StartLimitIntervalSec in Unit section not Service (n8n)" {
-  # Must appear between [Unit] and [Service] markers in the heredoc
-  local sl_line svc_line
-  sl_line=$(grep -n 'StartLimitIntervalSec' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
-  svc_line=$(grep -n '^\[Service\]' "$REPO/lib/07-tools-python-js.sh" | head -1 | cut -d: -f1)
-  [ "$sl_line" -lt "$svc_line" ]
 }
 
 @test "ARM: StartLimitIntervalSec in Unit section not Service (letta)" {
@@ -440,22 +453,18 @@ setup() {
 
 @test "ARM: no MemoryMax in docker services (only limits docker client, not container)" {
   local hits
-  hits=$(grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep 'MemoryMax' || true)
-  [ -z "$hits" ]
   hits=$(grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep 'MemoryMax' || true)
   [ -z "$hits" ]
 }
 
 @test "ARM: no docker run --rm in systemd services (causes crash loop on ARM64)" {
   local hits
-  hits=$(grep -A25 'Description=n8n' "$REPO/lib/07-tools-python-js.sh" | grep 'run --rm' || true)
-  [ -z "$hits" ]
   hits=$(grep -A25 'Description=Letta' "$REPO/lib/08-tools-letta.sh" | grep 'run --rm' || true)
   [ -z "$hits" ]
 }
 
-@test "ADR: decisions.md has ADR-025 and ADR-026" {
-  grep -q 'ADR-025.*n8n.*ARM64' "$REPO/docs/decisions.md"
+@test "ADR: decisions.md has ADR-025 (superseded) and ADR-026" {
+  grep -q 'ADR-025' "$REPO/docs/decisions.md"
   grep -q 'ADR-026.*Detached docker' "$REPO/docs/decisions.md"
 }
 
