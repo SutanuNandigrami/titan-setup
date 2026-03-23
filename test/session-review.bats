@@ -692,6 +692,35 @@ setup() {
   grep -q 'mise/shims/node' "$REPO/lib/07-tools-python-js.sh"
 }
 
+@test "ADR-035: decisions.md has ADR-035" {
+  grep -q 'ADR-035.*Canonicalize' "$REPO/docs/decisions.md"
+}
+
+@test "CANON: lib/00-header.sh canonicalizes \$0 via readlink -f" {
+  grep -q 'readlink -f.*\$0' "$REPO/lib/00-header.sh"
+}
+
+@test "CANON: lib/00-header.sh re-execs with absolute path" {
+  grep -q 'exec bash.*_SCRIPT_PATH' "$REPO/lib/00-header.sh"
+}
+
+@test "CANON: tmux wrapper uses plain \$0 (no per-site readlink)" {
+  # $0 is already absolute from header — no need for readlink in tmux wrapper
+  local hits
+  hits=$(grep 'readlink.*\$0' "$REPO/lib/03-vps-reexec.sh" || true)
+  [ -z "$hits" ]
+}
+
+@test "CANON: session-start.sh has no stderr redirects" {
+  local hits
+  hits=$(grep '>&2' "$REPO/dot-claude/hooks/session-start.sh" || true)
+  [ -z "$hits" ]
+}
+
+@test "CANON: subconscious /dev/tty patch in plugin install" {
+  grep -q "createWriteStream.*dev/tty.*on.*error" "$REPO/lib/12-plugins.sh"
+}
+
 # ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
