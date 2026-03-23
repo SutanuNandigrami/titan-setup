@@ -721,6 +721,18 @@ setup() {
   grep -q "createWriteStream.*dev/tty.*on.*error" "$REPO/lib/12-plugins.sh"
 }
 
+@test "CANON: subconscious session_start.ts exit-0 patch in plugin install" {
+  grep -q "session_start.ts.*exit 0 on API errors" "$REPO/lib/12-plugins.sh"
+}
+
+@test "CANON: subconscious sync_letta_memory.ts exit-0 patch in plugin install" {
+  grep -q "sync_letta_memory.ts.*exit 0 on all errors" "$REPO/lib/12-plugins.sh"
+}
+
+@test "CANON: subconscious exit-0 patches are idempotent (guarded by marker grep)" {
+  grep -q "non-blocking.*Letta errors" "$REPO/lib/12-plugins.sh"
+}
+
 # ════════════════════════════════════════════════════════════════════
 # BUILT SCRIPT INTEGRITY
 # ════════════════════════════════════════════════════════════════════
