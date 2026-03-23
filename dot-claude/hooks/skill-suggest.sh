@@ -27,7 +27,7 @@ SKILLS=(
 
 MATCHED=""
 for entry in "${SKILLS[@]}"; do
-  IFS='|' read -r _skill_name display keywords <<< "$entry"
+  IFS='|' read -r _skill_name display keywords <<<"$entry"
   # Split keywords by | and build grep pattern
   pattern=$(echo "$keywords" | tr '|' '\n' | paste -sd'|')
   if echo "$PROMPT_LC" | grep -qE "$pattern"; then
