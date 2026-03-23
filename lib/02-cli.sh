@@ -300,18 +300,26 @@ if [[ -z "$INSTALL_MODE" ]]; then
 fi
 echo -e "  Profile: ${GREEN}${INSTALL_MODE}${NC}\n"
 
-# ─── Desktop mode: fix HOME when running as root via sudo ───
+# ─── Desktop mode: fix HOME + user session env when running as root via sudo ───
 # sudo changes HOME to /root, but services/configs must go to the target user's home.
 # VPS mode handles this via re-exec (lib/03-vps-reexec.sh). Desktop mode needs this fix.
+# XDG_RUNTIME_DIR must also point to the target user's runtime dir (/run/user/UID)
+# so that systemctl --user targets the user's session, not root's (root has no
+# persistent user session on desktop — native services would start and die immediately).
 if [[ "$INSTALL_MODE" == "desktop" && "$(id -u)" == "0" ]]; then
   _TARGET_USER="${CLAUDE_USER:-${SUDO_USER:-}}"
   if [[ -n "$_TARGET_USER" && "$_TARGET_USER" != "root" ]]; then
     _TARGET_HOME=$(getent passwd "$_TARGET_USER" | cut -d: -f6)
-    if [[ -n "$_TARGET_HOME" && -d "$_TARGET_HOME" ]]; then
+    _TARGET_UID=$(id -u "$_TARGET_USER" 2>/dev/null || true)
+    if [[ -n "$_TARGET_HOME" && -d "$_TARGET_HOME" && -n "$_TARGET_UID" ]]; then
       export HOME="$_TARGET_HOME"
+      export XDG_RUNTIME_DIR="/run/user/$_TARGET_UID"
+      export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$_TARGET_UID/bus"
       # Add user's tool paths so mise/cargo/go/bun/uv binaries are found
       export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/go/bin:$PATH"
       echo -e "  ${GREEN}✓${NC} HOME → $_TARGET_HOME (running as root, targeting $_TARGET_USER)"
+      # Ensure user linger is enabled so their session persists without active login
+      loginctl enable-linger "$_TARGET_USER" 2>/dev/null || true
     fi
   fi
 fi

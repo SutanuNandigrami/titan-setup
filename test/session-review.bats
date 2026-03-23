@@ -701,6 +701,18 @@ setup() {
   grep -q 'mise/shims/node' "$REPO/lib/07-tools-python-js.sh"
 }
 
+@test "DESKTOP: XDG_RUNTIME_DIR set to target user runtime dir (systemctl --user fix)" {
+  grep -q 'export XDG_RUNTIME_DIR.*run/user.*TARGET_UID' "$REPO/lib/02-cli.sh"
+}
+
+@test "DESKTOP: DBUS_SESSION_BUS_ADDRESS set for target user (systemctl --user fix)" {
+  grep -q 'export DBUS_SESSION_BUS_ADDRESS.*run/user.*TARGET_UID' "$REPO/lib/02-cli.sh"
+}
+
+@test "DESKTOP: loginctl enable-linger called for target user in desktop mode" {
+  grep -A25 'INSTALL_MODE.*desktop.*id -u.*0' "$REPO/lib/02-cli.sh" | grep -q 'loginctl enable-linger'
+}
+
 @test "ADR-035: decisions.md has ADR-035" {
   grep -q 'ADR-035.*Canonicalize' "$REPO/docs/decisions.md"
 }
