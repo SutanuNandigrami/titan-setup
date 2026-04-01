@@ -67,6 +67,18 @@ else
           warn "subconscious: npm install failed — hooks may not work"
       fi
 
+      # Patch hooks.json: replace ${CLAUDE_PLUGIN_ROOT} with hardcoded absolute path.
+      # CC does not inject CLAUDE_PLUGIN_ROOT into hook subprocesses — empty string causes
+      # "Cannot find module '/hooks/...'" (MODULE_NOT_FOUND) on every hook invocation.
+      # Guard: only apply when literal '${CLAUDE_PLUGIN_ROOT}' is still present (idempotent).
+      _SUBCON_HOOKS="$_SUBCON_DIR/hooks/hooks.json"
+      if [[ -n "$_SUBCON_DIR" ]] && [[ -f "$_SUBCON_HOOKS" ]] &&
+          grep -q '\${CLAUDE_PLUGIN_ROOT}' "$_SUBCON_HOOKS" 2>/dev/null; then
+        sed -i "s|\${CLAUDE_PLUGIN_ROOT}|${_SUBCON_DIR}|g" "$_SUBCON_HOOKS" &&
+          ok "subconscious: patched hooks.json (CLAUDE_PLUGIN_ROOT → hardcoded path)" ||
+          warn "subconscious: hooks.json CLAUDE_PLUGIN_ROOT patch failed"
+      fi
+
       # Patch /dev/tty crash: createWriteStream('/dev/tty') throws unhandled ENXIO in hook context
       # (no terminal). Add .on("error") handler so the stream fails gracefully instead of crashing.
       _SUBCON_SESS="$_SUBCON_DIR/scripts/session_start.ts"
