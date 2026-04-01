@@ -842,3 +842,24 @@ setup() {
 @test "ROT: assembled titan-setup.sh includes password rotation logic" {
   grep -q '_RUNNING_PASS=$(docker inspect letta-server' "$REPO/titan-setup.sh"
 }
+
+
+# ── CLAUDE_PLUGIN_ROOT injection fix (issue #67, 2026-04-01) ──
+@test "I67: lib/12 patches hooks.json to replace CLAUDE_PLUGIN_ROOT with hardcoded path" {
+  grep -q 'CLAUDE_PLUGIN_ROOT.*hardcoded\|hardcoded.*CLAUDE_PLUGIN_ROOT\|CLAUDE_PLUGIN_ROOT.*hardcoded path\|hardcoded path' \
+    "$REPO/lib/12-plugins.sh"
+}
+
+@test "I67: lib/12 hooks.json patch uses sed with _SUBCON_DIR substitution" {
+  grep -q 'sed.*CLAUDE_PLUGIN_ROOT.*_SUBCON_DIR\|sed.*_SUBCON_DIR.*CLAUDE_PLUGIN_ROOT' \
+    "$REPO/lib/12-plugins.sh"
+}
+
+@test "I67: lib/12 hooks.json patch is idempotent (guarded by grep check)" {
+  grep -q "grep.*CLAUDE_PLUGIN_ROOT.*_SUBCON_HOOKS\|grep -q.*CLAUDE_PLUGIN_ROOT.*_SUBCON_HOOKS" \
+    "$REPO/lib/12-plugins.sh"
+}
+
+@test "I67: assembled titan-setup.sh includes CLAUDE_PLUGIN_ROOT hooks.json patch" {
+  grep -q 'CLAUDE_PLUGIN_ROOT.*hooks.json\|hooks.json.*CLAUDE_PLUGIN_ROOT' "$REPO/titan-setup.sh"
+}
